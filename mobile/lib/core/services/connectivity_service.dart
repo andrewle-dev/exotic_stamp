@@ -1,4 +1,3 @@
 class ConnectivityService {
   const ConnectivityService();
 }
-

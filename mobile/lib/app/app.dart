@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'router.dart';
+import '../core/di/injection.dart';
+import '../features/auth/presentation/cubit/auth_cubit.dart';
 import 'theme/app_theme.dart';
 
 class MetroStampApp extends StatelessWidget {
@@ -8,12 +10,14 @@ class MetroStampApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Metro Stamp',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      onGenerateRoute: AppRouter.onGenerateRoute,
-      initialRoute: AppRouter.auth,
+    return BlocProvider<AuthCubit>.value(
+      value: Injection.instance.authCubit,
+      child: MaterialApp.router(
+        title: 'Metro Stamp',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        routerConfig: Injection.instance.router,
+      ),
     );
   }
 }

@@ -1,12 +1,11 @@
-FROM gradle:8.8-jdk21 AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
-COPY backend/build.gradle backend/build.gradle
+COPY backend/pom.xml backend/pom.xml
 COPY backend/src backend/src
-RUN gradle bootJar --no-daemon
+RUN mvn -f backend/pom.xml package -DskipTests -q
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /workspace/build/libs/*.jar app.jar
+COPY --from=build /workspace/backend/target/ExoticStamp-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
-

@@ -7,4 +7,3 @@ class ApiResponseDto<T> {
   final T data;
   final String? message;
 }
-

@@ -1,0 +1,425 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>3.3.5</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>metro</groupId>
+	<artifactId>ExoticStamp</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name/>
+	<description/>
+	<url/>
+	<licenses>
+		<license/>
+	</licenses>
+	<developers>
+		<developer/>
+	</developers>
+	<scm>
+		<connection/>
+		<developerConnection/>
+		<tag/>
+		<url/>
+	</scm>
+
+	<!-- =========================================================
+         COMPILER & JAVA VERSION
+         - Spring Boot 4.0.3 supports Java 17–25 (first-class Java 25 support)
+    ========================================================= -->
+	<properties>
+		<java.version>21</java.version>
+		<maven.compiler.source>21</maven.compiler.source>
+		<maven.compiler.target>21</maven.compiler.target>
+		<!-- ADDED: Explicit version properties to avoid version mismatch between Lombok and MapStruct -->
+		<lombok.version>1.18.42</lombok.version>
+		<mapstruct.version>1.6.3</mapstruct.version>
+	</properties>
+
+	<dependencies>
+
+		<!-- =========================================================
+             CORE WEB & VALIDATION
+             - spring-boot-starter-web     : Spring MVC, REST, embedded Tomcat, Jackson
+             - spring-boot-starter-webflux : Reactive support (WebClient, etc.)
+             - spring-boot-starter-validation : Bean Validation (Hibernate Validator)
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<!-- =========================================================
+             DATA ACCESS — JPA & DATABASE DRIVER
+             - spring-boot-starter-data-jpa : Hibernate ORM, Spring Data repositories
+             - mysql-connector-j            : MySQL JDBC driver (runtime only)
+             - postgresql					: PostgreSQL driver (runtime only)
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+
+		<!-- =========================================================
+             REDIS FOR CACHING
+             - redis starter (Lettuce + spring-data-redis)
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+
+		<!-- =========================================================
+             SECURITY, OAUTH2 & JWT
+             * NOTE: WHEN ENABLE THESE DEPENDENCY, THIS APP ALWAYS REQUIRE AUTHENTICATION EVEN THOUGH NOT CONFIG SECURITY
+             - spring-boot-starter-security          : Core security filters, AuthN/AuthZ
+             - spring-boot-starter-oauth2-client     : Social login / OIDC client
+             - spring-boot-starter-oauth2-resource-server : JWT-based Resource Server
+             - jjwt (0.12.6)                         : JWT creation and parsing
+               NOTE: Upgraded from 0.11.5 → 0.12.6.
+               0.11.5 API (parserBuilder, setSigningKey) is deprecated and has
+               known reflection issues on JDK 17+. 0.12.x ships a JPMS-clean
+               implementation; jjwt-impl and jjwt-jackson should be runtime-scoped.
+               Breaking change: use Jwts.parser() and verifyWith(SecretKey) instead
+               of Jwts.parserBuilder() and setSigningKey(Key).
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-client</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>0.12.6</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>0.12.6</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-jackson</artifactId>
+			<version>0.12.6</version>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- =========================================================
+             TEMPLATE ENGINE — JTE
+             - jte                          : Java Template Engine core
+             - jte-spring-boot-starter-3    : Spring Boot 3/4 auto-configuration for JTE
+             NOTE: Thymeleaf Layout Dialect removed — project uses JTE, not Thymeleaf.
+             If Thymeleaf is needed alongside JTE, re-add spring-boot-starter-thymeleaf
+             and nz.net.ultraq.thymeleaf:thymeleaf-layout-dialect separately.
+        ========================================================= -->
+		<dependency>
+			<groupId>gg.jte</groupId>
+			<artifactId>jte</artifactId>
+			<version>3.1.12</version>
+		</dependency>
+		<dependency>
+			<groupId>gg.jte</groupId>
+			<artifactId>jte-spring-boot-starter-3</artifactId>
+			<version>3.1.12</version>
+		</dependency>
+
+		<!-- =========================================================
+             MEDIA STORAGE — CLOUDINARY
+             - cloudinary-http5 : Official Cloudinary SDK (backed by Apache HttpClient 5)
+        ========================================================= -->
+		<dependency>
+			<groupId>com.cloudinary</groupId>
+			<artifactId>cloudinary-http5</artifactId>
+			<version>2.0.0</version>
+		</dependency>
+
+		<!-- =========================================================
+             EMAIL
+             - spring-boot-starter-mail : JavaMailSender, SMTP/MIME support
+             - saaj-impl                : SAAJ (SOAP with Attachments) MIME implementation,
+                                         required by some mail scenarios
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.sun.xml.messaging.saaj</groupId>
+			<artifactId>saaj-impl</artifactId>
+			<version>3.0.4</version>
+		</dependency>
+
+		<!-- =========================================================
+             API DOCUMENTATION — SPRINGDOC OPENAPI
+             - springdoc-openapi-starter-webmvc-ui (2.8.16)
+               NOTE: Corrected from webflux-ui → webmvc-ui.
+               Project uses spring-boot-starter-web (Servlet/MVC stack), so the
+               webmvc variant is required. Use webflux-ui only for pure WebFlux apps.
+               Also upgraded 2.5.0 → 2.8.16 (latest stable, better Spring Boot 4 support).
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.6.0</version>
+		</dependency>
+
+		<!-- =========================================================
+             OBJECT MAPPING — DTO ↔ ENTITY
+             - modelmapper : Runtime reflection-based mapping (legacy, consider phasing out)
+             - mapstruct    : Compile-time, type-safe mapping (preferred going forward)
+             - mapstruct-processor : Annotation processor for MapStruct code generation
+        ========================================================= -->
+		<dependency>
+			<groupId>org.modelmapper</groupId>
+			<artifactId>modelmapper</artifactId>
+			<version>3.2.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<!-- MODIFIED: 1.5.5.Final → 1.6.3 (latest stable, better Java 21+ support) -->
+			<version>${mapstruct.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct-processor</artifactId>
+			<!-- MODIFIED: 1.5.5.Final → 1.6.3 (must match mapstruct version) -->
+			<version>${mapstruct.version}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- =========================================================
+             DEVELOPER UTILITIES
+             - lombok       : Boilerplate reduction (@Data, @Builder, etc.)
+             - commons-lang3: String/array/number utilities (Apache Commons)
+             - dotenv-java  : Load .env files into the environment at runtime
+        ========================================================= -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<!-- MODIFIED: 1.18.30 → 1.18.42 (required for Java 25 compatibility,
+                 1.18.30 causes ExceptionInInitializerError: TypeTag::UNKNOWN) -->
+			<version>${lombok.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>3.14.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.github.cdimascio</groupId>
+			<artifactId>dotenv-java</artifactId>
+			<version>3.0.0</version>
+		</dependency>
+
+		<!-- =========================================================
+             EXCEL PROCESSING — APACHE POI
+             - poi       : Core POI (XLS, HSSF)
+             - poi-ooxml : OOXML support (XLSX, XSSF)
+        ========================================================= -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi</artifactId>
+			<version>5.3.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.3.0</version>
+		</dependency>
+
+		<!-- =========================================================
+             OBSERVABILITY & RATE LIMITING
+             - spring-boot-starter-actuator : Health, metrics, info endpoints
+             - bucket4j-core (8.0.1)        : Token-bucket rate limiting
+               NOTE: Removed duplicate bucket4j-core 7.6.0 entry.
+               Keep only the latest version; multiple declarations cause
+               Maven to silently pick one (last-wins), which is error-prone.
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<!-- MODIFIED: groupId com.github.vladimir-bukhtoyarov → com.bucket4j (official modern group ID) -->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j-core</artifactId>
+			<version>8.10.1</version>
+		</dependency>
+
+		<!-- =========================================================
+             HTML PARSING
+             - jsoup : HTML sanitization, scraping, and DOM manipulation
+        ========================================================= -->
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.18.1</version>
+		</dependency>
+
+		<!-- =========================================================
+             TESTING
+             - spring-boot-starter-test : JUnit 5, Mockito, AssertJ, Spring Test
+             - mockito-core             : Mocking framework core
+             - mockito-junit-jupiter    : Mockito JUnit 5 extension
+             - spring-security-test    : SecurityMockMvc, mock authentication context
+             - javafaker               : Fake data generation for tests
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-core</artifactId>
+			<version>5.12.0</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-junit-jupiter</artifactId>
+			<version>5.12.0</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.github.javafaker</groupId>
+			<artifactId>javafaker</artifactId>
+			<version>1.0.2</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit-junit5</artifactId>
+			<version>1.3.0</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- =========================================================
+             AUTO RELOAD PROJECT WHEN MODIFYING
+             - devtools: auto restart app when code modified (no need to reload manually)
+             - auto disable when run app with "java -jar"
+        ========================================================= -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<scope>runtime</scope>          <!-- or 'provided' if using Gradle -->
+			<optional>true</optional>       <!-- Maven: prevent transitive dependency -->
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<!-- ADDED: maven-compiler-plugin to enforce correct annotation processor order.
+                 Lombok MUST run before MapStruct so MapStruct can see Lombok-generated
+                 getters/setters/constructors during compilation. Without this ordering,
+                 MapStruct silently generates broken/empty mappers. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>${java.version}</source>
+					<target>${java.version}</target>
+					<annotationProcessorPaths>
+						<!-- 1st: Lombok — must come before MapStruct -->
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+						<!-- 2nd: MapStruct processor -->
+						<path>
+							<groupId>org.mapstruct</groupId>
+							<artifactId>mapstruct-processor</artifactId>
+							<version>${mapstruct.version}</version>
+						</path>
+						<!-- 3rd: Lombok-MapStruct binding — ensures full compatibility between both -->
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok-mapstruct-binding</artifactId>
+							<version>0.2.0</version>
+						</path>
+					</annotationProcessorPaths>
+					<compilerArgs>
+						<!-- Makes all MapStruct mappers Spring beans (@Component) by default -->
+						<arg>-Amapstruct.defaultComponentModel=spring</arg>
+					</compilerArgs>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<excludeDevtools>true</excludeDevtools>  <!-- Assure that exclude devtools dependency from JAR -->
+					<!-- ADDED: Exclude Lombok from the final JAR since it is compile-time only -->
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+
+		</plugins>
+	</build>
+
+</project>

@@ -1,0 +1,247 @@
+package metro.ExoticStamp.modules.reward.application.service;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import metro.ExoticStamp.modules.reward.application.port.RewardCachePort;
+import metro.ExoticStamp.modules.reward.application.port.UserStampCampaignCountPort;
+import metro.ExoticStamp.modules.reward.application.support.RewardAuditHelper;
+import metro.ExoticStamp.modules.reward.domain.model.Milestone;
+import metro.ExoticStamp.modules.reward.domain.model.MilestoneStatus;
+import metro.ExoticStamp.modules.reward.domain.model.RewardStatus;
+import metro.ExoticStamp.modules.reward.domain.model.RewardType;
+import metro.ExoticStamp.modules.reward.domain.model.UserReward;
+import metro.ExoticStamp.modules.reward.domain.repository.MilestoneRepository;
+import metro.ExoticStamp.modules.reward.domain.repository.UserRewardRepository;
+import metro.ExoticStamp.modules.reward.domain.service.MilestoneDomainService;
+import metro.ExoticStamp.modules.reward.application.service.VoucherAllocationService.VoucherAllocation;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class RewardEvaluationServiceTest {
+
+    @Mock private UserStampCampaignCountPort countPort;
+    @Mock private MilestoneRepository milestoneRepository;
+    @Mock private UserRewardRepository userRewardRepository;
+    @Mock private RewardIssuancePolicyService issuancePolicyService;
+    @Mock private VoucherAllocationService voucherAllocationService;
+    @Mock private RewardAuditHelper rewardAuditHelper;
+    @Mock private RewardCachePort rewardCachePort;
+    @Mock private ApplicationEventPublisher eventPublisher;
+
+    private RewardEvaluationService service;
+
+    @BeforeEach
+    void setUp() {
+        Clock clock = Clock.fixed(Instant.parse("2026-04-12T10:00:00Z"), ZoneOffset.UTC);
+        service = new RewardEvaluationService(
+                countPort,
+                milestoneRepository,
+                userRewardRepository,
+                issuancePolicyService,
+                voucherAllocationService,
+                rewardAuditHelper,
+                new MilestoneDomainService(),
+                rewardCachePort,
+                eventPublisher,
+                clock,
+                new SimpleMeterRegistry()
+        );
+    }
+
+    @Test
+    void voucherAvailable_issuesWithVoucherId() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID voucherId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 7, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(7L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+        when(userRewardRepository.save(any(UserReward.class))).thenAnswer(inv -> {
+            UserReward ur = inv.getArgument(0);
+            ur.setId(UUID.randomUUID());
+            return ur;
+        });
+        when(voucherAllocationService.allocate(eq(milestoneId), eq(userId), any(UUID.class)))
+                .thenReturn(Optional.of(new VoucherAllocation(voucherId)));
+
+        service.handleStampCollected(userId, campaignId);
+
+        ArgumentCaptor<UserReward> cap = ArgumentCaptor.forClass(UserReward.class);
+        verify(userRewardRepository, org.mockito.Mockito.times(2)).save(cap.capture());
+        UserReward issued = cap.getAllValues().get(1);
+        assertEquals(RewardStatus.ISSUED, issued.getStatus());
+        assertEquals(voucherId, issued.getVoucherPoolId());
+    }
+
+    @Test
+    void alreadyRewardedMilestone_skipped() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.DIGITAL_STICKER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(5L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of(milestoneId));
+
+        service.handleStampCollected(userId, campaignId);
+        verify(userRewardRepository, never()).save(any());
+    }
+
+    @Test
+    void issuesNonVoucherWhenThresholdMet() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 3, RewardType.DIGITAL_STICKER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(3L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+        when(userRewardRepository.save(any(UserReward.class))).thenAnswer(inv -> {
+            UserReward ur = inv.getArgument(0);
+            ur.setId(UUID.randomUUID());
+            return ur;
+        });
+
+        service.handleStampCollected(userId, campaignId);
+
+        ArgumentCaptor<UserReward> cap = ArgumentCaptor.forClass(UserReward.class);
+        verify(userRewardRepository).save(cap.capture());
+        assertEquals(RewardStatus.ISSUED, cap.getValue().getStatus());
+    }
+
+    @Test
+    void voucherEmptyPool_setsPendingStock() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(1L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+        when(userRewardRepository.save(any(UserReward.class))).thenAnswer(inv -> {
+            UserReward ur = inv.getArgument(0);
+            ur.setId(UUID.randomUUID());
+            return ur;
+        });
+        when(voucherAllocationService.allocate(eq(milestoneId), eq(userId), any(UUID.class)))
+                .thenReturn(Optional.empty());
+
+        service.handleStampCollected(userId, campaignId);
+
+        ArgumentCaptor<UserReward> cap = ArgumentCaptor.forClass(UserReward.class);
+        verify(userRewardRepository).save(cap.capture());
+        assertEquals(RewardStatus.PENDING_STOCK, cap.getValue().getStatus());
+    }
+
+    @Test
+    void belowThreshold_issuesNothing() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, UUID.randomUUID(), 5, RewardType.DIGITAL_STICKER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(2L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+
+        service.handleStampCollected(userId, campaignId);
+        verify(userRewardRepository, never()).save(any());
+    }
+
+    @Test
+    void duplicateUniqueConstraint_skips() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.DIGITAL_STICKER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(1L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+        when(userRewardRepository.save(any(UserReward.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_user_rewards_once"));
+
+        service.handleStampCollected(userId, campaignId);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void oneCollectCrossingMultipleMilestones_issuesMultipleRewards() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID m1 = UUID.randomUUID();
+        UUID m2 = UUID.randomUUID();
+        Milestone milestone1 = milestone(userId, campaignId, m1, 1, RewardType.DIGITAL_STICKER, MilestoneStatus.ACTIVE);
+        Milestone milestone2 = milestone(userId, campaignId, m2, 2, RewardType.DIGITAL_BADGE, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(2L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone1, milestone2));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+        when(userRewardRepository.save(any(UserReward.class))).thenAnswer(inv -> {
+            UserReward ur = inv.getArgument(0);
+            ur.setId(UUID.randomUUID());
+            return ur;
+        });
+
+        service.handleStampCollected(userId, campaignId);
+
+        verify(userRewardRepository, org.mockito.Mockito.times(2)).save(any(UserReward.class));
+    }
+
+    @Test
+    void inactiveMilestone_skipped() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        Milestone inactive = milestone(userId, campaignId, UUID.randomUUID(), 1,
+                RewardType.DIGITAL_STICKER, MilestoneStatus.INACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(5L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of());
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+
+        service.handleStampCollected(userId, campaignId);
+        verify(userRewardRepository, never()).save(any());
+    }
+
+    private static Milestone milestone(UUID userId, UUID campaignId, UUID id, int stamps, RewardType type, MilestoneStatus status) {
+        return Milestone.builder()
+                .id(id)
+                .campaignId(campaignId)
+                .code("M" + id.toString().substring(0, 4))
+                .stampsRequired(stamps)
+                .name("Milestone")
+                .rewardType(type)
+                .rewardTitle("Reward")
+                .status(status)
+                .sortOrder(0)
+                .build();
+    }
+}

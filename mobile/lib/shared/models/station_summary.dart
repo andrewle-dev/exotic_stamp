@@ -7,4 +7,3 @@ class StationSummary {
   final String id;
   final String name;
 }
-

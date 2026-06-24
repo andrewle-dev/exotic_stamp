@@ -34,4 +34,3 @@ class PlaceholderScaffold extends StatelessWidget {
     );
   }
 }
-

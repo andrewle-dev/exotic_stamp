@@ -1,0 +1,71 @@
+package metro.ExoticStamp.modules.user.application;
+
+import metro.ExoticStamp.modules.user.application.port.UserCachePort;
+import metro.ExoticStamp.modules.user.application.view.UserView;
+import metro.ExoticStamp.modules.user.domain.exception.UserNotFoundException;
+import metro.ExoticStamp.modules.user.domain.model.User;
+import metro.ExoticStamp.modules.user.domain.model.UserStatus;
+import metro.ExoticStamp.modules.user.domain.repository.UserRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class UserQueryServiceTest {
+
+    private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+    @Mock private UserRepository userRepository;
+    @Mock private UserCachePort cachePort;
+
+    @InjectMocks
+    private UserQueryService userQueryService;
+
+    @Test
+    void getById_cacheHit_doesNotQueryRepository() {
+        UserView cached = UserView.builder().id(USER_ID).username("u1").email("u1@test.com").build();
+        when(cachePort.get(USER_ID)).thenReturn(Optional.of(cached));
+
+        UserView result = userQueryService.getById(USER_ID);
+
+        assertEquals(USER_ID, result.getId());
+        verify(userRepository, never()).findById(USER_ID);
+    }
+
+    @Test
+    void getById_cacheMiss_loadsAndCaches() {
+        when(cachePort.get(USER_ID)).thenReturn(Optional.empty());
+        User user = User.builder()
+                .username("u1")
+                .email("u1@test.com")
+                .phoneNumber("+10000000004")
+                .password("hash")
+                .status(UserStatus.ACTIVE)
+                .build();
+        user.setId(USER_ID);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        UserView result = userQueryService.getById(USER_ID);
+
+        assertEquals("u1", result.getUsername());
+        verify(cachePort).put(USER_ID, result);
+    }
+
+    @Test
+    void getById_notFound_throws() {
+        when(cachePort.get(USER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        assertThrows(UserNotFoundException.class, () -> userQueryService.getById(USER_ID));
+    }
+}

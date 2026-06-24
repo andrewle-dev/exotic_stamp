@@ -1,4 +1,0 @@
-class TokenStorageService {
-  const TokenStorageService();
-}
-

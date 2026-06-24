@@ -1,13 +1,127 @@
 spring:
-  application:
-    name: metro-stamp-api
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
 
-server:
-  port: 8080
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
 
+application:
+  frontend:
+    dev: http://localhost:3000
+    prod: frontend url
+
+  backend:
+    prod: backend url
+
+  rbac:
+    admin-role-code: ADMIN
+    protected-system-role-codes:
+      - ADMIN
+    max-role-code-length: 64
+    max-permission-code-length: 80
+    max-description-length: 500
+
+  mail:
+    from: ${MAIL_FROM}
+    logo-url: https://res.cloudinary.com/dnahocnhk/image/upload/f_png,b_white/v1762831622/fwf-logo_veozws.webp
+    queue:
+      max-per-minute: 30
+      batch-size: 10
+      poll-interval-ms: 5000
+      stuck-reset-interval-ms: 600000
+      stuck-processing-threshold-minutes: 5
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
+    allowed-headers: ${CORS_ALLOWED_HEADERS:*}
+    allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+
+  security:
+    token-revocation:
+      fail-open-on-db-error: false
+
+  auth:
+    otp:
+      length: 6
+      ttl: 5m
+      cooldown-ttl: 2m
+      attempts-ttl: 1h
+      max-attempts: 5
+    verification:
+      token-ttl: 15m
+      resend-cooldown-ttl: 2m
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-ttl: 15m
+  refresh-token-ttl: 7d
+  issuer: metricsX
+
+cache:
+  user-ttl: 30m
+  sales-ttl: 10m
+  booking-ttl: 10m
+  customer-ttl: 10m
+  realtime-ttl: 70s
+  ttl:
+    station-detail: 1800s
+    metro-station-scan: 1800s
+    collection-user-stamps: 600s
+    collection-user-progress: 600s
+    collection-user-history: 900s
+    collection-stamp-book: 900s
+
+collection:
+  idempotency-window: 1h
+  max-page-size: 50
+  default-page-size: 20
+  stamp-collected-event-dedup-ttl: 48h
+  gps:
+    verification-enabled: true
+    max-distance-meters: 150
+    earth-radius-meters: 6371000
+
+reward:
+  default-page-size: 20
+  max-page-size: 50
+  user-reward-cache-ttl: 30m
+  stamp-collected-event-dedup-ttl: 48h
+  stamp-collected-event-processing-lock-ttl: 2m
+  stamp-collected-event-max-attempts: 3
+  stamp-collected-event-retry-backoff: 200ms
+  expiry-cron: "0 0 2 * * *"
+
+community:
+  default-page-size: 20
+  max-page-size: 50
+  max-metadata-bytes: 2048
+  referral-code-max-attempts: 5
+
+storage:
+  provider: local
+  local:
+    base-path: ${STORAGE_LOCAL_PATH:./uploads}
+    base-url: ${STORAGE_LOCAL_URL:http://localhost:8080/uploads}
+  file:
+    max-size-mb: 5
+    allowed-types:
+      - image/jpeg
+      - image/png
+      - image/webp
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.springframework.web: INFO

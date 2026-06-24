@@ -1,9 +1,97 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-  data:
-    mongodb:
-      uri: mongodb://${MONGO_HOST}:${MONGO_PORT}/${MONGO_DATABASE}
+  config:
+    activate:
+      on-profile: dev
 
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/exotic_stamp}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:f123}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      # validate: check entity in code match the database? (recommend for prod)
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: public
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:work.exotictravelers@gmail.com}
+    password: ${MAIL_PASSWORD:jfeg nqup glrr hqzy}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  # Flyway: if this database already had tables created by Hibernate (ddl-auto) and no
+  # flyway_schema_history row yet, baseline-on-migrate creates the history table and
+  # marks baseline at baseline-version, then applies pending migrations (e.g. V1 mail_jobs).
+  # For production, prefer an explicit flyway baseline command instead of relying on this.
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
+    # After a failed migration or editing migration files, Flyway may need repair; dev-only.
+    repair-on-migrate: true
+    enabled: true
+
+application:
+  bootstrap:
+    admin-password: ${ADMIN_SEED_PASSWORD:changeme-dev-only}
+    demo-user-password: ${DEMO_USER_PASSWORD:changeme-demo-only}
+  frontend:
+    dev: http://localhost:3000
+    prod: https://report.facewashfox.com
+
+  backend:
+    dev: http://localhost:8080
+    prod: https://backend.facewashfox.com
+
+  mail:
+    # Must be a valid mailbox address; display name is handled by the mail provider/client.
+    from: ${MAIL_FROM:work.exotictravelers@gmail.com}
+    logo-url: https://res.cloudinary.com/dnahocnhk/image/upload/v1776831366/ExoticStamp_logo-removebg-preview_c8kmaa.png
+    queue:
+      max-per-minute: 30
+      batch-size: 10
+      poll-interval-ms: 1000
+      stuck-reset-interval-ms: 600000
+      stuck-processing-threshold-minutes: 5
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://report.facewashfox.com}
+
+  security:
+    token-revocation:
+      fail-open-on-db-error: true
+
+jwt:
+  secret: ${JWT_SECRET:N0WMqHgE1DHx8yzrf4NIEpPl83vXkOM2MmN2hjqJ5Yh-exoticstamp-dunglv-HDvnawi2}
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+
+gg:
+  jte:
+    developmentMode: true
+
+springdoc:
+  swagger-ui:
+    try-it-out-enabled: true
+    persist-authorization: true
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha

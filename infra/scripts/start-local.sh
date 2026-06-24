@@ -1,4 +1,3 @@
 #!/usr/bin/env bash
 
-docker compose up -d postgres mongo api
-
+docker compose up -d postgres redis api

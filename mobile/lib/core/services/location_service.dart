@@ -1,4 +1,3 @@
 class LocationService {
   const LocationService();
 }
-

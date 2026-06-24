@@ -3,6 +3,12 @@
 .vscode/
 *.iml
 
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.local
+
 # Flutter
 mobile/.dart_tool/
 mobile/.flutter-plugins
@@ -10,14 +16,14 @@ mobile/.flutter-plugins-dependencies
 mobile/.packages
 mobile/.metadata
 mobile/build/
-mobile/.dart_tool/
+mobile/coverage/
 
-# Java / Gradle
-backend/.gradle/
-backend/build/
-backend/out/
+# Java / Maven
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/logs/
 
-# Env
-.env
-*.local
-
+# Build artifacts
+**/target/
+**/build/
+!**/src/**/build/

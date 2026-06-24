@@ -1,19 +1,30 @@
-# Backend API
+# Exotic Stamp API
 
-Spring Boot API cho mobile app Metro Stamp.
+Spring Boot backend cho mobile app Metro Stamp.
 
-## Initial modules
+## Chạy nhanh
 
-- `auth`
-- `users`
-- `stations`
-- `scans`
-- `stamps`
-- `rewards`
-- `banners`
+```bash
+# Từ root repo (Docker)
+docker compose up -d postgres redis api
 
-## Data strategy
+# Hoặc trực tiếp
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
 
-- PostgreSQL la source of truth cho du lieu nghiep vu.
-- MongoDB dung cho scan events, logs va analytics phu tro.
+## Tài liệu
 
+- Kiến trúc & guardrails: `docs/`
+- API contract (shared): `../docs/api/MOBILE_API_CONTRACT.md`
+- Demo seed: `docs/DEMO_SEED.md`
+
+## Cấu trúc mã nguồn
+
+```
+src/main/java/metro/ExoticStamp/
+├── config/              # Security, seed, OpenAPI
+├── modules/             # auth, metro, collection, reward, rbac, …
+└── ExoticStampApplication.java
+```
+
+Mỗi module theo layered architecture: `domain` → `application` → `infrastructure` → `presentation`.

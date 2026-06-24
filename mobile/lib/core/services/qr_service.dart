@@ -1,4 +1,3 @@
 class QrService {
   const QrService();
 }
-
