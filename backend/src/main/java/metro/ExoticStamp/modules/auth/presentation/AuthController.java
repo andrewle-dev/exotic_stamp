@@ -11,7 +11,7 @@ import metro.ExoticStamp.modules.auth.application.command.ResendOtpCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResetPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.RegisterCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResendVerificationCommand;
-import metro.ExoticStamp.modules.auth.application.command.VerifyTokenCommand;
+import metro.ExoticStamp.modules.auth.application.command.VerifyAccountCommand;
 import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
 import metro.ExoticStamp.modules.auth.presentation.mapper.AuthPresentationMapper;
 import metro.ExoticStamp.common.response.ApiResponse;
@@ -21,7 +21,7 @@ import metro.ExoticStamp.modules.auth.presentation.dto.request.RegisterRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResetPasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResendOtpRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResendVerificationRequest;
-import metro.ExoticStamp.modules.auth.presentation.dto.request.VerifyTokenRequest;
+import metro.ExoticStamp.modules.auth.presentation.dto.request.VerifyAccountRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.response.AuthResponse;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -84,23 +84,23 @@ public class AuthController {
     ) {
         RegisterCommand cmd = presentationMapper.toRegisterCommand(req);
         commandService.register(cmd);
-        return ResponseEntity.ok("Registered successfully! Please check your email for verification.");
+        return ResponseEntity.ok("Registered successfully! Please check your email for your verification code.");
     }
 
-    @PostMapping("/verify-email")
-    @Operation(summary = "Verify email using verification token")
-    public ResponseEntity<ApiResponse<Void>> verifyEmail(@Valid @RequestBody VerifyTokenRequest req) {
-        commandService.verifyEmail(new VerifyTokenCommand(req.getToken()));
-        return ResponseEntity.ok(ApiResponse.ok("Email verified successfully.", null));
+    @PostMapping("/verify-account")
+    @Operation(summary = "Verify account with email OTP")
+    public ResponseEntity<ApiResponse<Void>> verifyAccount(@Valid @RequestBody VerifyAccountRequest req) {
+        commandService.verifyAccount(new VerifyAccountCommand(req.getEmail(), req.getOtp()));
+        return ResponseEntity.ok(ApiResponse.ok("Account verified successfully.", null));
     }
 
-    @PostMapping("/resend-verification")
-    @Operation(summary = "Resend verification email")
-    public ResponseEntity<ApiResponse<Void>> resendVerification(
+    @PostMapping("/resend-verification-otp")
+    @Operation(summary = "Resend account verification OTP")
+    public ResponseEntity<ApiResponse<Void>> resendVerificationOtp(
             @Valid @RequestBody ResendVerificationRequest req) {
-        commandService.resendVerification(new ResendVerificationCommand(req.getEmail()));
+        commandService.resendVerificationOtp(new ResendVerificationCommand(req.getEmail()));
         return ResponseEntity.ok(
-                ApiResponse.ok("If the account exists and is eligible, a verification email has been sent.", null));
+                ApiResponse.ok("If the account exists and is eligible, a verification code has been sent.", null));
     }
 
     @PostMapping("/forgot-password")

@@ -58,22 +58,23 @@ This document describes runtime behavior when Redis is unreachable for auth-rela
 
 **Public enumeration:** `forgotPassword` and `resendVerification` return generic success; throttling is enforced server-side when Redis is healthy.
 
-## Email verification token
+## Account verification OTP
 
-**Config keys** (`application.auth.verification`):
+**Config keys** (`application.auth.otp.email-verify`):
 
 | Key | Default | Used by |
 |-----|---------|---------|
-| `token-ttl` | `15m` | `VerifyTokenRepository.saveToken` |
-| `resend-cooldown-ttl` | `2m` | `VerifyTokenRepository.saveCooldown` |
+| `ttl` | `10m` | `OtpRepository.save` for `OtpType.EMAIL_VERIFY` |
+| `cooldown-ttl` | `2m` | Resend cooldown |
+| `attempts-ttl` / `max-attempts` | `1h` / `5` | Resend rate limit |
 
 **Redis down:**
 
-- `resendVerification` cooldown check returns **not on cooldown** (fail-open).
-- `verifyEmail` cannot resolve token from Redis → `InvalidTokenException`.
-- `saveToken` on register/resend may not persist token.
+- `resendVerificationOtp` cooldown check returns **not on cooldown** (fail-open).
+- `verifyAccount` cannot resolve OTP from Redis → `OtpExpiredException`.
+- Register/resend OTP `save` may not persist.
 
-**Public response:** `POST /api/v1/auth/resend-verification` always returns the same generic message regardless of unknown email, already verified, throttled, or eligible user.
+**Public response:** `POST /api/v1/auth/resend-verification-otp` returns generic success for unknown or already verified email; cooldown/max attempts return 429 when Redis is healthy.
 
 ## Access token revocation (JWT filter)
 
@@ -90,7 +91,6 @@ Redis errors increment `cache.error` with domain tags such as `auth.otp`, `auth.
 
 - `infra/redis/RedisKeyValueSupport.java`
 - `modules/auth/infrastructure/redis/OtpRepository.java`
-- `modules/auth/infrastructure/redis/VerifyTokenRepository.java`
 - `modules/auth/infrastructure/redis/RefreshTokenRedisRepository.java`
 - `modules/auth/infrastructure/redis/AccessTokenRevocationRedisRepository.java`
 - `modules/auth/config/AuthSecurityProperties.java`

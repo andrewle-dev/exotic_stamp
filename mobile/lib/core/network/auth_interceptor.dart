@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../storage/secure_token_storage.dart';
 
@@ -17,6 +18,8 @@ class AuthInterceptor extends Interceptor {
     RequestInterceptorHandler handler,
   ) async {
     if (options.extra[skipAuthKey] == true) {
+      // TODO(debug-bug2): remove
+      debugPrint('[auth] ${options.path} skipAuth=true');
       return handler.next(options);
     }
 
@@ -24,6 +27,10 @@ class AuthInterceptor extends Interceptor {
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
+    // TODO(debug-bug2): remove
+    debugPrint(
+      '[auth] ${options.path} authHeader=${token != null && token.isNotEmpty}',
+    );
     handler.next(options);
   }
 }

@@ -11,14 +11,14 @@ public class UserCreatedEvent {
     private final String userId;
     private final String email;
     private final String username;
-    private final String verifyToken;
+    private final String verifyOtp;
     private final LocalDateTime occurredAt;
 
-    public UserCreatedEvent(User user, String verifyToken) {
+    public UserCreatedEvent(User user, String verifyOtp) {
         this.userId = user.getId().toString();
         this.email = user.getEmail();
         this.username = user.getUsername();
-        this.verifyToken = verifyToken;
+        this.verifyOtp = verifyOtp;
         this.occurredAt = LocalDateTime.now();
     }
 

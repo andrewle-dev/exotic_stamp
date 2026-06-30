@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 
@@ -11,18 +13,28 @@ class NfcReader {
   NfcReader({
     NfcPayloadParser? payloadParser,
     bool Function()? iosTestBuildDisabled,
+    bool Function()? nfcSupported,
   })  : _payloadParser = payloadParser ?? const NfcPayloadParser(),
         _iosTestBuildDisabled = iosTestBuildDisabled ??
-            (() => defaultTargetPlatform == TargetPlatform.iOS);
+            (() => defaultTargetPlatform == TargetPlatform.iOS),
+        _nfcSupported = nfcSupported ?? _defaultNfcSupported;
 
   final NfcPayloadParser _payloadParser;
   final bool Function() _iosTestBuildDisabled;
+  final bool Function() _nfcSupported;
+
+  static bool _defaultNfcSupported() =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   bool _sessionRunning = false;
 
   bool get isSessionRunning => _sessionRunning;
 
   Future<NfcAvailabilityStatus> checkAvailability() async {
+    if (!_nfcSupported()) {
+      return NfcAvailabilityStatus.unavailable;
+    }
+
     if (_iosTestBuildDisabled()) {
       return NfcAvailabilityStatus.iosTestBuildDisabled;
     }
@@ -42,7 +54,7 @@ class NfcReader {
     required NfcPayloadHandler onPayload,
     String iosAlertMessage = 'Đưa điện thoại lại gần thẻ NFC để quét stamp.',
   }) async {
-    if (_sessionRunning) {
+    if (!_nfcSupported() || _sessionRunning) {
       return;
     }
 
@@ -74,7 +86,7 @@ class NfcReader {
   }
 
   Future<void> stopSession() async {
-    if (!_sessionRunning) {
+    if (!_sessionRunning || !_nfcSupported()) {
       return;
     }
 

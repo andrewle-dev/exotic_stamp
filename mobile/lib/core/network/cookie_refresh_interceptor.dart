@@ -1,5 +1,6 @@
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/api_config.dart';
 import '../storage/secure_token_storage.dart';
@@ -31,15 +32,29 @@ class CookieRefreshInterceptor extends QueuedInterceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    if (err.response?.statusCode == 401) {
+      // TODO(debug-bug2): remove
+      debugPrint(
+        '[refresh] 401 on ${err.requestOptions.path} '
+        'attemptRefresh=${_shouldAttemptRefresh(err)}',
+      );
+    }
+
     if (!_shouldAttemptRefresh(err)) {
       return handler.next(err);
     }
 
+    // TODO(debug-bug2): remove
+    debugPrint('[refresh] starting refresh for ${err.requestOptions.path}');
     try {
       await _refreshAccessTokenOnce();
       final response = await _retryRequest(err.requestOptions);
+      // TODO(debug-bug2): remove
+      debugPrint('[refresh] success, retry resolved ${err.requestOptions.path}');
       return handler.resolve(response);
-    } catch (_) {
+    } catch (error) {
+      // TODO(debug-bug2): remove
+      debugPrint('[refresh] failed: $error');
       await _tokenStorage.clear();
       await _cookieJar.deleteAll();
       await _onSessionInvalidated?.call();
@@ -90,6 +105,8 @@ class CookieRefreshInterceptor extends QueuedInterceptor {
     }
 
     await _tokenStorage.writeAccessToken(token);
+    // TODO(debug-bug2): remove
+    debugPrint('[refresh] new access token length=${token.length}');
   }
 
   Future<Response<dynamic>> _retryRequest(RequestOptions requestOptions) {

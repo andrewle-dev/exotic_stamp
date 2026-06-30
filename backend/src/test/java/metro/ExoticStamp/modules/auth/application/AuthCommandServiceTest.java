@@ -1,6 +1,5 @@
 package metro.ExoticStamp.modules.auth.application;
 
-import metro.ExoticStamp.infra.mail.MailProperties;
 import metro.ExoticStamp.infra.mail.MailService;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.LoginCommand;
@@ -9,18 +8,18 @@ import metro.ExoticStamp.modules.auth.application.command.RegisterCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResendOtpCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResendVerificationCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResetPasswordCommand;
-import metro.ExoticStamp.modules.auth.application.command.VerifyTokenCommand;
+import metro.ExoticStamp.modules.auth.application.command.VerifyAccountCommand;
 import metro.ExoticStamp.modules.auth.application.port.AccessTokenPort;
 import metro.ExoticStamp.modules.auth.application.port.AccessTokenRevocationPort;
-import metro.ExoticStamp.modules.auth.application.port.EmailVerificationTokenPort;
 import metro.ExoticStamp.modules.auth.application.port.OtpStorePort;
 import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort;
 import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
 import metro.ExoticStamp.modules.auth.application.view.AuthView;
 import metro.ExoticStamp.modules.auth.application.view.IssuedAccessTokenView;
 import metro.ExoticStamp.modules.auth.config.AuthSecurityProperties;
+import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
-import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
+import metro.ExoticStamp.modules.auth.domain.exception.OtpExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
@@ -75,9 +74,7 @@ class AuthCommandServiceTest {
     @Mock private AuditLogService auditLogService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private TokenTtlPort tokenTtlPort;
-    @Mock private EmailVerificationTokenPort emailVerificationTokenPort;
     @Mock private MailService mailService;
-    @Mock private MailProperties mailProperties;
     @Mock private AuthSecurityProperties authSecurityProperties;
 
     @InjectMocks
@@ -111,7 +108,7 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    void register_success_savesUserAndVerificationToken() {
+    void register_success_savesUserAndVerificationOtp() {
         RegisterCommand cmd = RegisterCommand.builder()
                 .email("new@test.com")
                 .username("newuser")
@@ -131,7 +128,10 @@ class AuthCommandServiceTest {
 
         authCommandService.register(cmd);
 
-        verify(emailVerificationTokenPort).saveToken(anyString(), eq(USER_ID));
+        verify(otpStore).delete("new@test.com", OtpType.EMAIL_VERIFY);
+        verify(otpStore).save(eq("new@test.com"), eq(OtpType.EMAIL_VERIFY), anyString());
+        verify(otpStore).saveCooldown("new@test.com", OtpType.EMAIL_VERIFY);
+        verify(otpStore).incrementAttempts("new@test.com", OtpType.EMAIL_VERIFY);
         verify(userRepository).save(argThat(u -> u.getStatus() == UserStatus.PENDING_VERIFIED));
     }
 
@@ -209,8 +209,32 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    void login_unverifiedUser_throws() {
+    void login_unverifiedUser_throwsAccountNotVerified() {
         activeUser.setStatus(UserStatus.PENDING_VERIFIED);
+        LoginCommand cmd = LoginCommand.builder()
+                .identifier("user@test.com")
+                .password("secret")
+                .build();
+        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        assertThrows(AccountNotVerifiedException.class, () -> authCommandService.login(cmd));
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+    }
+
+    @Test
+    void login_unverifiedUser_wrongPassword_stillThrowsAccountNotVerified() {
+        activeUser.setStatus(UserStatus.PENDING_VERIFIED);
+        LoginCommand cmd = LoginCommand.builder()
+                .identifier("user@test.com")
+                .password("wrong")
+                .build();
+        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        assertThrows(AccountNotVerifiedException.class, () -> authCommandService.login(cmd));
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+    }
+
+    @Test
+    void login_suspendedUser_throwsUserNotActive() {
+        activeUser.setStatus(UserStatus.SUSPENDED);
         LoginCommand cmd = LoginCommand.builder()
                 .identifier("user@test.com")
                 .password("secret")
@@ -221,24 +245,41 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    void verifyEmail_success_activatesUser() {
-        String token = "verify-token";
-        when(emailVerificationTokenPort.findUserIdByToken(token)).thenReturn(Optional.of(USER_ID));
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+    void verifyAccount_success_activatesUser() {
         activeUser.setStatus(UserStatus.PENDING_VERIFIED);
+        when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(Optional.of("123456"));
+        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
 
-        authCommandService.verifyEmail(new VerifyTokenCommand(token));
+        authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "123456"));
 
         assertEquals(UserStatus.ACTIVE, activeUser.getStatus());
         assertNotNull(activeUser.getVerifiedAt());
-        verify(emailVerificationTokenPort).deleteToken(token);
+        verify(otpStore).delete("user@test.com", OtpType.EMAIL_VERIFY);
     }
 
     @Test
-    void verifyEmail_invalidToken_throws() {
-        when(emailVerificationTokenPort.findUserIdByToken("bad")).thenReturn(Optional.empty());
-        assertThrows(InvalidTokenException.class,
-                () -> authCommandService.verifyEmail(new VerifyTokenCommand("bad")));
+    void verifyAccount_expiredOtp_throws() {
+        when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(Optional.empty());
+        assertThrows(OtpExpiredException.class,
+                () -> authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "123456")));
+    }
+
+    @Test
+    void verifyAccount_wrongOtp_throws() {
+        when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(Optional.of("111111"));
+        assertThrows(OtpInvalidException.class,
+                () -> authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "222222")));
+    }
+
+    @Test
+    void verifyAccount_rejectsForgotPasswordOtp() {
+        when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(Optional.empty());
+
+        assertThrows(OtpExpiredException.class,
+                () -> authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "123456")));
+
+        verify(otpStore).find("user@test.com", OtpType.EMAIL_VERIFY);
+        verify(otpStore, never()).find("user@test.com", OtpType.FORGOT_PASSWORD);
     }
 
     @Test
@@ -385,29 +426,36 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    void resendVerification_unknownEmail_isSilentlyIgnored() {
+    void resendVerificationOtp_unknownEmail_returnsWithoutSending() {
         when(userRepository.findByEmail("missing@test.com")).thenReturn(Optional.empty());
 
         assertDoesNotThrow(() ->
-                authCommandService.resendVerification(new ResendVerificationCommand("missing@test.com")));
+                authCommandService.resendVerificationOtp(new ResendVerificationCommand("missing@test.com")));
 
-        verify(emailVerificationTokenPort, never()).saveToken(anyString(), any());
-        verify(mailService, never()).sendVerifyEmail(anyString(), anyString(), anyString());
+        verify(mailService, never()).sendVerifyAccountOtp(anyString(), anyString(), anyString());
     }
 
     @Test
-    void resendVerification_verifiedUser_isSilentlyIgnored() {
+    void resendVerificationOtp_verifiedUser_returnsWithoutSending() {
         when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
 
         assertDoesNotThrow(() ->
-                authCommandService.resendVerification(new ResendVerificationCommand("user@test.com")));
+                authCommandService.resendVerificationOtp(new ResendVerificationCommand("user@test.com")));
 
-        verify(emailVerificationTokenPort, never()).saveToken(anyString(), any());
-        verify(mailService, never()).sendVerifyEmail(anyString(), anyString(), anyString());
+        verify(mailService, never()).sendVerifyAccountOtp(anyString(), anyString(), anyString());
     }
 
     @Test
-    void resendVerification_onCooldown_isSilentlyIgnored() {
+    void resendVerificationOtp_onCooldown_throws() {
+        when(otpStore.isOnCooldown("p@test.com", OtpType.EMAIL_VERIFY)).thenReturn(true);
+        when(otpStore.getCooldownTtlSeconds("p@test.com", OtpType.EMAIL_VERIFY)).thenReturn(30L);
+
+        assertThrows(ResendCooldownException.class,
+                () -> authCommandService.resendVerificationOtp(new ResendVerificationCommand("p@test.com")));
+    }
+
+    @Test
+    void resendVerificationOtp_eligibleUser_sendsMailAndStoresOtp() {
         User pending = User.builder()
                 .email("p@test.com")
                 .username("p")
@@ -417,34 +465,15 @@ class AuthCommandServiceTest {
                 .build();
         pending.setId(USER_ID);
         when(userRepository.findByEmail("p@test.com")).thenReturn(Optional.of(pending));
-        when(emailVerificationTokenPort.isOnCooldown("p@test.com")).thenReturn(true);
 
         assertDoesNotThrow(() ->
-                authCommandService.resendVerification(new ResendVerificationCommand("p@test.com")));
+                authCommandService.resendVerificationOtp(new ResendVerificationCommand("p@test.com")));
 
-        verify(emailVerificationTokenPort, never()).saveToken(anyString(), any());
-        verify(mailService, never()).sendVerifyEmail(anyString(), anyString(), anyString());
-    }
-
-    @Test
-    void resendVerification_eligibleUser_sendsMailAndStoresToken() {
-        User pending = User.builder()
-                .email("p@test.com")
-                .username("p")
-                .phoneNumber("+10000000002")
-                .password("hash")
-                .status(UserStatus.PENDING_VERIFIED)
-                .build();
-        pending.setId(USER_ID);
-        when(userRepository.findByEmail("p@test.com")).thenReturn(Optional.of(pending));
-        when(mailProperties.getFrontendUrl()).thenReturn("http://localhost:3000");
-
-        assertDoesNotThrow(() ->
-                authCommandService.resendVerification(new ResendVerificationCommand("p@test.com")));
-
-        verify(emailVerificationTokenPort).saveToken(anyString(), eq(USER_ID));
-        verify(emailVerificationTokenPort).saveCooldown("p@test.com");
-        verify(mailService).sendVerifyEmail(eq("p@test.com"), eq("p"), contains("/verify-email?token="));
+        verify(otpStore).delete("p@test.com", OtpType.EMAIL_VERIFY);
+        verify(otpStore).save(eq("p@test.com"), eq(OtpType.EMAIL_VERIFY), anyString());
+        verify(otpStore).saveCooldown("p@test.com", OtpType.EMAIL_VERIFY);
+        verify(otpStore).incrementAttempts("p@test.com", OtpType.EMAIL_VERIFY);
+        verify(mailService).sendVerifyAccountOtp(eq("p@test.com"), eq("p"), anyString());
     }
 
     @Test

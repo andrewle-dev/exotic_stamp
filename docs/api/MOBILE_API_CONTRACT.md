@@ -269,8 +269,8 @@
 
 | Endpoint | Status | Notes |
 |----------|--------|-------|
-| `POST /api/v1/auth/verify-email` | IMPLEMENTED | Deep link / email verification |
-| `POST /api/v1/auth/resend-verification` | IMPLEMENTED | `{ "email": "..." }` |
+| `POST /api/v1/auth/verify-account` | IMPLEMENTED | `{ "email": "...", "otp": "123456" }` — activates account |
+| `POST /api/v1/auth/resend-verification-otp` | IMPLEMENTED | `{ "email": "..." }` — 429 `RESEND_COOLDOWN` on cooldown |
 | `POST /api/v1/auth/resend-otp` | IMPLEMENTED | Forgot-password OTP resend |
 | `POST /api/v1/auth/logout-all` | IMPLEMENTED | Revoke all sessions |
 

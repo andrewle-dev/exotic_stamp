@@ -5,6 +5,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class VerifyTokenCommand {
-    private String token;
+public class VerifyAccountCommand {
+    private String email;
+    private String otp;
 }

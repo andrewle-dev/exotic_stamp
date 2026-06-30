@@ -9,6 +9,7 @@ import metro.ExoticStamp.modules.auth.domain.exception.OtpMaxAttemptsExceededExc
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
+import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
 import metro.ExoticStamp.common.exceptions.storage.FileTooLargeException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
@@ -519,6 +520,15 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("[400] OTP invalid: {}", ex.getMessage());
         return build(400, "OTP_INVALID", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(AccountNotVerifiedException.class)
+    public ResponseEntity<ErrorResponse> handleAccountNotVerified(
+            AccountNotVerifiedException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[403] Account not verified: {}", ex.getMessage());
+        return build(403, "ACCOUNT_NOT_VERIFIED", ex.getMessage(), req);
     }
 
     @ExceptionHandler(UserNotActiveException.class)

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../../core/errors/failure.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_token_storage.dart';
@@ -60,6 +62,19 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<void> verifyAccount({
+    required String email,
+    required String otp,
+  }) {
+    return _remoteDataSource.verifyAccount(email: email, otp: otp);
+  }
+
+  @override
+  Future<void> resendVerificationOtp({required String email}) {
+    return _remoteDataSource.resendVerificationOtp(email: email);
+  }
+
+  @override
   Future<Session> refreshSession() async {
     final response = await _remoteDataSource.refresh();
     await _tokenStorage.writeAccessToken(response.accessToken);
@@ -91,6 +106,8 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Session?> restoreSession() async {
     final hasToken = await _tokenStorage.hasAccessToken();
+    // TODO(debug-bug2): remove
+    debugPrint('[auth-startup] hasStoredAccessToken=$hasToken');
     if (!hasToken) {
       return _tryRefreshSession();
     }

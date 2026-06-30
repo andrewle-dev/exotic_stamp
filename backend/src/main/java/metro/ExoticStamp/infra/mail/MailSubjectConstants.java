@@ -5,8 +5,8 @@ package metro.ExoticStamp.infra.mail;
  */
 public final class MailSubjectConstants {
 
-    public static final String VERIFY_ACCOUNT = "Verify your MetricsX account";
-    public static final String OTP_VERIFICATION_CODE = "Your MetricsX verification code";
+    public static final String VERIFY_ACCOUNT = "Verify your Exotic Stamp account";
+    public static final String OTP_VERIFICATION_CODE = "Your Exotic Stamp verification code";
 
     private MailSubjectConstants() {
     }

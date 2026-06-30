@@ -1,5 +1,6 @@
 package metro.ExoticStamp.common.exceptions;
 
+import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
@@ -33,6 +34,13 @@ class GlobalExceptionHandlerTest {
         assertEquals("INVALID_CREDENTIALS", response.getBody().code());
         assertEquals(401, response.getBody().status());
         assertNotNull(response.getBody().timestamp());
+    }
+
+    @Test
+    void accountNotVerified_returns403() {
+        var response = handler.handleAccountNotVerified(new AccountNotVerifiedException(), request);
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("ACCOUNT_NOT_VERIFIED", response.getBody().code());
     }
 
     @Test

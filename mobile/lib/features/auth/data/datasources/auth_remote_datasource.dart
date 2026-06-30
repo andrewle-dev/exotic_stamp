@@ -10,6 +10,8 @@ import '../models/auth_response_model.dart';
 import '../models/forgot_password_request.dart';
 import '../models/login_request.dart';
 import '../models/register_request.dart';
+import '../models/resend_verification_otp_request.dart';
+import '../models/verify_account_request.dart';
 import '../models/user_model.dart';
 
 class AuthRemoteDataSource {
@@ -56,7 +58,7 @@ class AuthRemoteDataSource {
       if (data is String && data.isNotEmpty) {
         return data;
       }
-      return 'Registered successfully! Please check your email for verification.';
+      return 'Registered successfully! Please check your email for your verification code.';
     } on DioException catch (error) {
       throw _toFailure(error);
     }
@@ -67,6 +69,33 @@ class AuthRemoteDataSource {
       await _apiClient.post<void>(
         '/auth/forgot-password',
         data: ForgotPasswordRequest(email: email).toJson(),
+        options: Options(extra: {AuthInterceptor.skipAuthKey: true}),
+      );
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
+  Future<void> verifyAccount({
+    required String email,
+    required String otp,
+  }) async {
+    try {
+      await _apiClient.post<Map<String, dynamic>>(
+        '/auth/verify-account',
+        data: VerifyAccountRequest(email: email, otp: otp).toJson(),
+        options: Options(extra: {AuthInterceptor.skipAuthKey: true}),
+      );
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
+  Future<void> resendVerificationOtp({required String email}) async {
+    try {
+      await _apiClient.post<Map<String, dynamic>>(
+        '/auth/resend-verification-otp',
+        data: ResendVerificationOtpRequest(email: email).toJson(),
         options: Options(extra: {AuthInterceptor.skipAuthKey: true}),
       );
     } on DioException catch (error) {

@@ -1,6 +1,5 @@
 package metro.ExoticStamp.modules.auth.infrastructure.messaging;
 
-import metro.ExoticStamp.infra.mail.MailProperties;
 import metro.ExoticStamp.infra.mail.MailService;
 import metro.ExoticStamp.modules.user.domain.event.UserCreatedEvent;
 import lombok.RequiredArgsConstructor;
@@ -15,24 +14,20 @@ import org.springframework.stereotype.Service;
 public class AuthEventConsumer {
 
     private final MailService mailService;
-    private final MailProperties mailProperties;
 
     @EventListener
     @Async
     public void onUserCreated(UserCreatedEvent event) {
         try {
-            if (event.getVerifyToken() == null || event.getVerifyToken().isBlank()) {
+            if (event.getVerifyOtp() == null || event.getVerifyOtp().isBlank()) {
                 return;
             }
-            String verifyUrl = mailProperties.getFrontendUrl()
-                    + "/verify-email?token="
-                    + event.getVerifyToken();
-            mailService.sendVerifyEmail(
+            mailService.sendVerifyAccountOtp(
                     event.getEmail(),
                     event.getUsername(),
-                    verifyUrl
+                    event.getVerifyOtp()
             );
-            log.info("[AuthEvent] Verify email sent to {}", event.getEmail());
+            log.info("[AuthEvent] Verify account OTP sent to {}", event.getEmail());
         } catch (Exception e) {
             log.error("[AuthEvent] onUserCreated failed for {}: {}", event.getEmail(), e.getMessage());
         }

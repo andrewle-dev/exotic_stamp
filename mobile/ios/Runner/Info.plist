@@ -32,6 +32,8 @@
 	<string>Ứng dụng cần quyền thư viện ảnh để chọn ảnh chia sẻ kỷ niệm.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Ứng dụng cần quyền vị trí để tính ga gần nhất và mở đường đi chính xác.</string>
+	<key>NFCReaderUsageDescription</key>
+	<string>Ứng dụng dùng NFC để đọc thẻ stamp tại nhà ga. / This app uses NFC to read station stamp tags.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

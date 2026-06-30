@@ -1,6 +1,5 @@
 package metro.ExoticStamp.modules.auth.application;
 
-import metro.ExoticStamp.infra.mail.MailProperties;
 import metro.ExoticStamp.infra.mail.MailService;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.LoginCommand;
@@ -9,10 +8,9 @@ import metro.ExoticStamp.modules.auth.application.command.RegisterCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResendOtpCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResendVerificationCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResetPasswordCommand;
-import metro.ExoticStamp.modules.auth.application.command.VerifyTokenCommand;
+import metro.ExoticStamp.modules.auth.application.command.VerifyAccountCommand;
 import metro.ExoticStamp.modules.auth.application.port.AccessTokenPort;
 import metro.ExoticStamp.modules.auth.application.port.AccessTokenRevocationPort;
-import metro.ExoticStamp.modules.auth.application.port.EmailVerificationTokenPort;
 import metro.ExoticStamp.modules.auth.application.port.OtpStorePort;
 import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort;
 import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
@@ -20,6 +18,7 @@ import metro.ExoticStamp.modules.auth.application.view.AuthUserView;
 import metro.ExoticStamp.modules.auth.application.view.AuthView;
 import metro.ExoticStamp.modules.auth.application.view.IssuedAccessTokenView;
 import metro.ExoticStamp.modules.auth.config.AuthSecurityProperties;
+import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpMaxAttemptsExceededException;
@@ -86,9 +85,7 @@ public class AuthCommandService {
     private final AuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final TokenTtlPort tokenTtlPort;
-    private final EmailVerificationTokenPort emailVerificationTokenPort;
     private final MailService mailService;
-    private final MailProperties mailProperties;
     private final AuthSecurityProperties authSecurityProperties;
 
     @Transactional
@@ -96,6 +93,10 @@ public class AuthCommandService {
         User user = userRepository.findByEmail(cmd.getIdentifier())
                 .or(() -> userRepository.findByUsername(cmd.getIdentifier()))
                 .orElseThrow(InvalidCredentialsException::new);
+
+        if (user.getStatus() == UserStatus.PENDING_VERIFIED) {
+            throw new AccountNotVerifiedException();
+        }
 
         if (!passwordEncoder.matches(cmd.getPassword(), user.getPassword())) {
             throw new InvalidCredentialsException();
@@ -168,30 +169,42 @@ public class AuthCommandService {
 
         User saved = userRepository.save(user);
 
-        String token = UUID.randomUUID().toString();
-        emailVerificationTokenPort.saveToken(token, saved.getId());
+        String otp = generateOtp();
+        otpStore.delete(saved.getEmail(), OtpType.EMAIL_VERIFY);
+        otpStore.save(saved.getEmail(), OtpType.EMAIL_VERIFY, otp);
+        otpStore.saveCooldown(saved.getEmail(), OtpType.EMAIL_VERIFY);
+        otpStore.incrementAttempts(saved.getEmail(), OtpType.EMAIL_VERIFY);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                eventPublisher.publishEvent(new UserCreatedEvent(saved, token));
+                eventPublisher.publishEvent(new UserCreatedEvent(saved, otp));
             }
         });
     }
 
     @Transactional
-    public void verifyEmail(VerifyTokenCommand cmd) {
-        UUID userId = emailVerificationTokenPort.findUserIdByToken(cmd.getToken())
-                .orElseThrow(() -> new InvalidTokenException("Verification link is invalid or has expired"));
+    public void verifyAccount(VerifyAccountCommand cmd) {
+        String otp = otpStore.find(cmd.getEmail(), OtpType.EMAIL_VERIFY)
+                .orElseThrow(OtpExpiredException::new);
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
+        if (!otp.equals(cmd.getOtp())) {
+            throw new OtpInvalidException();
+        }
+
+        User user = userRepository.findByEmail(cmd.getEmail())
+                .orElseThrow(() -> new UserNotFoundException("email", cmd.getEmail()));
+
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            otpStore.delete(cmd.getEmail(), OtpType.EMAIL_VERIFY);
+            return;
+        }
 
         user.setStatus(UserStatus.ACTIVE);
         user.setVerifiedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        emailVerificationTokenPort.deleteToken(cmd.getToken());
+        otpStore.delete(cmd.getEmail(), OtpType.EMAIL_VERIFY);
 
         UUID verifiedUserId = user.getId();
         RbacTransactionCallbacks.afterCommit(() -> {
@@ -204,27 +217,44 @@ public class AuthCommandService {
     }
 
     @Transactional
-    public void resendVerification(ResendVerificationCommand cmd) {
-        Optional<User> userOpt = userRepository.findByEmail(cmd.getEmail());
-        if (userOpt.isEmpty()) {
-            return;
-        }
-        User user = userOpt.get();
-
-        if (user.getStatus() == UserStatus.ACTIVE) {
-            return;
+    public void resendVerificationOtp(ResendVerificationCommand cmd) {
+        if (otpStore.isOnCooldown(cmd.getEmail(), OtpType.EMAIL_VERIFY)) {
+            long secondsLeft = otpStore.getCooldownTtlSeconds(cmd.getEmail(), OtpType.EMAIL_VERIFY);
+            throw new ResendCooldownException(secondsLeft);
         }
 
-        if (emailVerificationTokenPort.isOnCooldown(cmd.getEmail())) {
-            return;
+        if (otpStore.isMaxAttemptsExceeded(cmd.getEmail(), OtpType.EMAIL_VERIFY)) {
+            throw new OtpMaxAttemptsExceededException(
+                    authSecurityProperties.getOtp().forType(OtpType.EMAIL_VERIFY).getMaxAttempts()
+            );
         }
 
-        String token = UUID.randomUUID().toString();
-        emailVerificationTokenPort.saveToken(token, user.getId());
-        emailVerificationTokenPort.saveCooldown(cmd.getEmail());
+        userRepository.findByEmail(cmd.getEmail()).ifPresent(user -> {
+            if (user.getStatus() != UserStatus.PENDING_VERIFIED) {
+                return;
+            }
 
-        String verifyUrl = mailProperties.getFrontendUrl() + "/verify-email?token=" + token;
-        mailService.sendVerifyEmail(cmd.getEmail(), user.getUsername(), verifyUrl);
+            otpStore.delete(cmd.getEmail(), OtpType.EMAIL_VERIFY);
+
+            String otp = generateOtp();
+            otpStore.save(cmd.getEmail(), OtpType.EMAIL_VERIFY, otp);
+            otpStore.saveCooldown(cmd.getEmail(), OtpType.EMAIL_VERIFY);
+            otpStore.incrementAttempts(cmd.getEmail(), OtpType.EMAIL_VERIFY);
+
+            mailService.sendVerifyAccountOtp(cmd.getEmail(), user.getUsername(), otp);
+
+            auditLogService.log(
+                    user.getId(),
+                    "otp",
+                    "RESEND_VERIFY_ACCOUNT_OTP",
+                    null,
+                    Map.of(
+                            "email", cmd.getEmail(),
+                            "attempts", otpStore.getAttemptsCount(cmd.getEmail(), OtpType.EMAIL_VERIFY)
+                    ),
+                    "SYSTEM"
+            );
+        });
     }
 
     @Transactional
@@ -259,7 +289,9 @@ public class AuthCommandService {
         }
 
         if (otpStore.isMaxAttemptsExceeded(cmd.getEmail(), OtpType.FORGOT_PASSWORD)) {
-            throw new OtpMaxAttemptsExceededException(authSecurityProperties.getOtp().getMaxAttempts());
+            throw new OtpMaxAttemptsExceededException(
+                    authSecurityProperties.getOtp().forType(OtpType.FORGOT_PASSWORD).getMaxAttempts()
+            );
         }
 
         userRepository.findByEmail(cmd.getEmail()).ifPresent(user -> {

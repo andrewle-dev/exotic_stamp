@@ -89,9 +89,22 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         if (state.status == AuthStatus.failure && state.failure != null) {
+          final failure = state.failure!;
+          if (failure.requiresAccountVerification) {
+            if (!context.mounted) {
+              return;
+            }
+            context.read<AuthCubit>().clearTransientState();
+            final identifier = identifierController.text.trim();
+            final email =
+                Validators.isValidEmail(identifier) ? identifier : '';
+            context.push(RouteNames.verifyAccountOtpWithEmail(email));
+            return;
+          }
+
           await _showNotice(
             title: 'Đăng nhập thất bại',
-            message: state.failure!.message,
+            message: failure.message,
           );
           if (!context.mounted) {
             return;

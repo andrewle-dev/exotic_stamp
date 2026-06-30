@@ -8,6 +8,9 @@ class ErrorMapper {
 
   static const backendCodeMap = <String, FailureCode>{
     'INVALID_CREDENTIALS': FailureCode.invalidCredentials,
+    'ACCOUNT_NOT_VERIFIED': FailureCode.accountNotVerified,
+    'OTP_EXPIRED': FailureCode.validationError,
+    'RESEND_COOLDOWN': FailureCode.validationError,
     'TOKEN_EXPIRED': FailureCode.tokenExpired,
     'EMAIL_TAKEN': FailureCode.emailTaken,
     'VALIDATION_ERROR': FailureCode.validationError,
@@ -84,6 +87,8 @@ class ErrorMapper {
     return switch (code) {
       FailureCode.invalidCredentials =>
         'Email/tên đăng nhập hoặc mật khẩu không đúng.',
+      FailureCode.accountNotVerified =>
+        'Tài khoản chưa được xác minh. Vui lòng nhập mã OTP đã gửi qua email.',
       FailureCode.tokenExpired => 'Phiên đăng nhập đã hết hạn.',
       FailureCode.emailTaken => 'Email này đã được đăng ký.',
       FailureCode.validationError =>

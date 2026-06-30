@@ -1,5 +1,7 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:metro_stamp_app/app/router/route_names.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metro_stamp_app/core/di/injection.dart';
@@ -12,11 +14,14 @@ import 'package:metro_stamp_app/features/auth/domain/usecases/login_usecase.dart
 import 'package:metro_stamp_app/features/auth/domain/usecases/logout_usecase.dart';
 import 'package:metro_stamp_app/features/auth/domain/usecases/refresh_session_usecase.dart';
 import 'package:metro_stamp_app/features/auth/domain/usecases/register_usecase.dart';
+import 'package:metro_stamp_app/features/auth/domain/usecases/resend_verification_otp_usecase.dart';
+import 'package:metro_stamp_app/features/auth/domain/usecases/verify_account_usecase.dart';
 import 'package:metro_stamp_app/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:metro_stamp_app/features/auth/presentation/cubit/auth_state.dart';
 import 'package:metro_stamp_app/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:metro_stamp_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:metro_stamp_app/features/auth/presentation/screens/register_screen.dart';
+import 'package:metro_stamp_app/features/auth/presentation/screens/verify_account_otp_screen.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -29,9 +34,24 @@ class MockApiClient extends Mock implements ApiClient {}
 class MockAuthCubit extends MockCubit<AuthState> implements AuthCubit {}
 
 Widget _wrapWithAuthCubit(Widget child, AuthCubit authCubit) {
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => child,
+      ),
+      GoRoute(
+        path: RouteNames.verifyAccountOtp,
+        builder: (context, state) => VerifyAccountOtpScreen(
+          initialEmail: state.uri.queryParameters['email'] ?? '',
+        ),
+      ),
+    ],
+  );
+
   return BlocProvider<AuthCubit>.value(
     value: authCubit,
-    child: MaterialApp(home: child),
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -63,6 +83,9 @@ void main() {
       loginUseCase: LoginUseCase(authRepository),
       registerUseCase: RegisterUseCase(authRepository),
       forgotPasswordUseCase: ForgotPasswordUseCase(authRepository),
+      verifyAccountUseCase: VerifyAccountUseCase(authRepository),
+      resendVerificationOtpUseCase:
+          ResendVerificationOtpUseCase(authRepository),
       refreshSessionUseCase: RefreshSessionUseCase(authRepository),
       logoutUseCase: LogoutUseCase(authRepository),
     );

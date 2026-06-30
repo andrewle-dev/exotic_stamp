@@ -31,18 +31,18 @@ class AuthSecurityPropertiesTest {
     }
 
     @Test
-    void invalidOtpCooldown_isRejected() {
+    void invalidForgotPasswordCooldown_isRejected() {
         AuthSecurityProperties properties = new AuthSecurityProperties();
-        properties.getOtp().setCooldownTtl(Duration.ofMillis(500));
+        properties.getOtp().getForgotPassword().setCooldownTtl(Duration.ofMillis(500));
 
         Set<ConstraintViolation<AuthSecurityProperties>> violations = validator.validate(properties);
         assertFalse(violations.isEmpty());
     }
 
     @Test
-    void invalidVerificationResendCooldown_isRejected() {
+    void invalidEmailVerifyCooldown_isRejected() {
         AuthSecurityProperties properties = new AuthSecurityProperties();
-        properties.getVerification().setResendCooldownTtl(Duration.ofMillis(500));
+        properties.getOtp().getEmailVerify().setCooldownTtl(Duration.ofMillis(500));
 
         Set<ConstraintViolation<AuthSecurityProperties>> violations = validator.validate(properties);
         assertFalse(violations.isEmpty());

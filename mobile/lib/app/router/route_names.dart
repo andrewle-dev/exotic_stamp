@@ -8,6 +8,10 @@ abstract final class RouteNames {
 
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
+  static const verifyAccountOtp = '/verify-account-otp';
+
+  static String verifyAccountOtpWithEmail(String email) =>
+      '$verifyAccountOtp?email=${Uri.encodeComponent(email)}';
   static const home = '/home';
   static const stampBook = '/stamp-book';
 
@@ -38,6 +42,7 @@ abstract final class RouteNames {
     auth,
     register,
     forgotPassword,
+    verifyAccountOtp,
   };
 
   static const Set<String> shellRoutes = {

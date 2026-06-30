@@ -6,6 +6,7 @@ import '../../features/app_shell/presentation/screens/main_shell_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
+import '../../features/auth/presentation/screens/verify_account_otp_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/memories/domain/entities/photo_share_context.dart';
 import '../../features/memories/presentation/screens/photo_share_screen.dart';
@@ -56,6 +57,13 @@ GoRouter createAppRouter() {
       GoRoute(
         path: RouteNames.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.verifyAccountOtp,
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'] ?? '';
+          return VerifyAccountOtpScreen(initialEmail: email);
+        },
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

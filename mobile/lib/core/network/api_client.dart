@@ -53,7 +53,6 @@ class ApiClient {
 
     dio.interceptors.add(CookieManager(resolvedCookieJar));
     dio.interceptors.add(AuthInterceptor(tokenStorage: resolvedTokenStorage));
-    dio.interceptors.add(ErrorInterceptor());
     dio.interceptors.add(
       CookieRefreshInterceptor(
         dio: dio,
@@ -62,6 +61,7 @@ class ApiClient {
         onSessionInvalidated: onSessionInvalidated,
       ),
     );
+    dio.interceptors.add(ErrorInterceptor());
 
     return ApiClient._(
       dio: dio,

@@ -11,11 +11,24 @@ void main() {
 
   test('ios test build reports disabled without touching platform NFC',
       () async {
-    final reader = NfcReader(iosTestBuildDisabled: () => true);
+    final reader = NfcReader(
+      iosTestBuildDisabled: () => true,
+      nfcSupported: () => true,
+    );
 
     final status = await reader.checkAvailability();
 
     expect(status, NfcAvailabilityStatus.iosTestBuildDisabled);
+    expect(reader.isSessionRunning, isFalse);
+  });
+
+  test('unsupported platform reports unavailable without touching NfcManager',
+      () async {
+    final reader = NfcReader(nfcSupported: () => false);
+
+    final status = await reader.checkAvailability();
+
+    expect(status, NfcAvailabilityStatus.unavailable);
     expect(reader.isSessionRunning, isFalse);
   });
 }

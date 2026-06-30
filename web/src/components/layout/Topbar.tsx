@@ -25,11 +25,11 @@ export function Topbar({ title }: TopbarProps) {
     <header className="flex h-[var(--topbar-height)] items-center justify-between border-b border-border bg-card px-6">
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-        <Badge status="DRAFT" label={import.meta.env.VITE_APP_ENV ?? 'STAGING'} />
+        {/* <Badge status="DRAFT" label={import.meta.env.VITE_APP_ENV ?? 'STAGING'} />
         <span className="hidden items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 md:inline-flex">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           API Healthy
-        </span>
+        </span> */}
       </div>
 
       <div className="flex items-center gap-3">

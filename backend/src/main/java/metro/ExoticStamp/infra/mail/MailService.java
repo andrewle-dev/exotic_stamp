@@ -13,9 +13,9 @@ public class MailService {
     private final MailQueueService mailQueueService;
     private final MailProperties mailProperties;
 
-    public void sendVerifyEmail(String toEmail, String username, String verifyUrl) {
-        String body = VerifyEmailTemplate.build(username, verifyUrl, mailProperties.getLogoUrl());
-        String dedupKey = "verify:" + toEmail;
+    public void sendVerifyAccountOtp(String toEmail, String username, String otp) {
+        String body = VerifyEmailTemplate.build(username, otp, mailProperties.getLogoUrl());
+        String dedupKey = "verify-account:" + toEmail + ":" + otp;
         mailQueueService.enqueueHtmlMail(toEmail, MailSubjectConstants.VERIFY_ACCOUNT, body, dedupKey);
     }
 

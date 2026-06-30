@@ -121,7 +121,6 @@ export function DashboardPage() {
     <div className="space-y-6">
       <AnalyticsPageHeader
         title="Dashboard"
-        description="Operational overview with collection metrics, station performance, and health warnings derived from live API data."
         lastRefreshedAt={lastRefreshedAt}
         isRefreshing={isRefreshing}
         onRefresh={() => void refetchAll()}

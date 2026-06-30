@@ -3,14 +3,12 @@ package metro.ExoticStamp.modules.auth.presentation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import metro.ExoticStamp.common.exceptions.GlobalExceptionHandler;
-import metro.ExoticStamp.infra.mail.MailProperties;
 import metro.ExoticStamp.infra.mail.MailService;
 import metro.ExoticStamp.modules.auth.AuthWebMvcTestSecurityConfig;
 import metro.ExoticStamp.modules.auth.application.AuditLogService;
 import metro.ExoticStamp.modules.auth.application.AuthCommandService;
 import metro.ExoticStamp.modules.auth.application.port.AccessTokenPort;
 import metro.ExoticStamp.modules.auth.application.port.AccessTokenRevocationPort;
-import metro.ExoticStamp.modules.auth.application.port.EmailVerificationTokenPort;
 import metro.ExoticStamp.modules.auth.application.port.OtpStorePort;
 import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort;
 import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
@@ -46,7 +44,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
@@ -67,7 +64,7 @@ class AuthResendVerificationControllerTest {
 
     private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final String GENERIC_RESEND_MESSAGE =
-            "If the account exists and is eligible, a verification email has been sent.";
+            "If the account exists and is eligible, a verification code has been sent.";
 
     @Autowired
     private MockMvc mockMvc;
@@ -86,9 +83,7 @@ class AuthResendVerificationControllerTest {
     @MockBean private AuditLogService auditLogService;
     @MockBean private ApplicationEventPublisher eventPublisher;
     @MockBean private TokenTtlPort tokenTtlPort;
-    @MockBean private EmailVerificationTokenPort emailVerificationTokenPort;
     @MockBean private MailService mailService;
-    @MockBean private MailProperties mailProperties;
     @MockBean private AuthSecurityProperties authSecurityProperties;
 
     @MockBean private JwtProvider jwtProvider;
@@ -100,46 +95,51 @@ class AuthResendVerificationControllerTest {
     @BeforeEach
     void setUp() {
         when(tokenTtlPort.getRefreshTokenTtl()).thenReturn(Duration.ofDays(7));
-        when(mailProperties.getFrontendUrl()).thenReturn("http://localhost:3000");
         AuthSecurityProperties.Otp otp = new AuthSecurityProperties.Otp();
         when(authSecurityProperties.getOtp()).thenReturn(otp);
     }
 
     @Test
-    void resendVerification_publicResponses_areIndistinguishableAcrossStates() throws Exception {
+    void resendVerificationOtp_publicResponses_areIndistinguishableAcrossStates() throws Exception {
         when(userRepository.findByEmail("missing@test.com")).thenReturn(Optional.empty());
         MvcResult unknown = performResend("missing@test.com");
-        verify(mailService, never()).sendVerifyEmail(anyString(), anyString(), anyString());
+        verify(mailService, never()).sendVerifyAccountOtp(anyString(), anyString(), anyString());
 
-        clearInvocations(emailVerificationTokenPort, mailService);
+        clearInvocations(otpStore, mailService);
         User verified = user("verified@test.com", "verified", UserStatus.ACTIVE);
         when(userRepository.findByEmail("verified@test.com")).thenReturn(Optional.of(verified));
         MvcResult verifiedResult = performResend("verified@test.com");
-        verify(mailService, never()).sendVerifyEmail(anyString(), anyString(), anyString());
+        verify(mailService, never()).sendVerifyAccountOtp(anyString(), anyString(), anyString());
 
-        clearInvocations(emailVerificationTokenPort, mailService);
-        User throttled = user("throttled@test.com", "throttled", UserStatus.PENDING_VERIFIED);
-        when(userRepository.findByEmail("throttled@test.com")).thenReturn(Optional.of(throttled));
-        when(emailVerificationTokenPort.isOnCooldown("throttled@test.com")).thenReturn(true);
-        MvcResult throttledResult = performResend("throttled@test.com");
-        verify(mailService, never()).sendVerifyEmail(anyString(), anyString(), anyString());
-
-        clearInvocations(emailVerificationTokenPort, mailService);
+        clearInvocations(otpStore, mailService);
         User eligible = user("eligible@test.com", "eligible", UserStatus.PENDING_VERIFIED);
         when(userRepository.findByEmail("eligible@test.com")).thenReturn(Optional.of(eligible));
-        when(emailVerificationTokenPort.isOnCooldown("eligible@test.com")).thenReturn(false);
         MvcResult eligibleResult = performResend("eligible@test.com");
-        verify(emailVerificationTokenPort).saveToken(anyString(), eq(eligible.getId()));
-        verify(emailVerificationTokenPort).saveCooldown("eligible@test.com");
-        verify(mailService).sendVerifyEmail(eq("eligible@test.com"), eq("eligible"), contains("/verify-email?token="));
+        verify(otpStore).delete("eligible@test.com", metro.ExoticStamp.modules.auth.domain.model.OtpType.EMAIL_VERIFY);
+        verify(mailService).sendVerifyAccountOtp(eq("eligible@test.com"), eq("eligible"), anyString());
 
         assertPublicEnvelopeEquals(unknown, verifiedResult);
-        assertPublicEnvelopeEquals(verifiedResult, throttledResult);
-        assertPublicEnvelopeEquals(throttledResult, eligibleResult);
+        assertPublicEnvelopeEquals(verifiedResult, eligibleResult);
         assertPublicResendBody(unknown);
         assertPublicResendBody(verifiedResult);
-        assertPublicResendBody(throttledResult);
         assertPublicResendBody(eligibleResult);
+    }
+
+    @Test
+    void resendVerificationOtp_onCooldown_returns429() throws Exception {
+        when(otpStore.isOnCooldown("throttled@test.com", metro.ExoticStamp.modules.auth.domain.model.OtpType.EMAIL_VERIFY))
+                .thenReturn(true);
+        when(otpStore.getCooldownTtlSeconds("throttled@test.com", metro.ExoticStamp.modules.auth.domain.model.OtpType.EMAIL_VERIFY))
+                .thenReturn(45L);
+
+        ResendVerificationRequest req = new ResendVerificationRequest();
+        req.setEmail("throttled@test.com");
+
+        mockMvc.perform(post("/api/v1/auth/resend-verification-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("RESEND_COOLDOWN"));
     }
 
     private void assertPublicEnvelopeEquals(MvcResult left, MvcResult right) throws Exception {
@@ -164,7 +164,7 @@ class AuthResendVerificationControllerTest {
         ResendVerificationRequest req = new ResendVerificationRequest();
         req.setEmail(email);
 
-        return mockMvc.perform(post("/api/v1/auth/resend-verification")
+        return mockMvc.perform(post("/api/v1/auth/resend-verification-otp")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())

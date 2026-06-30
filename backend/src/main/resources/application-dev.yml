@@ -59,8 +59,11 @@ application:
     prod: https://backend.facewashfox.com
 
   mail:
-    # Must be a valid mailbox address; display name is handled by the mail provider/client.
+    # Must be a valid mailbox address; the friendly display name is set via display-name below.
     from: ${MAIL_FROM:work.exotictravelers@gmail.com}
+    display-name: ${MAIL_DISPLAY_NAME:Exotic Travelers}
+    reply-to: ${MAIL_REPLY_TO:}
+    list-unsubscribe: ${MAIL_LIST_UNSUBSCRIBE:}
     logo-url: https://res.cloudinary.com/dnahocnhk/image/upload/v1776831366/ExoticStamp_logo-removebg-preview_c8kmaa.png
     queue:
       max-per-minute: 30

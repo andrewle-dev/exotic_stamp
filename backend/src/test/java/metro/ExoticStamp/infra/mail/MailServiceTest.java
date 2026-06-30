@@ -21,14 +21,14 @@ class MailServiceTest {
     private MailService mailService;
 
     @Test
-    void sendVerifyEmail_usesDedupKey() {
+    void sendVerifyAccountOtp_usesDedupKey() {
         when(mailProperties.getLogoUrl()).thenReturn("http://logo");
-        mailService.sendVerifyEmail("u@test.com", "user1", "http://app/verify?token=abc");
+        mailService.sendVerifyAccountOtp("u@test.com", "user1", "123456");
         verify(mailQueueService).enqueueHtmlMail(
                 eq("u@test.com"),
                 anyString(),
                 anyString(),
-                eq("verify:u@test.com"));
+                eq("verify-account:u@test.com:123456"));
     }
 
     @Test

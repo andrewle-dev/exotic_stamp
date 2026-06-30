@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 /// Typed failure codes mapped from backend and client-side errors.
 enum FailureCode {
   invalidCredentials,
+  accountNotVerified,
   tokenExpired,
   unauthorized,
   emailTaken,
@@ -34,8 +35,12 @@ class Failure extends Equatable implements Exception {
 
   bool get isAuthFailure =>
       code == FailureCode.invalidCredentials ||
+      code == FailureCode.accountNotVerified ||
       code == FailureCode.tokenExpired ||
       code == FailureCode.unauthorized;
+
+  bool get requiresAccountVerification =>
+      code == FailureCode.accountNotVerified;
 
   @override
   List<Object?> get props => [code, message, statusCode, backendCode];

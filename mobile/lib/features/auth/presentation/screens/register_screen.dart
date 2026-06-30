@@ -127,15 +127,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       listenWhen: (previous, current) => previous.status != current.status,
       listener: (context, state) async {
         if (state.status == AuthStatus.actionSuccess) {
-          await _showNotice(
-            title: 'Tạo tài khoản thành công',
-            message: state.message ??
-                'Bạn có thể đăng nhập ngay bằng email vừa đăng ký.',
-          );
+          final email = emailController.text.trim();
           if (!context.mounted) {
             return;
           }
-          context.go(RouteNames.login);
+          context.read<AuthCubit>().clearTransientState();
+          context.go(RouteNames.verifyAccountOtpWithEmail(email));
           return;
         }
 

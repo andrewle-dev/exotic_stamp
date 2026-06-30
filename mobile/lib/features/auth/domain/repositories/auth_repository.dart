@@ -18,6 +18,13 @@ abstract class AuthRepository {
 
   Future<void> forgotPassword({required String email});
 
+  Future<void> verifyAccount({
+    required String email,
+    required String otp,
+  });
+
+  Future<void> resendVerificationOtp({required String email});
+
   Future<Session> refreshSession();
 
   Future<void> logout();

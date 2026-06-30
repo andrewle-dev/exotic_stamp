@@ -14,6 +14,8 @@ import 'package:metro_stamp_app/features/auth/domain/usecases/login_usecase.dart
 import 'package:metro_stamp_app/features/auth/domain/usecases/logout_usecase.dart';
 import 'package:metro_stamp_app/features/auth/domain/usecases/refresh_session_usecase.dart';
 import 'package:metro_stamp_app/features/auth/domain/usecases/register_usecase.dart';
+import 'package:metro_stamp_app/features/auth/domain/usecases/resend_verification_otp_usecase.dart';
+import 'package:metro_stamp_app/features/auth/domain/usecases/verify_account_usecase.dart';
 import 'package:metro_stamp_app/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -51,6 +53,9 @@ void main() {
         loginUseCase: LoginUseCase(MockAuthRepository()),
         registerUseCase: RegisterUseCase(MockAuthRepository()),
         forgotPasswordUseCase: ForgotPasswordUseCase(MockAuthRepository()),
+        verifyAccountUseCase: VerifyAccountUseCase(MockAuthRepository()),
+        resendVerificationOtpUseCase:
+            ResendVerificationOtpUseCase(MockAuthRepository()),
         refreshSessionUseCase: RefreshSessionUseCase(MockAuthRepository()),
         logoutUseCase: LogoutUseCase(MockAuthRepository()),
       ),

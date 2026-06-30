@@ -30,7 +30,8 @@ public class OtpRepository extends RedisKeyValueSupport {
     }
 
     public void save(String email, OtpType type, String otp) {
-        putValue(DOMAIN, key(email, type), otp, authSecurityProperties.getOtp().getTtl());
+        AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
+        putValue(DOMAIN, key(email, type), otp, settings.getTtl());
     }
 
     public Optional<String> find(String email, OtpType type) {
@@ -50,7 +51,8 @@ public class OtpRepository extends RedisKeyValueSupport {
     }
 
     public void saveCooldown(String email, OtpType type) {
-        putValue(DOMAIN, cooldownKey(email, type), "1", authSecurityProperties.getOtp().getCooldownTtl());
+        AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
+        putValue(DOMAIN, cooldownKey(email, type), "1", settings.getCooldownTtl());
     }
 
     public long getCooldownTtlSeconds(String email, OtpType type) {
@@ -58,11 +60,12 @@ public class OtpRepository extends RedisKeyValueSupport {
     }
 
     public boolean isMaxAttemptsExceeded(String email, OtpType type) {
+        AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
         return getValue(DOMAIN, attemptsKey(email, type))
                 .map(Object::toString)
                 .map(value -> {
                     try {
-                        return Integer.parseInt(value) >= authSecurityProperties.getOtp().getMaxAttempts();
+                        return Integer.parseInt(value) >= settings.getMaxAttempts();
                     } catch (NumberFormatException e) {
                         return false;
                     }
@@ -71,7 +74,8 @@ public class OtpRepository extends RedisKeyValueSupport {
     }
 
     public void incrementAttempts(String email, OtpType type) {
-        incrementWithTtl(DOMAIN, attemptsKey(email, type), authSecurityProperties.getOtp().getAttemptsTtl());
+        AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
+        incrementWithTtl(DOMAIN, attemptsKey(email, type), settings.getAttemptsTtl());
     }
 
     public int getAttemptsCount(String email, OtpType type) {
@@ -87,6 +91,10 @@ public class OtpRepository extends RedisKeyValueSupport {
                 .orElse(0);
     }
 
+    private AuthSecurityProperties.PurposeSettings settingsFor(OtpType type) {
+        return authSecurityProperties.getOtp().forType(type);
+    }
+
     private static String key(String email, OtpType type) {
         return String.format(OTP_KEY_PATTERN, type.name().toLowerCase(), email);
     }
@@ -99,4 +107,3 @@ public class OtpRepository extends RedisKeyValueSupport {
         return ATTEMPTS_PREFIX + type.name().toLowerCase() + ":" + email;
     }
 }
-
