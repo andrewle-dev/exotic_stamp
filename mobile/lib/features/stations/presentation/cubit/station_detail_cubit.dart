@@ -20,6 +20,16 @@ class StationDetailCubit extends Cubit<StationDetailState> {
         status: StationDetailStatus.loading, clearFailure: true));
     try {
       final detail = await _getStationDetailUseCase(_stationId);
+      if (!detail.isActive) {
+        emit(
+          state.copyWith(
+            status: StationDetailStatus.inactive,
+            detail: detail,
+            clearFailure: true,
+          ),
+        );
+        return;
+      }
       emit(
         state.copyWith(
           status: StationDetailStatus.loaded,

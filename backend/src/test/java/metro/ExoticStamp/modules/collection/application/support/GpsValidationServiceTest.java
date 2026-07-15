@@ -64,9 +64,9 @@ class GpsValidationServiceTest {
 
     @Test
     void fallbackRadius150_whenZoneInvalid() {
-        assertEquals(150.0, GpsValidationService.resolveZoneRadius(5));
-        assertEquals(150.0, GpsValidationService.resolveZoneRadius(5000));
-        assertEquals(80.0, GpsValidationService.resolveZoneRadius(80));
+        assertEquals(150.0, metro.ExoticStamp.modules.collection.domain.policy.CollectionGpsPolicy.resolveZoneRadius(5));
+        assertEquals(150.0, metro.ExoticStamp.modules.collection.domain.policy.CollectionGpsPolicy.resolveZoneRadius(5000));
+        assertEquals(80.0, metro.ExoticStamp.modules.collection.domain.policy.CollectionGpsPolicy.resolveZoneRadius(80));
     }
 
     private static ResolvedStationView station(double lat, double lng, int zone) {

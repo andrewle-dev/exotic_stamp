@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:metro_stamp_app/app/router/rewards_route_refresh.dart';
 import 'package:metro_stamp_app/app/router/route_names.dart';
 import 'package:metro_stamp_app/features/scan/domain/entities/collect_stamp_result.dart';
 import 'package:metro_stamp_app/features/scan/presentation/cubit/scan_flow_cubit.dart';
@@ -48,35 +47,27 @@ void main() {
           ),
         ),
         GoRoute(
-          path: RouteNames.rewards,
-          builder: (context, state) => Scaffold(
-            body: Text(
-              'refresh=${state.uri.queryParameters[RewardsRouteRefresh.queryKey]}',
-            ),
-          ),
+          path: RouteNames.scanTapToCollect,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Tap To Collect')),
         ),
       ],
     );
   });
 
-  testWidgets('scan success CTA navigates to rewards with refresh signal',
+  testWidgets('scan next CTA navigates to tap-to-collect and resets flow',
       (tester) async {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Xem phần thưởng'));
+    await tester.tap(find.text('Quét tiếp'));
     await tester.pumpAndSettle();
 
     verify(() => scanFlowCubit.resetFlow()).called(1);
-
-    final refreshToken = router.routerDelegate.currentConfiguration.uri
-        .queryParameters[RewardsRouteRefresh.queryKey];
-    expect(refreshToken, isNotNull);
-    expect(refreshToken, isNotEmpty);
-
-    final uri = router.routerDelegate.currentConfiguration.uri;
-    expect(uri.path, RouteNames.rewards);
-    expect(uri.queryParameters.containsKey('stampId'), isFalse);
-    expect(uri.queryParameters.containsKey('rewardId'), isFalse);
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      RouteNames.scanTapToCollect,
+    );
+    expect(find.text('Tap To Collect'), findsOneWidget);
   });
 }

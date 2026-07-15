@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
+import { SearchFilterCard } from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
-import { Input } from '../../../components/ui/FormField'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import type { PermissionResponse } from '../../../types/rbac'
 import { usePermissions } from '../hooks'
 import { PermissionFormDrawer } from './PermissionFormDrawer'
@@ -36,11 +37,15 @@ export function PermissionsTab() {
       {
         id: 'permission',
         header: 'Permission',
+        ...COL_WIDTH.name,
+        defaultWidth: 220,
         cell: (row) => row.permission ?? '—',
       },
       {
         id: 'description',
         header: 'Description',
+        ...COL_WIDTH.description,
+        defaultWidth: 360,
         cell: (row) => row.description?.trim() || '—',
       },
     ],
@@ -59,29 +64,17 @@ export function PermissionsTab() {
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="permission-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="permission-search"
-            placeholder="Search by permission or description…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-        <Button variant="secondary" onClick={() => setSearch(searchInput.trim())}>
-          Apply
-        </Button>
-      </div>
+      <SearchFilterCard
+        id="permission-search"
+        label="Search"
+        placeholder="Search by permission or description…"
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={() => setSearch(searchInput.trim())}
+      />
 
       <DataTable
+        tableId="rbac-permissions"
         columns={columns}
         data={filteredPermissions}
         getRowId={(row) => row.id}

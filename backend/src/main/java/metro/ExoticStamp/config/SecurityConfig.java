@@ -45,7 +45,10 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/uploads/public/**"
+            "/uploads/public/**",
+            "/actuator/health",
+            "/actuator/health/**",
+            "/actuator/info"
     };
 
     private final JwtAuthFilter jwtAuthFilter;
@@ -65,7 +68,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/metro/lines/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/metro/stations/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/campaigns/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/partners/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/stations/*/campaigns").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/mobile/app-config").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/metro/scan/resolve").permitAll()
                         .anyRequest().authenticated()
                 )

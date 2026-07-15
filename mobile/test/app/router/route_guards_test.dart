@@ -7,6 +7,8 @@ import 'package:metro_stamp_app/core/di/injection.dart';
 import 'package:metro_stamp_app/core/network/api_client.dart';
 import 'package:metro_stamp_app/core/storage/local_preferences.dart';
 import 'package:metro_stamp_app/core/storage/secure_token_storage.dart';
+import 'package:metro_stamp_app/features/app_config/domain/entities/app_update_decision.dart';
+import 'package:metro_stamp_app/features/app_config/domain/entities/platform_version_policy.dart';
 import 'package:metro_stamp_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:metro_stamp_app/features/auth/domain/usecases/forgot_password_usecase.dart';
 import 'package:metro_stamp_app/features/auth/domain/usecases/login_usecase.dart';
@@ -72,6 +74,7 @@ void main() {
       ),
       routerOverride: GoRouter(routes: []),
       restoreSession: false,
+      checkAppConfig: false,
     );
   });
 
@@ -95,6 +98,38 @@ void main() {
     );
 
     expect(redirect, isNull);
+  });
+
+  test('force update decision redirects to force-update', () async {
+    Injection.instance.appUpdateDecision = AppUpdateDecision.forceUpdate(
+      installedVersion: '0.1.0',
+      policy: const PlatformVersionPolicy(
+        minimumSupportedVersion: '1.0.0',
+        latestVersion: '1.0.0',
+        forceUpdate: true,
+      ),
+    );
+
+    final redirect = await RouteGuards.redirect(
+      _FakeBuildContext(),
+      FakeGoRouterState(RouteNames.home),
+    );
+
+    expect(redirect, RouteNames.forceUpdate);
+  });
+
+  test('maintenance decision redirects to maintenance', () async {
+    Injection.instance.appUpdateDecision = AppUpdateDecision.maintenance(
+      installedVersion: '0.1.0',
+      message: 'Down',
+    );
+
+    final redirect = await RouteGuards.redirect(
+      _FakeBuildContext(),
+      FakeGoRouterState(RouteNames.login),
+    );
+
+    expect(redirect, RouteNames.maintenance);
   });
 
   test('allows register and forgot-password without redirect loop', () async {

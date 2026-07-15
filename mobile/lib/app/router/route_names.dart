@@ -9,6 +9,8 @@ abstract final class RouteNames {
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
   static const verifyAccountOtp = '/verify-account-otp';
+  static const forceUpdate = '/force-update';
+  static const maintenance = '/maintenance';
 
   static String verifyAccountOtpWithEmail(String email) =>
       '$verifyAccountOtp?email=${Uri.encodeComponent(email)}';
@@ -22,6 +24,7 @@ abstract final class RouteNames {
   /// `GET /collection/my-stamps/{stampId}` exists.
   static String stampDetail(String stationId) => '/stamps/$stationId';
   static const scan = '/scan';
+  static const scanTapToCollect = '/scan/tap-to-collect';
   static const scanLocationVerification = '/scan/location-verification';
   static const scanSuccess = '/scan/success';
   static const scanError = '/scan/error';
@@ -32,7 +35,12 @@ abstract final class RouteNames {
       '/rewards/vouchers/$voucherId';
   static const profile = '/profile';
   static const settings = '/profile/settings';
+  static const apiDebug = '/profile/api-debug';
+  static const adminNfcWriter = '/admin/nfc-writer';
   static const memoriesCreate = '/memories/create';
+  static const rewardsShare = '/rewards/share';
+  static const scanRewardUnlocked = '/scan/reward-unlocked';
+
 
   static String stationDetail(String stationId) => '/stations/$stationId';
 
@@ -43,6 +51,8 @@ abstract final class RouteNames {
     register,
     forgotPassword,
     verifyAccountOtp,
+    forceUpdate,
+    maintenance,
   };
 
   static const Set<String> shellRoutes = {

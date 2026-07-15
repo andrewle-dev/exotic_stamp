@@ -1,6 +1,5 @@
 import { Bell, LogOut } from 'lucide-react'
 import { useAuth } from '../../features/auth/hooks'
-import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 
 interface TopbarProps {

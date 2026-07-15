@@ -112,27 +112,16 @@ export function RewardDetailDrawer({
           </div>
 
           <dl className="grid gap-4 sm:grid-cols-2">
-            <DetailRow label="ID">
-              <span className="font-mono text-xs">{reward.id}</span>
-            </DetailRow>
             <DetailRow label="Name">{reward.name}</DetailRow>
             <DetailRow label="Milestone">
               <span className={milestoneLabel?.unknown ? 'text-amber-700' : undefined}>
                 {milestoneLabel?.label}
               </span>
-              <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
-                {reward.milestoneId}
-              </span>
             </DetailRow>
             <DetailRow label="Partner">
               <span className={partnerLabel?.unknown ? 'text-amber-700' : undefined}>
-                {partnerLabel?.label}
+                {partnerLabel?.label ?? '—'}
               </span>
-              {reward.partnerId ? (
-                <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
-                  {reward.partnerId}
-                </span>
-              ) : null}
             </DetailRow>
             <DetailRow label="Reward type">
               <StatusBadge status={reward.rewardType} />

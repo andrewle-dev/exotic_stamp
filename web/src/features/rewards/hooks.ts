@@ -9,11 +9,14 @@ import {
   listRewards,
   updateReward,
 } from '../../lib/api/rewards.api'
+import { analyticsKeys } from '../../lib/query/keys/analytics'
 import { rewardKeys } from '../../lib/query/keys/rewards'
 import { voucherKeys } from '../../lib/query/keys/vouchers'
+import { invalidateKeys } from '../../lib/query/invalidate'
 import type {
   BulkUploadVoucherRequest,
   CreateRewardRequest,
+  RewardResponse,
   RewardsListParams,
   UpdateRewardRequest,
 } from '../../types/rewards'
@@ -33,12 +36,20 @@ export function useReward(id: string | undefined) {
   })
 }
 
+function cacheRewardDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  reward: RewardResponse,
+) {
+  queryClient.setQueryData(rewardKeys.detail(reward.id), reward)
+}
+
 export function useCreateReward() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: CreateRewardRequest) => createReward(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.lists() })
+    onSuccess: async (reward) => {
+      cacheRewardDetail(queryClient, reward)
+      await invalidateKeys(queryClient, [rewardKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -48,9 +59,9 @@ export function useUpdateReward() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateRewardRequest }) =>
       updateReward(id, body),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.detail(variables.id) })
+    onSuccess: async (reward) => {
+      cacheRewardDetail(queryClient, reward)
+      await invalidateKeys(queryClient, [rewardKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -59,9 +70,9 @@ export function useActivateReward() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => activateReward(id),
-    onSuccess: (_data, id) => {
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.detail(id) })
+    onSuccess: async (reward) => {
+      cacheRewardDetail(queryClient, reward)
+      await invalidateKeys(queryClient, [rewardKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -70,9 +81,9 @@ export function useDeactivateReward() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deactivateReward(id),
-    onSuccess: (_data, id) => {
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.detail(id) })
+    onSuccess: async (reward) => {
+      cacheRewardDetail(queryClient, reward)
+      await invalidateKeys(queryClient, [rewardKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -90,11 +101,14 @@ export function useBulkUploadRewardVouchers() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: BulkUploadVoucherRequest }) =>
       bulkUploadRewardVouchers(id, body),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: voucherKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.voucherStats(variables.id) })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.detail(variables.id) })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.lists() })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [
+        voucherKeys.lists(),
+        rewardKeys.voucherStats(variables.id),
+        rewardKeys.detail(variables.id),
+        rewardKeys.lists(),
+        analyticsKeys.collectionStats(),
+      ])
     },
   })
 }

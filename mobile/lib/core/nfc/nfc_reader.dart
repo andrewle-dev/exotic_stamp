@@ -15,8 +15,9 @@ class NfcReader {
     bool Function()? iosTestBuildDisabled,
     bool Function()? nfcSupported,
   })  : _payloadParser = payloadParser ?? const NfcPayloadParser(),
-        _iosTestBuildDisabled = iosTestBuildDisabled ??
-            (() => defaultTargetPlatform == TargetPlatform.iOS),
+        // iOS NFC is enabled when entitlements are present (Runner.entitlements).
+        // Override only for tests that need to force the disabled path.
+        _iosTestBuildDisabled = iosTestBuildDisabled ?? (() => false),
         _nfcSupported = nfcSupported ?? _defaultNfcSupported;
 
   final NfcPayloadParser _payloadParser;

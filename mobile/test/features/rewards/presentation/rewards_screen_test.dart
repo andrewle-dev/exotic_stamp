@@ -14,20 +14,22 @@ void main() {
 
   const overviewNoRewards = RewardsOverview(
     campaignId: 'campaign-1',
+    rankTitle: 'Explorer Rank',
     progress: RewardsProgress(
       lineId: 'line-1',
       collected: 3,
-      total: 10,
-      percentage: 30,
+      total: 14,
+      percentage: 21,
     ),
     milestones: [
       Milestone(
         id: 'milestone-1',
         campaignId: 'campaign-1',
-        code: 'M5',
-        name: '5 Stamps',
-        requiredStampCount: 5,
-        rewardTitle: 'Coffee Voucher',
+        code: 'M3',
+        name: 'Metro Cadet',
+        requiredStampCount: 3,
+        rewardTitle: 'Silver Digital Sticker Pack',
+        claimStatus: MilestoneClaimStatus.claimed,
       ),
     ],
     rewards: [],
@@ -56,10 +58,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Cột mốc'), findsOneWidget);
-    expect(find.text('5 Stamps'), findsOneWidget);
-    expect(find.text('Chưa có phần thưởng'), findsOneWidget);
-    expect(find.text('Coffee Voucher'), findsWidgets);
+    expect(find.text('Road to 14'), findsOneWidget);
+    expect(find.text('Metro Cadet'), findsOneWidget);
+    expect(find.text('No vouchers yet'), findsOneWidget);
+    expect(find.text('Silver Digital Sticker Pack'), findsWidgets);
     expect(find.text('Redeem'), findsNothing);
     expect(find.text('Claim'), findsNothing);
   });

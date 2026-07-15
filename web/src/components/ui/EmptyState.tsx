@@ -18,7 +18,7 @@ export function EmptyState({ title, description, icon, action, className }: Empt
         className,
       )}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
         {icon ?? <Inbox className="h-5 w-5" />}
       </div>
       <div className="space-y-1">

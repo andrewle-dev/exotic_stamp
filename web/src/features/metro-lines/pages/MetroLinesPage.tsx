@@ -1,29 +1,62 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowUpDown, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
-import { Input } from '../../../components/ui/FormField'
 import { formatDateTime } from '../../../lib/formatting/date'
 import { isForbiddenError } from '../../../lib/api/errors'
-import type { LineResponse, MetroStatus } from '../../../types/metro-lines'
+import type { LineResponse } from '../../../types/metro-lines'
 import { useDeleteMetroLine, useMetroLinesList } from '../hooks'
 import { MetroLineFormDrawer } from '../components/MetroLineFormDrawer'
-
-type StatusFilter = MetroStatus | 'ALL'
+import { MetroLinesReorderDrawer } from '../components/MetroLinesReorderDrawer'
+import {
+  EMPTY_LINE_FILTERS,
+  type MetroLineFilters,
+  type MetroLineStatusFilter,
+} from '../filter-schema'
 
 export function MetroLinesPage() {
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<MetroLineFilters>({ emptyFilters: EMPTY_LINE_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [reorderOpen, setReorderOpen] = useState(false)
   const [editingLine, setEditingLine] = useState<LineResponse | null>(null)
   const [deletingLine, setDeletingLine] = useState<LineResponse | null>(null)
+
+  const { status: statusFilter } = appliedFilters
 
   const listParams = useMemo(
     () => ({
@@ -38,27 +71,50 @@ export function MetroLinesPage() {
   const { data, isLoading, error, refetch } = useMetroLinesList(listParams)
   const deleteMutation = useDeleteMetroLine()
 
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    statusFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'status',
+          label: 'Status',
+          value: statusFilter,
+          accent: 'status',
+          onRemove: () => removeFilter('status', 'ALL'),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const count = data?.totalElements ?? 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${count} filtered metro line${count === 1 ? '' : 's'}`
+    : `Showing ${count} metro line${count === 1 ? '' : 's'}`
+
   const columns: DataTableColumn<LineResponse>[] = useMemo(
     () => [
       {
         id: 'code',
         header: 'Code',
+        ...COL_WIDTH.code,
         cell: (row) => <span className="font-mono text-xs">{row.code}</span>,
       },
-      { id: 'name', header: 'Name', cell: (row) => row.name },
+      { id: 'name', header: 'Name', ...COL_WIDTH.name, cell: (row) => row.name },
       {
         id: 'displayName',
         header: 'Display name',
+        ...COL_WIDTH.title,
         cell: (row) => row.displayName ?? '—',
       },
       {
         id: 'color',
         header: 'Color',
+        ...COL_WIDTH.color,
+        truncate: false,
         cell: (row) =>
           row.colorHex ? (
             <span className="inline-flex items-center gap-2">
               <span
-                className="h-4 w-4 rounded border border-border"
+                className="h-4 w-4 shrink-0 rounded border border-border"
                 style={{ backgroundColor: row.colorHex }}
               />
               <span className="font-mono text-xs">{row.colorHex}</span>
@@ -71,22 +127,20 @@ export function MetroLinesPage() {
         id: 'totalStations',
         header: 'Stations',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) => row.totalStations ?? 0,
       },
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.status} />,
-      },
-      {
-        id: 'sortOrder',
-        header: 'Sort',
-        align: 'right',
-        cell: (row) => row.sortOrder ?? '—',
       },
       {
         id: 'updatedAt',
         header: 'Updated',
+        ...COL_WIDTH.date,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">{formatDateTime(row.updatedAt)}</span>
         ),
@@ -116,61 +170,53 @@ export function MetroLinesPage() {
           <h2 className="text-2xl font-semibold text-foreground">Metro Lines</h2>
           <p className="text-sm text-muted-foreground">Manage metro line configuration and status.</p>
         </div>
-        <Button size="md" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Create line
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="md" onClick={() => setReorderOpen(true)}>
+            <ArrowUpDown className="h-4 w-4" />
+            Reorder
+          </Button>
+          <Button size="md" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Create line
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1">
-          <label htmlFor="line-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="line-search"
-            placeholder="Search by code or name…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-                setPage(0)
-              }
-            }}
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="line-status" className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
-          <select
-            id="line-status"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as StatusFilter)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm sm:w-40"
+      <ListFilterToolbar
+        searchId="line-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by code or name…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([statusFilter !== 'ALL'])}
+        filterSubtitle="Narrow the list by line status."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="line-status-filter" label="Status" accent="status">
+          <FilterSelect
+            id="line-status-filter"
+            value={draftFilters.status}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                status: e.target.value as MetroLineStatusFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="DRAFT">Draft</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-          </select>
-        </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSearch(searchInput.trim())
-            setPage(0)
-          }}
-        >
-          Apply
-        </Button>
-      </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
+
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="metro-lines"
         columns={columns}
         data={data?.content}
         getRowId={(row) => row.id}
@@ -178,6 +224,7 @@ export function MetroLinesPage() {
         error={error}
         onRetry={() => void refetch()}
         caption="Metro lines"
+        actionsWidth={112}
         rowActions={(row) => (
           <>
             <Button variant="ghost" size="sm" onClick={() => openEdit(row)} aria-label="Edit line">
@@ -202,10 +249,7 @@ export function MetroLinesPage() {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 
@@ -217,6 +261,8 @@ export function MetroLinesPage() {
           setEditingLine(null)
         }}
       />
+
+      <MetroLinesReorderDrawer open={reorderOpen} onClose={() => setReorderOpen(false)} />
 
       <ConfirmDialog
         open={Boolean(deletingLine)}

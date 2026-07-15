@@ -94,7 +94,7 @@ export function ImportVouchersTab({ milestones }: ImportVouchersTabProps) {
           htmlFor="import-codesText"
           required
           error={errors.codesText?.message}
-          hint="One code per line. Blank lines are ignored; duplicates are removed before import."
+          help="One code per line. Blank lines are ignored; duplicates are removed before import."
         >
           <textarea
             id="import-codesText"
@@ -120,7 +120,7 @@ export function ImportVouchersTab({ milestones }: ImportVouchersTabProps) {
           label="Expires at"
           htmlFor="import-expiresAt"
           error={errors.expiresAt?.message}
-          hint="Optional. When set, imported vouchers expire at this date and time."
+          help="Optional. When set, imported vouchers expire at this date and time."
         >
           <Input id="import-expiresAt" type="datetime-local" {...register('expiresAt')} />
         </FormField>

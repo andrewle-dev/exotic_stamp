@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -86,10 +87,13 @@ class StampCollectedEventListenerTest {
     void handlerException_swallowed() {
         UUID eventId = UUID.randomUUID();
         UUID lineId = UUID.randomUUID();
+        Counter orphanCounter = mock(Counter.class);
         when(dedupPort.isProcessed(eventId)).thenReturn(false);
         when(dedupPort.acquireProcessingLock(eventId)).thenReturn(true);
         when(meterRegistry.counter(eq("reward.milestone.checked"), eq("lineId"), eq(lineId.toString())))
                 .thenReturn(counter);
+        when(meterRegistry.counter("reward.stamp_collected.orphan", "reason", "listener_exhausted"))
+                .thenReturn(orphanCounter);
         doThrow(new RuntimeException("boom")).when(rewardEvaluationService).handleStampCollected(any(), any());
         StampCollectedEvent event = new StampCollectedEvent(
                 this, eventId, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
@@ -99,5 +103,6 @@ class StampCollectedEventListenerTest {
         verify(rewardEvaluationService, times(3)).handleStampCollected(any(), any());
         verify(dedupPort, never()).markProcessed(eventId);
         verify(dedupPort).releaseProcessingLock(eventId);
+        verify(orphanCounter).increment();
     }
 }

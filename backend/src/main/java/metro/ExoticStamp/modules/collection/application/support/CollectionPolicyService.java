@@ -2,9 +2,8 @@ package metro.ExoticStamp.modules.collection.application.support;
 
 import lombok.RequiredArgsConstructor;
 import metro.ExoticStamp.modules.collection.config.CollectionProperties;
-import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyKeyConflictException;
-import metro.ExoticStamp.modules.collection.domain.exception.StampAlreadyCollectedException;
 import metro.ExoticStamp.modules.collection.domain.model.UserStamp;
+import metro.ExoticStamp.modules.collection.domain.policy.CollectionDuplicatePolicy;
 import metro.ExoticStamp.modules.collection.domain.repository.UserStampRepository;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +13,10 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Application orchestration for collection anti-cheat lookups.
+ * Domain decisions live in {@link CollectionDuplicatePolicy}.
+ */
 @Component
 @RequiredArgsConstructor
 public class CollectionPolicyService {
@@ -35,16 +38,15 @@ public class CollectionPolicyService {
             return Optional.empty();
         }
         UserStamp stamp = existing.get();
-        if (!userId.equals(stamp.getUserId())) {
-            throw new IdempotencyKeyConflictException();
-        }
+        CollectionDuplicatePolicy.assertReplayBelongsToUser(stamp.getUserId(), userId);
         return Optional.of(stamp);
     }
 
     public void assertCollectAllowed(UUID userId, UUID stationId, UUID campaignId) {
-        if (userStampRepository.existsByUserIdAndStationIdAndCampaignId(userId, stationId, campaignId)) {
+        boolean exists = userStampRepository.existsByUserIdAndStationIdAndCampaignId(userId, stationId, campaignId);
+        if (exists) {
             auditHelper.scheduleDuplicateAttempt(userId, stationId, campaignId);
-            throw new StampAlreadyCollectedException(stationId);
         }
+        CollectionDuplicatePolicy.assertNotAlreadyCollected(exists, stationId);
     }
 }

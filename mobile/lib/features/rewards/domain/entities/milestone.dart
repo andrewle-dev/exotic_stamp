@@ -1,5 +1,12 @@
 import 'package:equatable/equatable.dart';
 
+enum MilestoneClaimStatus {
+  locked,
+  inProgress,
+  claimable,
+  claimed,
+}
+
 class Milestone extends Equatable {
   const Milestone({
     required this.id,
@@ -12,6 +19,7 @@ class Milestone extends Equatable {
     this.rewardType,
     this.rewardDescription,
     this.rewardImageUrl,
+    this.claimStatus,
   });
 
   final String id;
@@ -24,6 +32,7 @@ class Milestone extends Equatable {
   final String? rewardType;
   final String? rewardDescription;
   final String? rewardImageUrl;
+  final MilestoneClaimStatus? claimStatus;
 
   bool isAchieved(int collectedStampCount) {
     return collectedStampCount >= requiredStampCount;
@@ -41,5 +50,6 @@ class Milestone extends Equatable {
         rewardType,
         rewardDescription,
         rewardImageUrl,
+        claimStatus,
       ];
 }

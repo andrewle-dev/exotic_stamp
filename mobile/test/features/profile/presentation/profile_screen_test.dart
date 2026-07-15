@@ -47,12 +47,13 @@ void main() {
     expect(find.text('#152'), findsNothing);
     expect(find.text('12/24'), findsNothing);
     expect(
-      find.text('Thống kê sẽ hiển thị khi backend cung cấp dữ liệu.'),
+      find.text('Stats will appear when the backend provides profile data.'),
       findsOneWidget,
     );
     expect(find.text('0'), findsNothing);
     expect(find.text('STAMPS'), findsNothing);
-    expect(find.text('MEMORIES'), findsNothing);
+    expect(find.text('LINES'), findsNothing);
+    expect(find.text('RANK'), findsNothing);
   });
 
   testWidgets('shows backend-provided stats when available', (tester) async {
@@ -67,7 +68,8 @@ void main() {
           lastname: 'Nguyen',
           stats: ProfileStats(
             collectedStampsCount: 7,
-            memoriesCount: 2,
+            linesCount: 2,
+            rankPosition: 88,
           ),
         ),
       ),
@@ -78,9 +80,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('7'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('#88'), findsOneWidget);
     expect(find.text('STAMPS'), findsOneWidget);
-    expect(find.text('MEMORIES'), findsOneWidget);
+    expect(find.text('LINES'), findsOneWidget);
+    expect(find.text('RANK'), findsOneWidget);
   });
 
   testWidgets('shows loading view while fetching profile', (tester) async {

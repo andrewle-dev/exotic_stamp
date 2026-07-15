@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Flag, Gift, MapPin, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField, Input } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
 import { PublicAssetUploadField } from '../../uploads/components/PublicAssetUploadField'
 import type { CampaignResponse } from '../../../types/campaigns'
 import type { MilestoneResponse } from '../../../types/milestones'
@@ -13,7 +15,6 @@ import {
 import {
   defaultMilestoneFormValues,
   milestoneFormSchema,
-  parseFormSortOrder,
   type MilestoneFormValues,
 } from '../schemas'
 import { useCreateMilestone, useUpdateMilestone } from '../hooks'
@@ -26,7 +27,7 @@ interface MilestoneFormDrawerProps {
   onSuccess?: () => void
 }
 
-function toCreatePayload(values: MilestoneFormValues) {
+function toCreatePayload(values: MilestoneFormValues, existingSortOrder?: number) {
   return {
     campaignId: values.campaignId,
     code: values.code.trim(),
@@ -38,11 +39,12 @@ function toCreatePayload(values: MilestoneFormValues) {
     rewardDescription: values.rewardDescription?.trim() || undefined,
     rewardImageUrl: values.rewardImageUrl?.trim() || undefined,
     status: values.status,
-    sortOrder: parseFormSortOrder(values.sortOrder),
+    // Ordering is managed via Milestones reorder drawer — preserve on edit, omit on create.
+    sortOrder: existingSortOrder,
   }
 }
 
-function toUpdatePayload(values: MilestoneFormValues) {
+function toUpdatePayload(values: MilestoneFormValues, existingSortOrder?: number) {
   return {
     code: values.code.trim(),
     requiredStampCount: Number(values.requiredStampCount),
@@ -53,7 +55,7 @@ function toUpdatePayload(values: MilestoneFormValues) {
     rewardDescription: values.rewardDescription?.trim() || undefined,
     rewardImageUrl: values.rewardImageUrl?.trim() || undefined,
     status: values.status,
-    sortOrder: parseFormSortOrder(values.sortOrder),
+    sortOrder: existingSortOrder,
   }
 }
 
@@ -99,7 +101,6 @@ export function MilestoneFormDrawer({
         rewardDescription: milestone.rewardDescription ?? '',
         rewardImageUrl: milestone.rewardImageUrl ?? '',
         status: milestone.status ?? 'DRAFT',
-        sortOrder: milestone.sortOrder != null ? String(milestone.sortOrder) : '',
       })
     } else {
       reset(defaultMilestoneFormValues)
@@ -107,10 +108,14 @@ export function MilestoneFormDrawer({
   }, [open, milestone, reset])
 
   const onSubmit = handleSubmit(async (values) => {
+    const existingSortOrder = isEdit ? milestone?.sortOrder : undefined
     if (isEdit && milestone) {
-      await updateMutation.mutateAsync({ id: milestone.id, body: toUpdatePayload(values) })
+      await updateMutation.mutateAsync({
+        id: milestone.id,
+        body: toUpdatePayload(values, existingSortOrder),
+      })
     } else {
-      await createMutation.mutateAsync(toCreatePayload(values))
+      await createMutation.mutateAsync(toCreatePayload(values, existingSortOrder))
     }
     onSuccess?.()
     onClose()
@@ -133,23 +138,22 @@ export function MilestoneFormDrawer({
       onClose={onClose}
       width="lg"
     >
-      <form id="milestone-form" className="space-y-6" onSubmit={onSubmit} noValidate>
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Campaign
-          </h3>
-
+      <form id="milestone-form" className="space-y-4" onSubmit={onSubmit} noValidate>
+        <DrawerSectionCard
+          icon={MapPin}
+          title="Campaign"
+          description="Which campaign this milestone belongs to."
+        >
           <FormField
             label="Campaign"
             htmlFor="campaignId"
             required
             error={errors.campaignId?.message}
           >
-            <select
+            <Select
               id="campaignId"
               {...register('campaignId')}
               disabled={isEdit}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm disabled:opacity-60"
             >
               <option value="">Select campaign…</option>
               {campaignOptions.map((opt) => (
@@ -164,20 +168,23 @@ export function MilestoneFormDrawer({
                   {shortenId(milestone.campaignId)} (unknown)
                 </option>
               ) : null}
-            </select>
+            </Select>
           </FormField>
-        </div>
+        </DrawerSectionCard>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Trigger
-          </h3>
-
-          <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
+        <DrawerSectionCard
+          icon={Flag}
+          title="Trigger"
+          description="Stamp threshold and milestone identity."
+        >
+          <FormField
+            label="Code"
+            htmlFor="code"
+            required
+            error={errors.code?.message}
+            help="Unique milestone code, e.g. MS3, MS7, MS14."
+          >
             <Input id="code" placeholder="MS3" {...register('code')} />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Unique milestone code, e.g. MS3, MS7, MS14
-            </p>
           </FormField>
 
           <FormField
@@ -185,6 +192,7 @@ export function MilestoneFormDrawer({
             htmlFor="requiredStampCount"
             required
             error={errors.requiredStampCount?.message}
+            help="Number of stamps the collector must gather to unlock this reward."
           >
             <Input
               id="requiredStampCount"
@@ -193,9 +201,6 @@ export function MilestoneFormDrawer({
               step={1}
               {...register('requiredStampCount')}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              User must collect this many stamps to unlock the reward
-            </p>
           </FormField>
 
           <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
@@ -203,35 +208,26 @@ export function MilestoneFormDrawer({
           </FormField>
 
           <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-            <textarea
-              id="description"
-              rows={3}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              {...register('description')}
-            />
+            <Textarea id="description" rows={3} {...register('description')} />
           </FormField>
-        </div>
+        </DrawerSectionCard>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Reward
-          </h3>
-
+        <DrawerSectionCard
+          icon={Gift}
+          title="Reward"
+          description="What the collector receives when this milestone unlocks."
+        >
           <FormField
             label="Reward type"
             htmlFor="rewardType"
             required
             error={errors.rewardType?.message}
           >
-            <select
-              id="rewardType"
-              {...register('rewardType')}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            >
+            <Select id="rewardType" {...register('rewardType')}>
               <option value="VOUCHER">Voucher</option>
               <option value="DIGITAL_STICKER">Digital sticker</option>
               <option value="BONUS_STAMP">Bonus stamp</option>
-            </select>
+            </Select>
           </FormField>
 
           <FormField
@@ -248,12 +244,7 @@ export function MilestoneFormDrawer({
             htmlFor="rewardDescription"
             error={errors.rewardDescription?.message}
           >
-            <textarea
-              id="rewardDescription"
-              rows={2}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              {...register('rewardDescription')}
-            />
+            <Textarea id="rewardDescription" rows={2} {...register('rewardDescription')} />
           </FormField>
 
           <Controller
@@ -262,40 +253,31 @@ export function MilestoneFormDrawer({
             render={({ field }) => (
               <PublicAssetUploadField
                 id="rewardImageUrl"
-                label="Reward image URL"
+                label="Reward image"
                 value={field.value ?? ''}
                 onChange={field.onChange}
                 error={errors.rewardImageUrl?.message}
                 formDirty={isDirty}
+                help="Shown when the milestone unlocks. Recommended: square (1:1)."
               />
             )}
           />
-        </div>
+        </DrawerSectionCard>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Publishing
-          </h3>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="Sort order" htmlFor="sortOrder" error={errors.sortOrder?.message}>
-              <Input id="sortOrder" type="number" min={0} step={1} {...register('sortOrder')} />
-            </FormField>
-
-            <FormField label="Status" htmlFor="status" error={errors.status?.message}>
-              <select
-                id="status"
-                {...register('status')}
-                className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              >
-                <option value="DRAFT">Draft</option>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-            </FormField>
-          </div>
-        </div>
+        <DrawerSectionCard
+          icon={Send}
+          title="Publishing"
+          description="Visibility status. List order is managed via Reorder Milestones."
+        >
+          <FormField label="Status" htmlFor="status" error={errors.status?.message}>
+            <Select id="status" {...register('status')}>
+              <option value="DRAFT">Draft</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="ARCHIVED">Archived</option>
+            </Select>
+          </FormField>
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

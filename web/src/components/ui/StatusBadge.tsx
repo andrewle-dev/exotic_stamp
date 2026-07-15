@@ -48,6 +48,10 @@ const STATUS_MAP: Record<string, StatusMeta> = {
   // Scan key
   CONFIGURED: { tone: 'success', label: 'Configured' },
   MISSING: { tone: 'danger', label: 'Missing' },
+  REVOKED: { tone: 'danger', label: 'Revoked' },
+  LOST: { tone: 'danger', label: 'Lost' },
+  REPLACED: { tone: 'neutral', label: 'Replaced' },
+
   // GPS
   GPS_OK: { tone: 'success', label: 'GPS OK' },
   GPS_MISSING: { tone: 'danger', label: 'GPS Missing' },
@@ -99,13 +103,15 @@ export function StatusBadge({ status, label, dot = true, className }: StatusBadg
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap',
+        'inline-flex max-w-full items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
         toneClasses[tone],
         className,
       )}
     >
-      {dot ? <span className={cn('h-1.5 w-1.5 rounded-full', toneDotClasses[tone])} /> : null}
-      {text}
+      {dot ? (
+        <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', toneDotClasses[tone])} />
+      ) : null}
+      <span className="truncate">{text}</span>
     </span>
   )
 }

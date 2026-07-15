@@ -1,40 +1,72 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowUpDown, Eye, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
-import { Input } from '../../../components/ui/FormField'
 import { formatDateTime } from '../../../lib/formatting/date'
 import { formatNumber } from '../../../lib/formatting/number'
 import { gpsReadinessStatus } from '../../../lib/metro/readiness'
 import { isForbiddenError } from '../../../lib/api/errors'
 import { ROUTES } from '../../../lib/constants/routes'
-import type { MetroStatus } from '../../../types/common'
+import { detailFromListState } from '../../../lib/navigation/useSafeBackNavigation'
 import type { StationResponse } from '../../../types/stations'
 import { useMetroLinesList } from '../../metro-lines/hooks'
 import { useDeleteStation, useStationStats, useStationsList } from '../hooks'
 import { StationFormDrawer } from '../components/StationFormDrawer'
 import { ScanKeyDrawer } from '../components/ScanKeyDrawer'
 import { StationTableCell } from '../components/StationTableCell'
-
-type StatusFilter = MetroStatus | 'ALL'
+import { StationsReorderDrawer } from '../components/StationsReorderDrawer'
+import {
+  EMPTY_STATION_FILTERS,
+  type StationFilters,
+  type StationStatusFilter,
+} from '../filter-schema'
 
 export function StationsPage() {
   const navigate = useNavigate()
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [lineFilter, setLineFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<StationFilters>({ emptyFilters: EMPTY_STATION_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [reorderOpen, setReorderOpen] = useState(false)
   const [editingStation, setEditingStation] = useState<StationResponse | null>(null)
   const [deletingStation, setDeletingStation] = useState<StationResponse | null>(null)
   const [scanKeyStationId, setScanKeyStationId] = useState<string | null>(null)
+
+  const { lineId: lineFilter, status: statusFilter } = appliedFilters
 
   const listParams = useMemo(
     () => ({
@@ -58,51 +90,102 @@ export function StationsPage() {
     return map
   }, [stats])
 
-  const lines = linesPage?.content ?? []
+  const lines = useMemo(() => linesPage?.content ?? [], [linesPage?.content])
+  const selectedLine = useMemo(
+    () => lines.find((line) => line.id === lineFilter),
+    [lines, lineFilter],
+  )
+
+  const activeAdvancedFilterCount = countAppliedAdvancedFilters([
+    Boolean(lineFilter),
+    statusFilter !== 'ALL',
+  ])
+
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    lineFilter
+      ? buildLabeledFilterTag({
+          id: 'line',
+          label: 'Line',
+          value: (() => {
+            const line = lines.find((l) => l.id === lineFilter)
+            return line ? `${line.code} — ${line.name}` : lineFilter
+          })(),
+          accent: 'line',
+          onRemove: () => removeFilter('lineId', ''),
+        })
+      : null,
+    statusFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'status',
+          label: 'Status',
+          value: statusFilter,
+          accent: 'status',
+          onRemove: () => removeFilter('status', 'ALL'),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const count = data?.totalElements ?? 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${count} filtered station${count === 1 ? '' : 's'}`
+    : `Showing ${count} station${count === 1 ? '' : 's'}`
 
   const columns: DataTableColumn<StationResponse>[] = useMemo(
     () => [
       {
         id: 'code',
         header: 'Code',
+        ...COL_WIDTH.code,
         cell: (row) => <span className="font-mono text-xs">{row.code}</span>,
       },
       {
         id: 'station',
         header: 'Station',
+        defaultWidth: 220,
+        minWidth: 160,
+        truncate: false,
         cell: (row) => <StationTableCell station={row} />,
       },
       {
         id: 'line',
         header: 'Line',
+        ...COL_WIDTH.entity,
+        defaultWidth: 140,
         cell: (row) => row.lineCode ?? row.lineName ?? '—',
       },
       {
         id: 'address',
         header: 'Address',
-        cell: (row) => (
-          <span className="max-w-[200px] truncate text-sm">{row.address ?? '—'}</span>
-        ),
+        ...COL_WIDTH.address,
+        cell: (row) => <span className="text-sm">{row.address ?? '—'}</span>,
       },
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.status} />,
       },
       {
         id: 'gps',
         header: 'GPS',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={gpsReadinessStatus(row)} />,
       },
       {
         id: 'collectors',
         header: 'Collectors',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) => formatNumber(collectorMap.get(row.id) ?? 0),
       },
       {
         id: 'updatedAt',
         header: 'Updated',
+        ...COL_WIDTH.date,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">{formatDateTime(row.updatedAt)}</span>
         ),
@@ -121,85 +204,79 @@ export function StationsPage() {
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Stations</h2>
           <p className="text-sm text-muted-foreground">
-            Manage station records, GPS configuration, and scan key readiness.
+            Manage station profiles, GPS and geofence settings, scan keys, and discovery media.
           </p>
         </div>
-        <Button size="md" onClick={() => { setEditingStation(null); setDrawerOpen(true) }}>
-          <Plus className="h-4 w-4" />
-          Create station
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="md"
+            disabled={!lineFilter}
+            title={lineFilter ? undefined : 'Select a line filter to reorder stations'}
+            onClick={() => setReorderOpen(true)}
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            Reorder
+          </Button>
+          <Button size="md" onClick={() => { setEditingStation(null); setDrawerOpen(true) }}>
+            <Plus className="h-4 w-4" />
+            Create station
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-end">
-        <div className="flex-1 space-y-1">
-          <label htmlFor="station-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="station-search"
-            placeholder="Search by code or name…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-                setPage(0)
-              }
-            }}
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="station-line" className="text-xs font-medium text-muted-foreground">
-            Line
-          </label>
-          <select
-            id="station-line"
-            value={lineFilter}
-            onChange={(e) => {
-              setLineFilter(e.target.value)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-48"
+      <ListFilterToolbar
+        searchId="station-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by code or name…"
+        activeAdvancedFilterCount={activeAdvancedFilterCount}
+        filterSubtitle="Narrow the list by metro line and status."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="station-line-filter" label="Line" accent="line">
+          <FilterSelect
+            id="station-line-filter"
+            value={draftFilters.lineId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, lineId: e.target.value }))
+            }
           >
             <option value="">All lines</option>
             {lines.map((line) => (
               <option key={line.id} value={line.id}>
-                {line.code}
+                {line.code} — {line.name}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="station-status" className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
-          <select
-            id="station-status"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as StatusFilter)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+          </FilterSelect>
+        </FilterGroup>
+
+        <FilterGroup id="station-status-filter" label="Status" accent="status">
+          <FilterSelect
+            id="station-status-filter"
+            value={draftFilters.status}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                status: e.target.value as StationStatusFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="DRAFT">Draft</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-          </select>
-        </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSearch(searchInput.trim())
-            setPage(0)
-          }}
-        >
-          Apply
-        </Button>
-      </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
+
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="stations"
         columns={columns}
         data={data?.content}
         getRowId={(row) => row.id}
@@ -207,13 +284,18 @@ export function StationsPage() {
         error={error}
         onRetry={() => void refetch()}
         caption="Metro stations"
+        actionsWidth={168}
         rowWarning={(row) => gpsReadinessStatus(row) === 'GPS_MISSING'}
         rowActions={(row) => (
           <>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(ROUTES.stationDetail(row.id))}
+              onClick={() =>
+                navigate(ROUTES.stationDetail(row.id), {
+                  state: detailFromListState(ROUTES.stations),
+                })
+              }
               aria-label="View station"
             >
               <Eye className="h-4 w-4" />
@@ -253,10 +335,7 @@ export function StationsPage() {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 
@@ -269,6 +348,15 @@ export function StationsPage() {
           setEditingStation(null)
         }}
       />
+
+      {lineFilter ? (
+        <StationsReorderDrawer
+          open={reorderOpen}
+          lineId={lineFilter}
+          lineLabel={selectedLine ? `${selectedLine.code} · ${selectedLine.name}` : undefined}
+          onClose={() => setReorderOpen(false)}
+        />
+      ) : null}
 
       <ScanKeyDrawer
         open={Boolean(scanKeyStationId)}

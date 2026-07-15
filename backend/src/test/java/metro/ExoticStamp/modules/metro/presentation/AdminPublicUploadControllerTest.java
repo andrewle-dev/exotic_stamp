@@ -45,12 +45,12 @@ class AdminPublicUploadControllerTest {
     @WithMockUser(authorities = {"ROLE_ADMIN", "UPLOAD_PUBLIC_ASSET"})
     void uploadPng_success() throws Exception {
         when(publicAssetUploadService.uploadPublicAsset(any())).thenReturn(
-                PublicAssetUploadView.builder().url("/uploads/public/abc.png").build());
+                PublicAssetUploadView.builder().url("http://localhost:8080/uploads/public/abc.png").build());
 
         MockMultipartFile file = new MockMultipartFile("file", "a.png", "image/png", new byte[10]);
         mockMvc.perform(multipart("/api/v1/admin/uploads/public").file(file).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.url").value("/uploads/public/abc.png"));
+                .andExpect(jsonPath("$.data.url").value("http://localhost:8080/uploads/public/abc.png"));
     }
 
     @Test
@@ -62,6 +62,13 @@ class AdminPublicUploadControllerTest {
         MockMultipartFile file = new MockMultipartFile("file", "a.svg", "image/svg+xml", new byte[10]);
         mockMvc.perform(multipart("/api/v1/admin/uploads/public").file(file).with(csrf()))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void upload_unauthenticated_returns401() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "a.png", "image/png", new byte[10]);
+        mockMvc.perform(multipart("/api/v1/admin/uploads/public").file(file).with(csrf()))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

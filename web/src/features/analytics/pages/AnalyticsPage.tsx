@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { cn } from '../../../lib/utils/cn'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { isForbiddenError } from '../../../lib/api/errors'
@@ -113,18 +114,22 @@ export function AnalyticsPage() {
       {
         id: 'campaign',
         header: 'Campaign',
+        ...COL_WIDTH.entity,
+        defaultWidth: 240,
         cell: (row) => resolveCampaignLabel(row.campaignId, campaignsList),
       },
       {
         id: 'stamps',
         header: 'Stamps',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) => formatAnalyticsNumber(row.stampCount),
       },
       {
         id: 'share',
         header: 'Share of max',
         align: 'right',
+        ...COL_WIDTH.metric,
         cell: (row) => {
           if (maxCampaignStamps <= 0) {
             return '—'
@@ -142,17 +147,22 @@ export function AnalyticsPage() {
       {
         id: 'station',
         header: 'Station',
+        ...COL_WIDTH.entity,
+        defaultWidth: 200,
         cell: (row) => row.stationName,
       },
       {
         id: 'line',
         header: 'Line',
+        ...COL_WIDTH.entity,
+        defaultWidth: 140,
         cell: (row) => row.lineName ?? '—',
       },
       {
         id: 'collectors',
         header: 'Collectors',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) => formatAnalyticsNumber(row.collectorCount),
       },
     ],
@@ -161,34 +171,42 @@ export function AnalyticsPage() {
 
   const rewardColumns: DataTableColumn<RewardStockRow>[] = useMemo(
     () => [
-      { id: 'name', header: 'Reward', cell: (row) => row.name },
+      { id: 'name', header: 'Reward', ...COL_WIDTH.name, defaultWidth: 200, cell: (row) => row.name },
       {
         id: 'type',
         header: 'Type',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.rewardType} dot={false} />,
       },
       {
         id: 'total',
         header: 'Total stock',
         align: 'right',
+        ...COL_WIDTH.number,
+        defaultWidth: 110,
         cell: (row) => (row.totalStock !== undefined ? formatAnalyticsNumber(row.totalStock) : '—'),
       },
       {
         id: 'issued',
         header: 'Issued',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) => formatAnalyticsNumber(row.issuedCount ?? 0),
       },
       {
         id: 'remaining',
         header: 'Remaining',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) =>
           row.remaining !== undefined ? formatAnalyticsNumber(row.remaining) : '—',
       },
       {
         id: 'status',
         header: 'Stock status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) =>
           row.stockStatus === 'UNKNOWN' ? (
             <span className="text-xs text-muted-foreground">Not available</span>
@@ -269,6 +287,7 @@ export function AnalyticsPage() {
               <EmptyState title="No collection breakdown" />
             )}
             <DataTable
+              tableId="analytics-campaign-stamps"
               columns={campaignColumns}
               data={campaignStampRows}
               getRowId={(row) => row.campaignId}
@@ -301,6 +320,7 @@ export function AnalyticsPage() {
                   ))}
                 </div>
                 <DataTable
+                  tableId="analytics-stations"
                   columns={stationColumns}
                   data={sortedStations}
                   getRowId={(row) => row.stationId}
@@ -315,6 +335,7 @@ export function AnalyticsPage() {
           <div className="grid gap-6 xl:grid-cols-2">
             <AnalyticsSection title="Top 10 stations" description="Highest collector counts.">
               <DataTable
+                tableId="analytics-stations-top"
                 columns={stationColumns}
                 data={topStations}
                 getRowId={(row) => row.stationId}
@@ -332,6 +353,7 @@ export function AnalyticsPage() {
             >
               {bottomStations.length > 0 ? (
                 <DataTable
+                  tableId="analytics-stations-bottom"
                   columns={stationColumns}
                   data={bottomStations}
                   getRowId={(row) => row.stationId}
@@ -385,6 +407,7 @@ export function AnalyticsPage() {
             onRetry={() => void rewards.refetch()}
           >
             <DataTable
+              tableId="analytics-reward-stock"
               columns={rewardColumns}
               data={rewardStockRows}
               getRowId={(row) => row.id}

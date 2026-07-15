@@ -7,15 +7,15 @@ import 'package:metro_stamp_app/features/stations/domain/entities/station.dart';
 import 'package:metro_stamp_app/features/stations/domain/entities/station_collected_status.dart';
 import 'package:metro_stamp_app/features/stations/presentation/cubit/stations_cubit.dart';
 import 'package:metro_stamp_app/features/stations/presentation/cubit/stations_state.dart';
-import 'package:metro_stamp_app/features/stations/presentation/screens/stations_screen.dart';
-import 'package:metro_stamp_app/features/stations/presentation/widgets/station_list_tile.dart';
+import 'package:metro_stamp_app/features/stations/presentation/screens/stations_list_screen.dart';
+import 'package:metro_stamp_app/features/stations/presentation/utils/stations_line_filter.dart';
+import 'package:metro_stamp_app/features/stations/presentation/widgets/station_directory_row.dart';
 import 'package:metro_stamp_app/shared/widgets/app_empty_state.dart';
 import 'package:metro_stamp_app/shared/widgets/app_error_view.dart';
 import 'package:metro_stamp_app/shared/widgets/app_loading_view.dart';
 import 'package:mocktail/mocktail.dart';
 
-class MockStationsCubit extends MockCubit<StationsState>
-    implements StationsCubit {}
+class MockStationsCubit extends MockCubit<StationsState> implements StationsCubit {}
 
 void main() {
   late MockStationsCubit cubit;
@@ -26,7 +26,7 @@ void main() {
 
   Widget buildSubject() {
     return MaterialApp(
-      home: StationsScreen(cubit: cubit),
+      home: StationsListScreen(cubit: cubit),
     );
   }
 
@@ -60,48 +60,34 @@ void main() {
     expect(find.byType(AppErrorView), findsOneWidget);
   });
 
-  testWidgets('shows loaded station list', (tester) async {
+  testWidgets('shows loaded station directory', (tester) async {
     when(() => cubit.state).thenReturn(
       const StationsState(
         status: StationsStatus.loaded,
         lines: [Line(id: 'line-1', name: 'Line 1', status: 'ACTIVE')],
-        selectedLineId: 'line-1',
+        selectedLineId: StationsLineFilter.allLines,
+        userLatitude: 10.77,
+        userLongitude: 106.69,
         stations: [
           Station(
             id: 's1',
             lineId: 'line-1',
             code: 'S01',
             name: 'Ben Thanh',
+            lineName: 'Line 1',
+            latitude: 10.772,
+            longitude: 106.695,
             collectedStatus: StationCollectedStatus.collected,
           ),
-        ],
-      ),
-    );
-    when(() => cubit.load()).thenAnswer((_) async {});
-    when(() => cubit.selectLine(any())).thenAnswer((_) async {});
-    when(() => cubit.updateSearch(any())).thenAnswer((_) async {});
-
-    await tester.pumpWidget(buildSubject());
-    await tester.pump();
-
-    expect(find.byType(StationListTile), findsOneWidget);
-    expect(find.text('Ben Thanh'), findsOneWidget);
-    expect(find.text('Đã thu'), findsOneWidget);
-  });
-
-  testWidgets('hides collected badge when status is unknown', (tester) async {
-    when(() => cubit.state).thenReturn(
-      const StationsState(
-        status: StationsStatus.loaded,
-        lines: [Line(id: 'line-1', name: 'Line 1', status: 'ACTIVE')],
-        selectedLineId: 'line-1',
-        stations: [
           Station(
-            id: 's1',
+            id: 's2',
             lineId: 'line-1',
-            code: 'S01',
-            name: 'Ben Thanh',
-            collectedStatus: StationCollectedStatus.unknown,
+            code: 'S02',
+            name: 'Ba Son',
+            lineName: 'Line 1',
+            latitude: 10.79,
+            longitude: 106.71,
+            collectedStatus: StationCollectedStatus.uncollected,
           ),
         ],
       ),
@@ -109,22 +95,28 @@ void main() {
     when(() => cubit.load()).thenAnswer((_) async {});
     when(() => cubit.selectLine(any())).thenAnswer((_) async {});
     when(() => cubit.updateSearch(any())).thenAnswer((_) async {});
+    when(() => cubit.updateUserLocation(
+          latitude: any(named: 'latitude'),
+          longitude: any(named: 'longitude'),
+        )).thenReturn(null);
+    when(() => cubit.markGpsDisabled()).thenReturn(null);
 
     await tester.pumpWidget(buildSubject());
     await tester.pump();
 
-    expect(find.text('Ben Thanh'), findsOneWidget);
-    expect(find.text('Đã thu'), findsNothing);
-    expect(find.text('Chưa thu'), findsNothing);
+    expect(find.text('Stations'), findsOneWidget);
+    expect(find.text('Station Directory'), findsOneWidget);
+    expect(find.byType(StationDirectoryRow), findsOneWidget);
+    expect(find.text('Ben Thanh'), findsWidgets);
   });
 
-  testWidgets('shows empty state', (tester) async {
+  testWidgets('shows empty search state', (tester) async {
     when(() => cubit.state).thenReturn(
       const StationsState(
-        status: StationsStatus.loaded,
+        status: StationsStatus.emptySearch,
+        searchQuery: 'missing',
         lines: [Line(id: 'line-1', name: 'Line 1')],
-        selectedLineId: 'line-1',
-        stations: [],
+        selectedLineId: StationsLineFilter.allLines,
       ),
     );
     when(() => cubit.load()).thenAnswer((_) async {});
@@ -135,6 +127,34 @@ void main() {
     await tester.pump();
 
     expect(find.byType(AppEmptyState), findsOneWidget);
-    expect(find.text('Không có ga'), findsOneWidget);
+    expect(find.text('Không tìm thấy ga'), findsOneWidget);
+  });
+
+  testWidgets('shows gps banner when gps disabled', (tester) async {
+    when(() => cubit.state).thenReturn(
+      const StationsState(
+        status: StationsStatus.gpsDisabled,
+        lines: [Line(id: 'line-1', name: 'Line 1', status: 'ACTIVE')],
+        selectedLineId: StationsLineFilter.allLines,
+        stations: [
+          Station(
+            id: 's1',
+            lineId: 'line-1',
+            code: 'S01',
+            name: 'Ben Thanh',
+            lineName: 'Line 1',
+          ),
+        ],
+      ),
+    );
+    when(() => cubit.load()).thenAnswer((_) async {});
+    when(() => cubit.selectLine(any())).thenAnswer((_) async {});
+    when(() => cubit.updateSearch(any())).thenAnswer((_) async {});
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pump();
+
+    expect(find.textContaining('Bật GPS'), findsOneWidget);
+    expect(find.byType(StationDirectoryRow), findsOneWidget);
   });
 }

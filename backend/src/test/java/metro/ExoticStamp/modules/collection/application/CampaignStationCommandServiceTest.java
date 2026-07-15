@@ -29,6 +29,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,6 +68,33 @@ class CampaignStationCommandServiceTest {
         when(lineReadPort.getLineById(lineId)).thenReturn(MetroLineView.builder().id(lineId).code("L1").name("L").active(true).build());
 
         service.assign(campaignId, stationId);
+        verify(campaignStationRepository).assign(campaignId, stationId);
+    }
+
+    @Test
+    void ensureAssigned_skipsWhenAlreadyLinked() {
+        UUID campaignId = UUID.randomUUID();
+        UUID stationId = UUID.randomUUID();
+        when(campaignStationRepository.exists(campaignId, stationId)).thenReturn(true);
+
+        service.ensureAssigned(campaignId, stationId);
+
+        verify(campaignStationRepository, never()).assign(any(), any());
+    }
+
+    @Test
+    void ensureAssigned_assignsWhenMissing() {
+        UUID campaignId = UUID.randomUUID();
+        UUID stationId = UUID.randomUUID();
+        UUID lineId = UUID.randomUUID();
+        when(campaignStationRepository.exists(campaignId, stationId)).thenReturn(false);
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(activeCampaign(campaignId)));
+        when(stationReadPort.getStationViewById(stationId)).thenReturn(MetroStationView.builder()
+                .id(stationId).lineId(lineId).name("S").sequence(1).active(true).build());
+        when(lineReadPort.getLineById(lineId)).thenReturn(MetroLineView.builder().id(lineId).code("L1").name("L").active(true).build());
+
+        service.ensureAssigned(campaignId, stationId);
+
         verify(campaignStationRepository).assign(campaignId, stationId);
     }
 

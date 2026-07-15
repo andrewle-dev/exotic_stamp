@@ -31,6 +31,7 @@ void main() {
     when(() => cubit.stream).thenAnswer((_) => const Stream.empty());
     when(() => cubit.close()).thenAnswer((_) async {});
     when(() => cubit.load()).thenAnswer((_) async {});
+    when(() => cubit.redeem()).thenAnswer((_) async {});
 
     router = GoRouter(
       initialLocation: RouteNames.voucherDetail('reward-1'),
@@ -50,7 +51,7 @@ void main() {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pump();
 
-    expect(find.text('Chi tiết voucher'), findsOneWidget);
+    expect(find.text('Chi tiết Voucher'), findsOneWidget);
     expect(find.text('Coffee Voucher'), findsOneWidget);
     expect(find.text('ABC-123'), findsOneWidget);
   });

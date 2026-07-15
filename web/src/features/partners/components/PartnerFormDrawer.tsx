@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Building2, Calendar, Image } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input } from '../../../components/ui/FormField'
-import { PublicAssetUploadField } from '../../uploads/components/PublicAssetUploadField'
+import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 import type { PartnerResponse } from '../../../types/partners'
 import {
   defaultPartnerFormValues,
@@ -23,6 +25,7 @@ function toPayload(values: PartnerFormValues) {
   return {
     name: values.name.trim(),
     logoUrl: values.logoUrl?.trim() || undefined,
+    bannerImageUrl: values.bannerImageUrl?.trim() || undefined,
     contactEmail: values.contactEmail?.trim() || undefined,
     contractStartDate: values.contractStartDate?.trim() || undefined,
     contractEndDate: values.contractEndDate?.trim() || undefined,
@@ -60,6 +63,7 @@ export function PartnerFormDrawer({
       reset({
         name: partner.name,
         logoUrl: partner.logoUrl ?? '',
+        bannerImageUrl: partner.bannerImageUrl ?? '',
         contactEmail: partner.contactEmail ?? '',
         contractStartDate: partner.contractStartDate ?? '',
         contractEndDate: partner.contractEndDate ?? '',
@@ -96,12 +100,12 @@ export function PartnerFormDrawer({
       onClose={onClose}
       width="lg"
     >
-      <form id="partner-form" className="space-y-6" onSubmit={onSubmit} noValidate>
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Identity
-          </h3>
-
+      <form id="partner-form" className="space-y-4" onSubmit={onSubmit} noValidate>
+        <DrawerSectionCard
+          icon={Building2}
+          title="Identity"
+          description="Partner name and primary contact."
+        >
           <FormField label="Partner name" htmlFor="name" required error={errors.name?.message}>
             <Input id="name" placeholder="Grab Vietnam" {...register('name')} />
           </FormField>
@@ -118,28 +122,59 @@ export function PartnerFormDrawer({
               {...register('contactEmail')}
             />
           </FormField>
+        </DrawerSectionCard>
 
-          <Controller
-            name="logoUrl"
-            control={control}
-            render={({ field }) => (
-              <PublicAssetUploadField
-                id="logoUrl"
-                label="Logo URL"
-                value={field.value ?? ''}
-                onChange={field.onChange}
-                error={errors.logoUrl?.message}
-                formDirty={isDirty}
+        <DrawerSectionCard
+          icon={Image}
+          title="Brand assets"
+          description="Logo and banner used across reward and Home surfaces."
+        >
+          <div className="space-y-6">
+            <Controller
+              name="logoUrl"
+              control={control}
+              render={({ field }) => (
+                <AssetImageFieldCard
+                  id="logoUrl"
+                  title="Partner logo"
+                  help="Used across reward and partner surfaces. Recommended: square logo (1:1)."
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  error={errors.logoUrl?.message}
+                  formDirty={isDirty}
+                  previewAspect="square"
+                  clearable
+                />
+              )}
+            />
+
+            <div className="border-t border-border pt-6">
+              <Controller
+                name="bannerImageUrl"
+                control={control}
+                render={({ field }) => (
+                  <AssetImageFieldCard
+                    id="bannerImageUrl"
+                    title="Partner banner"
+                    help="Shown in the mobile Home promotional carousel. Recommended: landscape banner (≈16:9)."
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    error={errors.bannerImageUrl?.message}
+                    formDirty={isDirty}
+                    previewAspect="wide"
+                    clearable
+                  />
+                )}
               />
-            )}
-          />
-        </div>
+            </div>
+          </div>
+        </DrawerSectionCard>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Contract
-          </h3>
-
+        <DrawerSectionCard
+          icon={Calendar}
+          title="Contract"
+          description="Optional partnership window dates."
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Contract start"
@@ -157,7 +192,7 @@ export function PartnerFormDrawer({
               <Input id="contractEndDate" type="date" {...register('contractEndDate')} />
             </FormField>
           </div>
-        </div>
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

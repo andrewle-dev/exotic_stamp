@@ -5,11 +5,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import metro.ExoticStamp.common.reorder.ReorderResponse;
 import metro.ExoticStamp.common.response.ApiResponse;
 import metro.ExoticStamp.common.response.PageResponse;
 import metro.ExoticStamp.modules.collection.application.service.StampDesignCommandService;
 import metro.ExoticStamp.modules.collection.application.service.StampDesignQueryService;
 import metro.ExoticStamp.modules.collection.presentation.dto.request.CreateStampDesignRequest;
+import metro.ExoticStamp.modules.collection.presentation.dto.request.ReorderStampDesignsRequest;
 import metro.ExoticStamp.modules.collection.presentation.dto.request.UpdateStampDesignRequest;
 import metro.ExoticStamp.modules.collection.presentation.dto.response.StampDesignResponse;
 import metro.ExoticStamp.modules.collection.presentation.mapper.CampaignPresentationMapper;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -51,8 +54,16 @@ public class StampDesignAdminController {
     @Operation(summary = "List stamp designs")
     public ResponseEntity<ApiResponse<PageResponse<StampDesignResponse>>> list(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) UUID campaignId
     ) {
+        if (campaignId != null) {
+            List<StampDesignResponse> content = stampDesignQueryService.listByCampaignId(campaignId).stream()
+                    .map(mapper::toResponse)
+                    .toList();
+            return ResponseEntity.ok(ApiResponse.ok(
+                    PageResponse.of(content, content.size(), 1, 0, Math.max(content.size(), 1))));
+        }
         return ResponseEntity.ok(ApiResponse.ok(mapper.toStampDesignPage(stampDesignQueryService.list(page, size))));
     }
 
@@ -60,6 +71,15 @@ public class StampDesignAdminController {
     @Operation(summary = "Get stamp design by id")
     public ResponseEntity<ApiResponse<StampDesignResponse>> get(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(mapper.toResponse(stampDesignQueryService.getById(id))));
+    }
+
+    @PatchMapping("/reorder")
+    @Operation(summary = "Reorder stamp designs in a campaign",
+            description = "Dense-renumbers all non-deleted stamp designs in the campaign to 0..n-1. "
+                    + "orderedIds must be a permutation of every stamp design id in that campaign.")
+    public ResponseEntity<ApiResponse<ReorderResponse>> reorder(@Valid @RequestBody ReorderStampDesignsRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(ReorderResponse.from(
+                stampDesignCommandService.reorder(mapper.toReorderStampDesignsCommand(request)))));
     }
 
     @PatchMapping("/{id}")

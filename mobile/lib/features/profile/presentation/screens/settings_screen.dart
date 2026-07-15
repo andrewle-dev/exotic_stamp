@@ -197,16 +197,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       top: false,
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
           AppSpacing.xl,
-          AppSpacing.lg,
-          AppSpacing.xxxl,
+          AppSpacing.xxl,
+          AppSpacing.xl,
+          AppSpacing.huge,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _ProfileSummaryCard(profile: profile),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xxl),
             Text(
               'THÔNG TIN CÁ NHÂN',
               style: AppTextStyles.caption.copyWith(
@@ -215,7 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _firstnameController,
               label: 'Tên',
@@ -223,7 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               textInputAction: TextInputAction.next,
             ),
             if (state.fieldErrors['firstname'] != null) ...[
-              const SizedBox(height: AppSpacing.xxs),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 state.fieldErrors['firstname']!,
                 style: AppTextStyles.caption.copyWith(
@@ -231,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             AppTextField(
               controller: _lastnameController,
               label: 'Họ',
@@ -239,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               textInputAction: TextInputAction.next,
             ),
             if (state.fieldErrors['lastname'] != null) ...[
-              const SizedBox(height: AppSpacing.xxs),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 state.fieldErrors['lastname']!,
                 style: AppTextStyles.caption.copyWith(
@@ -247,7 +247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             AppTextField(
               controller: _emailController,
               label: 'Email',
@@ -255,12 +255,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               keyboardType: TextInputType.emailAddress,
               readOnly: true,
             ),
-            const SizedBox(height: AppSpacing.xxs),
+            const SizedBox(height: AppSpacing.xs),
             const Text(
               'Email không thể thay đổi qua ứng dụng.',
               style: AppTextStyles.caption,
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             AppTextField(
               controller: _phoneController,
               label: 'Số điện thoại',
@@ -268,7 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               keyboardType: TextInputType.phone,
               readOnly: true,
             ),
-            const SizedBox(height: AppSpacing.xxs),
+            const SizedBox(height: AppSpacing.xs),
             const Text(
               'Số điện thoại chỉ đọc — backend chưa hỗ trợ cập nhật.',
               style: AppTextStyles.caption,
@@ -276,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (state.failure != null &&
                 state.status == SettingsStatus.saveFailure &&
                 state.fieldErrors.isEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 state.failure!.message,
                 style: AppTextStyles.caption.copyWith(
@@ -284,7 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xxl),
             AppButton(
               label: 'Lưu thay đổi',
               isLoading: isSaving,
@@ -297,7 +297,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       );
                     },
             ),
-            const SizedBox(height: AppSpacing.xxxl),
+            const SizedBox(height: AppSpacing.huge),
             AppButton(
               label: 'Đăng xuất',
               variant: AppButtonVariant.outlined,
@@ -327,7 +327,7 @@ class _ProfileSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.blueTint,
         borderRadius: BorderRadius.circular(20),
@@ -355,7 +355,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                     color: AppColors.backgroundWhite,
                   ),
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,7 +365,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                   style: AppTextStyles.titleLarge,
                 ),
                 if (profile.email.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xxs),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(profile.email, style: AppTextStyles.bodyMedium),
                 ],
               ],

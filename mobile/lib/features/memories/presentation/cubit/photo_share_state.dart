@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 
 import '../../../../core/errors/failure.dart';
 import '../../domain/entities/photo_share_context.dart';
+import '../../domain/entities/stamp_share_option.dart';
 
 enum PhotoShareStatus {
   initial,
@@ -9,6 +10,8 @@ enum PhotoShareStatus {
   editing,
   sharing,
   shared,
+  saving,
+  saved,
   shareFailed,
 }
 
@@ -23,6 +26,8 @@ class PhotoShareState extends Equatable {
     this.failure,
     this.trackingRecorded = false,
     this.trackingFailed = false,
+    this.stampOptions = const [],
+    this.selectedStationId,
   });
 
   final PhotoShareStatus status;
@@ -34,6 +39,8 @@ class PhotoShareState extends Equatable {
   final Failure? failure;
   final bool trackingRecorded;
   final bool trackingFailed;
+  final List<StampShareOption> stampOptions;
+  final String? selectedStationId;
 
   bool get hasPhoto => photoPath != null && photoPath!.isNotEmpty;
   bool get hasStampContext => context != null;
@@ -50,6 +57,9 @@ class PhotoShareState extends Equatable {
     bool? trackingRecorded,
     bool? trackingFailed,
     bool clearPhoto = false,
+    List<StampShareOption>? stampOptions,
+    String? selectedStationId,
+    bool clearSelectedStationId = false,
   }) {
     return PhotoShareState(
       status: status ?? this.status,
@@ -61,6 +71,10 @@ class PhotoShareState extends Equatable {
       failure: clearFailure ? null : (failure ?? this.failure),
       trackingRecorded: trackingRecorded ?? this.trackingRecorded,
       trackingFailed: trackingFailed ?? this.trackingFailed,
+      stampOptions: stampOptions ?? this.stampOptions,
+      selectedStationId: clearSelectedStationId
+          ? null
+          : (selectedStationId ?? this.selectedStationId),
     );
   }
 
@@ -75,5 +89,7 @@ class PhotoShareState extends Equatable {
         failure,
         trackingRecorded,
         trackingFailed,
+        stampOptions,
+        selectedStationId,
       ];
 }

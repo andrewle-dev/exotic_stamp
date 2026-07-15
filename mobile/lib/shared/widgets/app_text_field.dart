@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_text_styles.dart';
 
 class AppTextField extends StatelessWidget {
@@ -43,11 +44,9 @@ class AppTextField extends StatelessWidget {
         if (label != null) ...[
           Text(
             label!,
-            style: AppTextStyles.titleMedium.copyWith(
-              color: AppColors.textPrimary,
-            ),
+            style: AppTextStyles.cardTitle,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
         ],
         TextFormField(
           controller: controller,

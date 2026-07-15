@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <clipPath id="round-clip">
+      <circle cx="24" cy="24" r="24" />
+    </clipPath>
+  </defs>
+  <rect width="48" height="48" fill="transparent" />
+  <g clip-path="url(#round-clip)">
+    <image
+      x="0"
+      y="0"
+      width="48"
+      height="48"
+      xlink:href="/assets/logo/ExoticStamp_logo2.png"
+      href="/assets/logo/ExoticStamp_logo2.png"
+      preserveAspectRatio="xMidYMid slice"
+    />
+  </g>
+</svg>

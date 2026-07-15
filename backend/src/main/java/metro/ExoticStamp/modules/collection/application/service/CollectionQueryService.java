@@ -380,13 +380,27 @@ public class CollectionQueryService {
 
 
 
+    /**
+     * Progress for one campaign (Home / stamp-book / collect response).
+     *
+     * <p>Scope (must stay aligned):
+     * <ul>
+     *   <li>{@code collected} — distinct stations the user collected in this campaign</li>
+     *   <li>{@code total} — ACTIVE non-deleted stamp designs in this campaign
+     *       (not {@code campaign_stations} row count alone, and not line station count)</li>
+     * </ul>
+     * Historical stamps beyond current ACTIVE designs may yield {@code collected > total};
+     * percentage is capped at 100 in that case.
+     */
     public ProgressView computeProgress(UUID userId, UUID lineId, UUID campaignId) {
 
         long collected = userStampRepository.countDistinctStationsByUserIdAndCampaignId(userId, campaignId);
 
-        long total = campaignStationRepository.countByCampaignId(campaignId);
+        long total = stampDesignRepository.countActiveByCampaignId(campaignId);
 
-        int pct = total <= 0 ? 0 : (int) Math.floor((collected * 100.0) / total);
+        int pct = total <= 0
+                ? 0
+                : (int) Math.min(100, Math.floor((collected * 100.0) / total));
 
         return ProgressView.builder()
 
@@ -462,6 +476,12 @@ public class CollectionQueryService {
                     .collected(isCollected)
 
                     .stampDesignUrl(design != null ? design.getImageUrl() : null)
+
+                    .stampDesignName(design != null ? design.getName() : null)
+
+                    .stampDesignDescription(design != null ? design.getDescription() : null)
+
+                    .rarity(design != null && design.getRarity() != null ? design.getRarity().name() : null)
 
                     .collectedAt(userStamp != null ? userStamp.getCollectedAt() : null)
 

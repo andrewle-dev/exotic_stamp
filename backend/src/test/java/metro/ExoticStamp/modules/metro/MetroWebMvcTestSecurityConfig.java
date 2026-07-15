@@ -8,6 +8,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 @TestConfiguration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -20,7 +22,12 @@ public class MetroWebMvcTestSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/metro/lines/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/metro/stations/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/metro/scan/resolve").permitAll()
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) ->
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED))
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                response.sendError(HttpServletResponse.SC_FORBIDDEN)));
         return http.build();
     }
 }

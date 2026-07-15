@@ -8,7 +8,10 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../cubit/scan_flow_cubit.dart';
 import '../cubit/scan_flow_state.dart';
+import '../../../../shared/widgets/app_loading_view.dart';
+import '../utils/scan_error_presentation.dart';
 import '../widgets/scan_action_buttons.dart';
+import '../widgets/scan_flow_listener.dart';
 import '../widgets/scan_flow_scope.dart';
 
 class ScanErrorScreen extends StatelessWidget {
@@ -17,13 +20,7 @@ class ScanErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScanFlowScope(
-      child: BlocListener<ScanFlowCubit, ScanFlowState>(
-        listenWhen: (previous, current) =>
-            previous.phase != current.phase &&
-            current.phase == ScanFlowPhase.success,
-        listener: (context, state) {
-          context.push(RouteNames.scanSuccess);
-        },
+      child: ScanFlowListener(
         child: Scaffold(
           backgroundColor: AppColors.backgroundWhite,
           appBar: AppBar(
@@ -32,93 +29,60 @@ class ScanErrorScreen extends StatelessWidget {
             title: const Text('Không thể thu stamp'),
             leading: IconButton(
               icon: const Icon(Icons.close_rounded),
-              onPressed: () => _returnToScan(context),
+              onPressed: () => _returnHome(context),
             ),
           ),
           body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
             builder: (context, state) {
               if (state.phase == ScanFlowPhase.checkingCollectStatus) {
-                return const Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.primaryBlue),
-                );
+                return const AppLoadingView(message: 'Đang kiểm tra...');
               }
 
-              final title = _titleForPhase(state.phase);
-              final message = state.statusMessage ??
-                  state.failure?.message ??
-                  'Đã xảy ra lỗi khi thu thập stamp.';
+              final presentation = ScanErrorPresentation.forPhase(state);
 
               return Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                padding: const EdgeInsets.all(AppSpacing.xxl),
                 child: Column(
                   children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.redTint,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        presentation.tagLabel,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.accentRed,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
                     Icon(
-                      _iconForPhase(state.phase),
+                      presentation.icon,
                       size: 72,
                       color: AppColors.accentRed,
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.xl),
                     Text(
-                      title,
+                      presentation.title,
                       style: AppTextStyles.headlineMedium.copyWith(
                         color: AppColors.accentRed,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
+                    const SizedBox(height: AppSpacing.md),
                     Text(
-                      message,
+                      presentation.message,
                       style: AppTextStyles.bodyLarge,
                       textAlign: TextAlign.center,
                     ),
                     const Spacer(),
-                    if (state.phase == ScanFlowPhase.duplicate) ...[
-                      ScanPrimaryButton(
-                        label: 'Mở Sổ stamp',
-                        onPressed: () {
-                          context.read<ScanFlowCubit>().resetFlow();
-                          context.go(RouteNames.stampBook);
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      if (state.resolvedStation?.id != null)
-                        ScanOutlineButton(
-                          label: 'Xem chi tiết ga',
-                          onPressed: () {
-                            final stationId = state.resolvedStation!.id;
-                            context.read<ScanFlowCubit>().resetFlow();
-                            context.push(RouteNames.stationDetail(stationId));
-                          },
-                        ),
-                    ] else if (state.isUncertainOutcome ||
-                        state.phase == ScanFlowPhase.networkError) ...[
-                      if (state.idempotencyKey != null)
-                        ScanPrimaryButton(
-                          label: 'Kiểm tra trạng thái',
-                          onPressed: () => context
-                              .read<ScanFlowCubit>()
-                              .checkCollectStatus(),
-                        ),
-                      if (state.idempotencyKey != null)
-                        const SizedBox(height: AppSpacing.sm),
-                      ScanOutlineButton(
-                        label: 'Kiểm tra Sổ stamp',
-                        onPressed: () {
-                          context.read<ScanFlowCubit>().resetFlow();
-                          context.go(RouteNames.stampBook);
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      ScanOutlineButton(
-                        label: 'Thử lại',
-                        onPressed: () => _returnToScan(context),
-                      ),
-                    ] else
-                      ScanPrimaryButton(
-                        label: 'Thử lại',
-                        onPressed: () => _returnToScan(context),
-                      ),
+                    ..._buildActions(context, state, presentation),
                   ],
                 ),
               );
@@ -129,39 +93,88 @@ class ScanErrorScreen extends StatelessWidget {
     );
   }
 
-  void _returnToScan(BuildContext context) {
+  List<Widget> _buildActions(
+    BuildContext context,
+    ScanFlowState state,
+    ScanErrorPresentation presentation,
+  ) {
+    if (state.phase == ScanFlowPhase.duplicate) {
+      return [
+        ScanPrimaryButton(
+          label: presentation.primaryActionLabel,
+          onPressed: () {
+            context.read<ScanFlowCubit>().resetFlow();
+            context.go(RouteNames.stampBook);
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ScanOutlineButton(
+          label: presentation.secondaryActionLabel,
+          onPressed: () => _returnToStation(context, state),
+        ),
+      ];
+    }
+
+    if (state.isUncertainOutcome || state.phase == ScanFlowPhase.networkError) {
+      return [
+        if (state.idempotencyKey != null)
+          ScanPrimaryButton(
+            label: presentation.primaryActionLabel,
+            onPressed: () =>
+                context.read<ScanFlowCubit>().checkCollectStatus(),
+          ),
+        if (state.idempotencyKey != null)
+          const SizedBox(height: AppSpacing.md),
+        ScanOutlineButton(
+          label: 'Kiểm tra Sổ stamp',
+          onPressed: () {
+            context.read<ScanFlowCubit>().resetFlow();
+            context.go(RouteNames.stampBook);
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ScanOutlineButton(
+          label: 'Thử lại',
+          onPressed: () => _retryScan(context),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ScanOutlineButton(
+          label: presentation.secondaryActionLabel,
+          onPressed: () => _returnHome(context),
+        ),
+      ];
+    }
+
+    return [
+      ScanPrimaryButton(
+        label: presentation.primaryActionLabel,
+        onPressed: () => _retryScan(context),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      ScanOutlineButton(
+        label: presentation.secondaryActionLabel,
+        onPressed: () => _returnToStation(context, state),
+      ),
+    ];
+  }
+
+  void _retryScan(BuildContext context) {
     context.read<ScanFlowCubit>().resetFlow();
     context.go(RouteNames.scan);
   }
 
-  String _titleForPhase(ScanFlowPhase phase) {
-    return switch (phase) {
-      ScanFlowPhase.duplicate => 'Stamp đã được thu',
-      ScanFlowPhase.invalidTag => 'Tag NFC không hợp lệ',
-      ScanFlowPhase.qrExpired => 'Mã QR không còn hiệu lực',
-      ScanFlowPhase.gpsOutsideRange => 'Ngoài phạm vi ga',
-      ScanFlowPhase.stationInactive => 'Ga không hoạt động',
-      ScanFlowPhase.campaignInactive => 'Chiến dịch không khả dụng',
-      ScanFlowPhase.networkError => 'Lỗi kết nối',
-      ScanFlowPhase.locationPermissionDenied => 'Cần quyền vị trí',
-      ScanFlowPhase.locationServiceDisabled => 'Bật dịch vụ vị trí',
-      ScanFlowPhase.locationLowAccuracy => 'GPS không đủ chính xác',
-      ScanFlowPhase.locationTimeout => 'Không lấy được vị trí',
-      _ => 'Không thể thu stamp',
-    };
+  void _returnHome(BuildContext context) {
+    context.read<ScanFlowCubit>().resetFlow();
+    context.go(RouteNames.home);
   }
 
-  IconData _iconForPhase(ScanFlowPhase phase) {
-    return switch (phase) {
-      ScanFlowPhase.duplicate => Icons.collections_bookmark_outlined,
-      ScanFlowPhase.gpsOutsideRange => Icons.location_off_outlined,
-      ScanFlowPhase.locationPermissionDenied =>
-        Icons.location_disabled_outlined,
-      ScanFlowPhase.locationServiceDisabled => Icons.location_off_outlined,
-      ScanFlowPhase.locationLowAccuracy => Icons.gps_not_fixed_outlined,
-      ScanFlowPhase.locationTimeout => Icons.timer_off_outlined,
-      ScanFlowPhase.networkError => Icons.wifi_off_rounded,
-      _ => Icons.error_outline_rounded,
-    };
+  void _returnToStation(BuildContext context, ScanFlowState state) {
+    final stationId = state.resolvedStation?.id;
+    context.read<ScanFlowCubit>().resetFlow();
+    if (stationId != null) {
+      context.go(RouteNames.stationDetail(stationId));
+      return;
+    }
+    context.go(RouteNames.home);
   }
 }

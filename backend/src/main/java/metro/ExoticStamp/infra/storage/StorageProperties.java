@@ -30,7 +30,7 @@ public class StorageProperties {
     @Data
     public static class FileConstraints {
         private long maxSizeMb = 5;
-        private List<String> allowedTypes = List.of("image/jpeg", "image/png");
+        private List<String> allowedTypes = List.of("image/jpeg", "image/png", "image/webp");
     }
 
     @Data

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../shared/widgets/app_button.dart';
+import '../../../stamp_book/domain/usecases/get_stamp_book_usecase.dart';
 import '../../domain/entities/photo_share_context.dart';
 import '../../domain/usecases/record_share_event_usecase.dart';
 import '../cubit/photo_share_cubit.dart';
@@ -17,6 +20,7 @@ import '../utils/photo_share_capture.dart';
 import '../widgets/photo_picker_placeholder.dart';
 import '../widgets/photo_share_editor_controls.dart';
 import '../widgets/photo_share_preview.dart';
+import '../widgets/photo_share_stamp_platform.dart';
 
 class PhotoShareScreen extends StatelessWidget {
   const PhotoShareScreen({
@@ -46,6 +50,9 @@ class PhotoShareScreen extends StatelessWidget {
       create: (_) => PhotoShareCubit(
         recordShareEventUseCase: RecordShareEventUseCase(
           Injection.instance.memoriesRepository,
+        ),
+        getStampBookUseCase: GetStampBookUseCase(
+          Injection.instance.stampBookRepository,
         ),
         photoPickerService: ImagePickerPhotoPickerService(),
         nativeShareService: SharePlusNativeShareService(),
@@ -85,6 +92,10 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
     super.dispose();
   }
 
+  Future<Uint8List?> _capturePreview() async {
+    return captureWidgetPng(_previewKey);
+  }
+
   Future<void> _onSharePressed() async {
     final cubit = context.read<PhotoShareCubit>();
     final state = cubit.state;
@@ -95,7 +106,7 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
       return;
     }
 
-    final bytes = await captureWidgetPng(_previewKey);
+    final bytes = await _capturePreview();
     if (bytes == null) {
       if (!mounted) {
         return;
@@ -107,15 +118,78 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
     }
 
     await cubit.shareComposedImage(bytes);
+    _showShareResult(cubit.state);
+  }
 
-    if (!mounted) {
+  Future<void> _onSavePressed() async {
+    final cubit = context.read<PhotoShareCubit>();
+    if (!cubit.state.hasPhoto) {
       return;
     }
 
-    final next = cubit.state;
-    if (next.status == PhotoShareStatus.shared) {
+    final bytes = await _capturePreview();
+    if (bytes == null) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã mở bảng chia sẻ.')),
+        const SnackBar(content: Text('Không thể tạo ảnh.')),
+      );
+      return;
+    }
+
+    await cubit.saveComposedImage(bytes);
+    if (!mounted) {
+      return;
+    }
+    final next = cubit.state;
+    if (next.status == PhotoShareStatus.saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã lưu ảnh kỷ niệm.')),
+      );
+    } else if (next.status == PhotoShareStatus.shareFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(next.failure?.message ?? 'Không thể lưu ảnh.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onPlatformSelected(PhotoSharePlatform platform) async {
+    final cubit = context.read<PhotoShareCubit>();
+    if (!cubit.state.hasPhoto) {
+      return;
+    }
+
+    final bytes = await _capturePreview();
+    if (bytes == null) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể tạo ảnh chia sẻ.')),
+      );
+      return;
+    }
+
+    await cubit.shareWithPlatform(
+      platform: platform,
+      composedImageBytes: bytes,
+    );
+    _showShareResult(cubit.state);
+  }
+
+  void _showShareResult(PhotoShareState next) {
+    if (!mounted) {
+      return;
+    }
+    if (next.status == PhotoShareStatus.shared) {
+      final message = next.trackingFailed
+          ? 'Đã chia sẻ. Ghi nhận sự kiện không thành công.'
+          : 'Đã mở bảng chia sẻ.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
       );
     } else if (next.status == PhotoShareStatus.shareFailed) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,16 +200,6 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
         ),
       );
     }
-  }
-
-  void _onSavePressed() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Lưu vào thư viện ảnh chưa hỗ trợ trong MVP. Hãy dùng Chia sẻ.',
-        ),
-      ),
-    );
   }
 
   @override
@@ -149,10 +213,11 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
       ),
       body: BlocBuilder<PhotoShareCubit, PhotoShareState>(
         builder: (context, state) {
-          final isSharing = state.status == PhotoShareStatus.sharing;
+          final isBusy = state.status == PhotoShareStatus.sharing ||
+              state.status == PhotoShareStatus.saving;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.all(AppSpacing.xl),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -174,11 +239,11 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
                         context.read<PhotoShareCubit>().pickFromCamera(),
                   ),
                 if (state.hasPhoto) ...[
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.md),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
-                      onPressed: isSharing
+                      onPressed: isBusy
                           ? null
                           : () => context.read<PhotoShareCubit>().clearPhoto(),
                       icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -186,7 +251,16 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.lg),
+                if (state.stampOptions.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  PhotoShareStampSelectorRow(
+                    options: state.stampOptions,
+                    selectedStationId: state.selectedStationId,
+                    onSelected: (option) =>
+                        context.read<PhotoShareCubit>().selectStamp(option),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xl),
                 PhotoShareEditorControls(
                   captionController: _captionController,
                   showStationName: state.showStationName,
@@ -199,15 +273,15 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
                       .read<PhotoShareCubit>()
                       .toggleShowCollectionDate(value),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
                 Row(
                   children: [
                     Expanded(
                       child: AppButton(
                         label: 'Chia sẻ',
                         variant: AppButtonVariant.accent,
-                        isLoading: isSharing,
-                        onPressed: state.hasPhoto && !isSharing
+                        isLoading: state.status == PhotoShareStatus.sharing,
+                        onPressed: state.hasPhoto && !isBusy
                             ? _onSharePressed
                             : null,
                         icon: const Icon(
@@ -217,12 +291,13 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    const SizedBox(width: AppSpacing.lg),
                     Expanded(
                       child: AppButton(
                         label: 'Lưu ảnh',
                         variant: AppButtonVariant.outlined,
-                        onPressed: state.hasPhoto && !isSharing
+                        isLoading: state.status == PhotoShareStatus.saving,
+                        onPressed: state.hasPhoto && !isBusy
                             ? _onSavePressed
                             : null,
                         icon: const Icon(
@@ -234,8 +309,13 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.xxl),
+                PhotoSharePlatformChips(
+                  enabled: state.hasPhoto && !isBusy,
+                  onPlatformSelected: _onPlatformSelected,
+                ),
                 if (!state.hasStampContext) ...[
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.xl),
                   Text(
                     'Mở màn hình từ chi tiết Stamp để thêm nhãn ga và ngày thu.',
                     style: AppTextStyles.caption.copyWith(
@@ -244,7 +324,7 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
                     textAlign: TextAlign.center,
                   ),
                 ],
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
               ],
             ),
           );

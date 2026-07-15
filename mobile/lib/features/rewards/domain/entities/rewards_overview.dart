@@ -50,6 +50,7 @@ class RewardsOverview extends Equatable {
     this.milestones = const [],
     this.rewards = const [],
     this.nextMilestone,
+    this.rankTitle,
     this.partialErrors = const [],
   });
 
@@ -59,11 +60,27 @@ class RewardsOverview extends Equatable {
   final List<Milestone> milestones;
   final List<UserReward> rewards;
   final NextMilestoneHint? nextMilestone;
+  final String? rankTitle;
   final List<String> partialErrors;
 
   bool get hasUserRewards => rewards.isNotEmpty;
 
   bool get hasMilestones => milestones.isNotEmpty;
+
+  bool get hasPendingRewards =>
+      rewards.any((reward) => reward.status == UserRewardStatus.pending);
+
+  List<UserReward> get availableVouchers =>
+      rewards.where((reward) => reward.status == UserRewardStatus.available).toList();
+
+  List<UserReward> get historyVouchers => rewards
+      .where(
+        (reward) =>
+            reward.status == UserRewardStatus.used ||
+            reward.status == UserRewardStatus.expired ||
+            reward.status == UserRewardStatus.unavailable,
+      )
+      .toList();
 
   @override
   List<Object?> get props => [
@@ -73,6 +90,7 @@ class RewardsOverview extends Equatable {
         milestones,
         rewards,
         nextMilestone,
+        rankTitle,
         partialErrors,
       ];
 }

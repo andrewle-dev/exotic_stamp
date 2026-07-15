@@ -143,6 +143,28 @@ class CollectionRuntimeControllerTest {
     }
 
     @Test
+    @WithAnonymousUser
+    void progress_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(get("/api/v1/collection/progress")
+                        .param("lineId", LINE_ID.toString()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void progress_fourteenOfFourteen_returnsCollectedAndTotal() throws Exception {
+        when(queryService.getMyProgress(eq(USER_ID), eq(LINE_ID), isNull())).thenReturn(
+                ProgressView.builder().lineId(LINE_ID).collected(14).total(14).percentage(100).build());
+
+        mockMvc.perform(get("/api/v1/collection/progress")
+                        .param("lineId", LINE_ID.toString())
+                        .with(user(USER_ID.toString()).password("n/a").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.collected").value(14))
+                .andExpect(jsonPath("$.data.total").value(14))
+                .andExpect(jsonPath("$.data.percentage").value(100));
+    }
+
+    @Test
     void myStamps_authenticated_returns200() throws Exception {
         when(queryService.getMyStamps(eq(USER_ID), eq(LINE_ID), eq(0), eq(20)))
                 .thenReturn(PageResponse.of(List.of(), 0, 0, 0, 20));

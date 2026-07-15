@@ -31,12 +31,18 @@ void main() {
         collected: true,
         collectedAt: DateTime(2026, 6, 20, 14, 22),
         stampDesignUrl: '/uploads/stamp.png',
+        stampDesignName: 'Stamp Ben Thanh',
+        stampDesignDescription: 'Heart of the metro system.',
+        rarity: 'RARE',
       ),
       StampItemModel(
         stationId: 'station-2',
         stationName: 'Suoi Tien',
         sequence: 2,
         collected: false,
+        stampDesignName: 'Stamp Suoi Tien',
+        stampDesignDescription: 'Theme park terminus stamp.',
+        rarity: 'COMMON',
       ),
     ],
   );
@@ -100,6 +106,9 @@ void main() {
 
     expect(detail.collected, isFalse);
     expect(detail.stationName, 'Suoi Tien');
+    expect(detail.stampDesignName, 'Stamp Suoi Tien');
+    expect(detail.stampDesignDescription, 'Theme park terminus stamp.');
+    expect(detail.rarity, 'COMMON');
     verifyNever(
       () => remoteDataSource.getMyStamps(
         lineId: any(named: 'lineId'),

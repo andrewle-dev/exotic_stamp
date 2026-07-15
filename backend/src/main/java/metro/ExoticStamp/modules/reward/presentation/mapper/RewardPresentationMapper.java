@@ -5,11 +5,13 @@ import metro.ExoticStamp.modules.reward.application.command.CreateMilestoneComma
 import metro.ExoticStamp.modules.reward.application.command.CreatePartnerCommand;
 import metro.ExoticStamp.modules.reward.application.command.CreateRewardCommand;
 import metro.ExoticStamp.modules.reward.application.command.ImportVouchersCommand;
+import metro.ExoticStamp.modules.reward.application.command.ReorderMilestonesCommand;
 import metro.ExoticStamp.modules.reward.application.command.UpdateMilestoneCommand;
 import metro.ExoticStamp.modules.reward.application.command.UpdatePartnerCommand;
 import metro.ExoticStamp.modules.reward.application.command.UpdateRewardCommand;
 import metro.ExoticStamp.modules.reward.application.view.MilestoneView;
 import metro.ExoticStamp.modules.reward.application.view.PartnerView;
+import metro.ExoticStamp.modules.reward.application.view.PromotionalPartnerBannerView;
 import metro.ExoticStamp.modules.reward.application.view.RewardView;
 import metro.ExoticStamp.modules.reward.application.view.UserRewardView;
 import metro.ExoticStamp.modules.reward.application.view.VoucherPoolStatsView;
@@ -19,11 +21,13 @@ import metro.ExoticStamp.modules.reward.presentation.request.CreateMilestoneRequ
 import metro.ExoticStamp.modules.reward.presentation.request.CreatePartnerRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.CreateRewardRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.ImportVouchersRequest;
+import metro.ExoticStamp.modules.reward.presentation.request.ReorderMilestonesRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.UpdateMilestoneRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.UpdatePartnerRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.UpdateRewardRequest;
 import metro.ExoticStamp.modules.reward.presentation.response.MilestoneResponse;
 import metro.ExoticStamp.modules.reward.presentation.response.PartnerResponse;
+import metro.ExoticStamp.modules.reward.presentation.response.PromotionalPartnerBannerResponse;
 import metro.ExoticStamp.modules.reward.presentation.response.RewardResponse;
 import metro.ExoticStamp.modules.reward.presentation.response.UserRewardResponse;
 import metro.ExoticStamp.modules.reward.presentation.response.UserRewardVoucherResponse;
@@ -39,12 +43,12 @@ import java.util.stream.Collectors;
 public class RewardPresentationMapper {
 
     public CreatePartnerCommand toCreatePartnerCommand(CreatePartnerRequest r) {
-        return new CreatePartnerCommand(r.getName(), r.getLogoUrl(), r.getContactEmail(),
+        return new CreatePartnerCommand(r.getName(), r.getLogoUrl(), r.getBannerImageUrl(), r.getContactEmail(),
                 r.getContractStartDate(), r.getContractEndDate());
     }
 
     public UpdatePartnerCommand toUpdatePartnerCommand(UUID id, UpdatePartnerRequest r) {
-        return new UpdatePartnerCommand(id, r.getName(), r.getLogoUrl(), r.getContactEmail(),
+        return new UpdatePartnerCommand(id, r.getName(), r.getLogoUrl(), r.getBannerImageUrl(), r.getContactEmail(),
                 r.getContractStartDate(), r.getContractEndDate());
     }
 
@@ -53,10 +57,22 @@ public class RewardPresentationMapper {
                 .id(v.id())
                 .name(v.name())
                 .logoUrl(v.logoUrl())
+                .bannerImageUrl(v.bannerImageUrl())
                 .contactEmail(v.contactEmail())
                 .contractStartDate(v.contractStartDate())
                 .contractEndDate(v.contractEndDate())
                 .active(v.active())
+                .build();
+    }
+
+    public PromotionalPartnerBannerResponse toPromotionalPartnerBannerResponse(PromotionalPartnerBannerView v) {
+        return PromotionalPartnerBannerResponse.builder()
+                .partnerId(v.partnerId())
+                .partnerName(v.partnerName())
+                .logoUrl(v.logoUrl())
+                .bannerImageUrl(v.bannerImageUrl())
+                .contractStart(v.contractStart())
+                .contractEnd(v.contractEnd())
                 .build();
     }
 
@@ -90,6 +106,10 @@ public class RewardPresentationMapper {
                 r.getStatus() == null ? null : r.getStatus().name(),
                 r.getSortOrder()
         );
+    }
+
+    public ReorderMilestonesCommand toReorderMilestonesCommand(ReorderMilestonesRequest r) {
+        return new ReorderMilestonesCommand(r.getCampaignId(), r.getOrderedIds());
     }
 
     public MilestoneResponse toMilestoneResponse(MilestoneView v) {

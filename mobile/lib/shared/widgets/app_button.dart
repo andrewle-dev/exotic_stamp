@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
-import '../../app/theme/app_radius.dart';
-import '../../app/theme/app_spacing.dart';
-import '../../app/theme/app_text_styles.dart';
+import 'app_action_buttons.dart';
 
 enum AppButtonVariant { primary, accent, outlined }
 
+/// Legacy button wrapper — prefer [PrimaryButton], [SecondaryButton],
+/// [DangerActionButton].
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -27,67 +26,27 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = isLoading
-        ? const SizedBox(
-            height: 22,
-            width: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              color: AppColors.backgroundWhite,
-            ),
-          )
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                icon!,
-                const SizedBox(width: AppSpacing.xs),
-              ],
-              Text(label),
-            ],
-          );
-
-    final button = switch (variant) {
-      AppButtonVariant.primary => ElevatedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primaryBlue,
-            foregroundColor: AppColors.backgroundWhite,
-            minimumSize: const Size(0, 52),
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-            textStyle: AppTextStyles.labelLarge,
-          ),
-          child: child,
+    return switch (variant) {
+      AppButtonVariant.primary => PrimaryButton(
+          label: label,
+          onPressed: onPressed,
+          isLoading: isLoading,
+          expand: expand,
+          icon: icon,
         ),
-      AppButtonVariant.accent => ElevatedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accentRed,
-            foregroundColor: AppColors.backgroundWhite,
-            minimumSize: const Size(0, 52),
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-            textStyle: AppTextStyles.labelLarge,
-          ),
-          child: child,
+      AppButtonVariant.accent => DangerActionButton(
+          label: label,
+          onPressed: onPressed,
+          isLoading: isLoading,
+          expand: expand,
+          icon: icon,
         ),
-      AppButtonVariant.outlined => OutlinedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primaryBlue,
-            minimumSize: const Size(0, 52),
-            side: const BorderSide(color: AppColors.primaryBlue),
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-            textStyle: AppTextStyles.labelMedium,
-          ),
-          child: child,
+      AppButtonVariant.outlined => SecondaryButton(
+          label: label,
+          onPressed: onPressed,
+          expand: expand,
+          icon: icon,
         ),
     };
-
-    if (!expand) {
-      return button;
-    }
-
-    return SizedBox(width: double.infinity, child: button);
   }
 }

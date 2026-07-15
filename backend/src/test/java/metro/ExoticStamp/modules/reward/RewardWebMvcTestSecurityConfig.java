@@ -17,6 +17,7 @@ public class RewardWebMvcTestSecurityConfig {
     public SecurityFilterChain rewardWebMvcSecurityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/api/v1/partners/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/rewards/my/**").authenticated()
                         .anyRequest().authenticated());
         return http.build();

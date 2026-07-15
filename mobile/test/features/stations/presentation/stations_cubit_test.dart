@@ -9,6 +9,7 @@ import 'package:metro_stamp_app/features/stations/domain/usecases/get_lines_usec
 import 'package:metro_stamp_app/features/stations/domain/usecases/get_stations_usecase.dart';
 import 'package:metro_stamp_app/features/stations/presentation/cubit/stations_cubit.dart';
 import 'package:metro_stamp_app/features/stations/presentation/cubit/stations_state.dart';
+import 'package:metro_stamp_app/features/stations/presentation/utils/stations_line_filter.dart';
 import 'package:mocktail/mocktail.dart';
 
 class MockStationsRepository extends Mock implements StationsRepository {}
@@ -46,7 +47,7 @@ void main() {
     build: () {
       when(() => repository.getLines()).thenAnswer((_) async => lines);
       when(
-        () => repository.getStations(lineId: 'line-1', searchQuery: null),
+        () => repository.getStations(lineId: null, searchQuery: ''),
       ).thenAnswer((_) async => stations);
       return cubit;
     },
@@ -56,8 +57,31 @@ void main() {
           .having((s) => s.status, 'status', StationsStatus.loading),
       isA<StationsState>()
           .having((s) => s.status, 'status', StationsStatus.loaded)
-          .having((s) => s.stations, 'stations', stations),
+          .having((s) => s.stations, 'stations', stations)
+          .having(
+            (s) => s.selectedLineId,
+            'selectedLineId',
+            StationsLineFilter.allLines,
+          ),
     ],
+  );
+
+  blocTest<StationsCubit, StationsState>(
+    'emits emptySearch when search returns no stations',
+    build: () {
+      when(() => repository.getLines()).thenAnswer((_) async => lines);
+      when(
+        () => repository.getStations(lineId: null, searchQuery: 'missing'),
+      ).thenAnswer((_) async => const <Station>[]);
+      return cubit;
+    },
+    act: (cubit) async {
+      await cubit.load();
+      await cubit.updateSearch('missing');
+    },
+    verify: (_) {
+      expect(cubit.state.status, StationsStatus.emptySearch);
+    },
   );
 
   blocTest<StationsCubit, StationsState>(

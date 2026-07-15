@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Debug ExoticStamp Backend",
+      "request": "launch",
+      "mainClass": "metro.ExoticStamp.ExoticStampApplication",
+      "projectName": "ExoticStamp",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "dev"
+      },
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Infra + Debug Backend",
+      "configurations": [
+        "Debug ExoticStamp Backend"
+      ],
+      "preLaunchTask": "Docker: Ensure Healthy Infrastructure",
+      "stopAll": true
+    }
+  ]
+}

@@ -13,7 +13,6 @@ export const metroLineFormSchema = z.object({
     .refine((val) => !val || /^#[0-9A-Fa-f]{6}$/.test(val), {
       message: 'Color must be in #RRGGBB format',
     }),
-  sortOrder: z.number().int().min(0),
   status: metroStatusSchema,
 })
 
@@ -25,6 +24,5 @@ export const defaultMetroLineFormValues: MetroLineFormValues = {
   displayName: '',
   description: '',
   colorHex: '',
-  sortOrder: 0,
   status: 'DRAFT',
 }

@@ -1,7 +1,12 @@
 .DS_Store
 .idea/
-.vscode/
 *.iml
+
+# VS Code / Cursor — commit shared launch/tasks; ignore personal settings
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
 # Env & secrets
 .env
@@ -22,6 +27,10 @@ mobile/coverage/
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
 backend/logs/
+
+# Local uploads (keep directory; ignore contents)
+backend/uploads/**
+!backend/uploads/.gitkeep
 
 # Build artifacts
 **/target/

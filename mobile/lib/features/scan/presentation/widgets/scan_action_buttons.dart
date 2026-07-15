@@ -24,8 +24,8 @@ class ScanPrimaryButton extends StatelessWidget {
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: AppColors.backgroundWhite,
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.lg,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
@@ -61,7 +61,7 @@ class ScanOutlineButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primaryBlue,
           side: const BorderSide(color: AppColors.primaryBlue),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -88,7 +88,7 @@ class ScanHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       decoration: BoxDecoration(
         color: AppColors.blueTint,
         borderRadius: BorderRadius.circular(22),
@@ -97,7 +97,7 @@ class ScanHeroCard extends StatelessWidget {
       child: Column(
         children: [
           Icon(icon, size: 72, color: AppColors.primaryBlue),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xl),
           Text(
             title,
             style: AppTextStyles.headlineMedium.copyWith(
@@ -105,7 +105,7 @@ class ScanHeroCard extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           Text(
             subtitle,
             style: AppTextStyles.bodyLarge,

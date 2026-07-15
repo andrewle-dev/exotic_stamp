@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
-import '../../../../core/utils/media_url_resolver.dart';
 import '../cubit/scan_flow_cubit.dart';
 import '../cubit/scan_flow_state.dart';
+import '../../../../shared/widgets/app_loading_view.dart';
+import '../widgets/gps_status_card.dart';
 import '../widgets/scan_action_buttons.dart';
+import '../widgets/scan_flow_listener.dart';
 import '../widgets/scan_flow_scope.dart';
 
 class LocationVerificationScreen extends StatelessWidget {
@@ -17,85 +21,196 @@ class LocationVerificationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScanFlowScope(
-      child: Scaffold(
-        backgroundColor: AppColors.backgroundWhite,
-        appBar: AppBar(
+      child: ScanFlowListener(
+        child: Scaffold(
           backgroundColor: AppColors.backgroundWhite,
-          foregroundColor: AppColors.textPrimary,
-          title: const Text('Xác minh vị trí'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            onPressed: () => context.pop(),
+          appBar: AppBar(
+            backgroundColor: AppColors.backgroundWhite,
+            foregroundColor: AppColors.textPrimary,
+            title: const Text('Xác minh vị trí'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: () => context.pop(),
+            ),
           ),
-        ),
-        body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
-          builder: (context, state) {
-            final station = state.resolvedStation;
-            final gps = state.gpsReading;
-            if (station == null || gps == null) {
-              return const Center(
-                  child: Text('Không có dữ liệu ga để xác minh.'));
-            }
+          body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
+            builder: (context, state) {
+              final station = state.resolvedStation;
+              final gps = state.gpsReading;
 
-            final mediaResolver = MediaUrlResolver();
-            final imageUrl = mediaResolver.resolve(
-              station.stampPreviewUrl ?? station.imageUrl,
-            );
+              if (state.phase == ScanFlowPhase.checkingLocation ||
+                  state.phase == ScanFlowPhase.resolvingStation ||
+                  state.phase == ScanFlowPhase.collecting) {
+                return const AppLoadingView(message: 'Đang xác minh vị trí...');
+              }
 
-            return Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (imageUrl != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.network(
-                        imageUrl,
-                        height: 160,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
+              if (station == null) {
+                return const Center(
+                  child: Text('Không có dữ liệu ga để xác minh.'),
+                );
+              }
+
+              final needsPermission =
+                  state.phase == ScanFlowPhase.locationPermissionDenied ||
+                      state.phase == ScanFlowPhase.locationServiceDisabled;
+              final hasGps = gps != null;
+              final accuracyOk = hasGps && gps.accuracyMeters <= 50;
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.xxl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _LocationMapGraphic(stationName: station.name),
+                    const SizedBox(height: AppSpacing.xl),
+                    Text(
+                      'Xác minh bạn đang ở ga',
+                      style: AppTextStyles.displayMedium.copyWith(
+                        color: AppColors.primaryBlue,
                       ),
                     ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    station.name,
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      color: AppColors.primaryBlue,
-                    ),
-                  ),
-                  if (station.lineName != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(station.lineName!, style: AppTextStyles.bodyMedium),
-                  ],
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    'GPS: ${gps.latitude.toStringAsFixed(5)}, ${gps.longitude.toStringAsFixed(5)}',
-                    style: AppTextStyles.bodyMedium,
-                  ),
-                  Text(
-                    'Độ chính xác: ${gps.accuracyMeters.toStringAsFixed(1)} m',
-                    style: AppTextStyles.bodyMedium,
-                  ),
-                  if (station.zoneRadiusMeters != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
+                    const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Phạm vi ga: ${station.zoneRadiusMeters} m (xác minh bởi máy chủ)',
-                      style: AppTextStyles.caption,
+                      station.name,
+                      style: AppTextStyles.cardTitle,
+                    ),
+                    if (station.lineName != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        station.lineName!,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.xl),
+                    Text(
+                      'GPS giúp xác minh bạn ở gần ga. Máy chủ sẽ quyết định '
+                      'phạm vi hợp lệ — không lưu kết quả cục bộ.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    GpsStatusCard(
+                      title: 'Vị trí hiện tại',
+                      subtitle: hasGps
+                          ? '${gps.latitude.toStringAsFixed(5)}, ${gps.longitude.toStringAsFixed(5)}'
+                          : state.statusMessage ?? 'Chưa có tọa độ GPS',
+                      icon: Icons.my_location_rounded,
+                      statusLabel: hasGps ? 'Đã lấy' : 'Chưa có',
+                      isPositive: hasGps,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    GpsStatusCard(
+                      title: 'Độ chính xác GPS',
+                      subtitle: hasGps
+                          ? '${gps.accuracyMeters.toStringAsFixed(0)} m'
+                          : 'Cần quyền vị trí để tiếp tục',
+                      icon: Icons.gps_fixed_rounded,
+                      statusLabel: hasGps
+                          ? (accuracyOk ? 'Tốt' : 'Thấp')
+                          : 'Chưa có',
+                      isPositive: hasGps && accuracyOk,
+                    ),
+                    if (station.zoneRadiusMeters != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      GpsStatusCard(
+                        title: 'Phạm vi ga (máy chủ)',
+                        subtitle:
+                            'Bán kính ~${station.zoneRadiusMeters} m — xác minh bởi backend',
+                        icon: Icons.radar_rounded,
+                        statusLabel: 'Tham khảo',
+                        isPositive: true,
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.xxxl),
+                    if (needsPermission)
+                      ScanPrimaryButton(
+                        label: 'Cho phép vị trí',
+                        onPressed: () async {
+                          if (state.phase ==
+                              ScanFlowPhase.locationServiceDisabled) {
+                            await Geolocator.openLocationSettings();
+                          } else {
+                            await Geolocator.openAppSettings();
+                          }
+                          if (context.mounted) {
+                            await context
+                                .read<ScanFlowCubit>()
+                                .refreshLocation();
+                          }
+                        },
+                      ),
+                    if (needsPermission) const SizedBox(height: AppSpacing.md),
+                    ScanOutlineButton(
+                      label: 'Thử lại',
+                      onPressed: () =>
+                          context.read<ScanFlowCubit>().refreshLocation(),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    ScanPrimaryButton(
+                      label: 'Thu thập stamp',
+                      onPressed: hasGps &&
+                              state.phase != ScanFlowPhase.collecting &&
+                              !needsPermission
+                          ? () =>
+                              context.read<ScanFlowCubit>().confirmCollect()
+                          : null,
                     ),
                   ],
-                  const Spacer(),
-                  ScanPrimaryButton(
-                    label: 'Thu thập stamp',
-                    onPressed: state.phase == ScanFlowPhase.collecting
-                        ? null
-                        : () => context.read<ScanFlowCubit>().confirmCollect(),
-                  ),
-                ],
-              ),
-            );
-          },
+                ),
+              );
+            },
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _LocationMapGraphic extends StatelessWidget {
+  const _LocationMapGraphic({required this.stationName});
+
+  final String stationName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 180,
+      decoration: BoxDecoration(
+        color: AppColors.blueTint,
+        borderRadius: AppRadius.xlAll,
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(
+            Icons.map_outlined,
+            size: 120,
+            color: AppColors.primaryBlue.withValues(alpha: 0.15),
+          ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.location_on_rounded,
+                color: AppColors.primaryBlue,
+                size: 36,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                stationName,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.primaryBlue,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -21,6 +21,9 @@ public record StampBookView(
             Integer sequence,
             boolean collected,
             String stampDesignUrl,
+            String stampDesignName,
+            String stampDesignDescription,
+            String rarity,
             java.time.LocalDateTime collectedAt
     ) {
     }

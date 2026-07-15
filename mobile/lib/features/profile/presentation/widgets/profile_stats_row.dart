@@ -19,14 +19,14 @@ class ProfileStatsRow extends StatelessWidget {
     if (!stats.hasAnyData) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: AppRadius.lgAll,
+          borderRadius: AppRadius.xlAll,
           border: Border.all(color: AppColors.border),
         ),
         child: Text(
-          'Thống kê sẽ hiển thị khi backend cung cấp dữ liệu.',
+          'Stats will appear when the backend provides profile data.',
           style: AppTextStyles.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -35,9 +35,9 @@ class ProfileStatsRow extends StatelessWidget {
       );
     }
 
-    final items = <Widget>[];
+    final cards = <Widget>[];
     if (stats.collectedStampsCount != null) {
-      items.add(
+      cards.add(
         _StatCard(
           icon: Icons.emoji_events_outlined,
           label: 'STAMPS',
@@ -45,8 +45,26 @@ class ProfileStatsRow extends StatelessWidget {
         ),
       );
     }
-    if (stats.memoriesCount != null) {
-      items.add(
+    if (stats.linesCount != null) {
+      cards.add(
+        _StatCard(
+          icon: Icons.map_outlined,
+          label: 'LINES',
+          value: '${stats.linesCount}',
+        ),
+      );
+    }
+    if (stats.rankPosition != null) {
+      cards.add(
+        _StatCard(
+          icon: Icons.leaderboard_outlined,
+          label: 'RANK',
+          value: '#${stats.rankPosition}',
+        ),
+      );
+    }
+    if (cards.isEmpty && stats.memoriesCount != null) {
+      cards.add(
         _StatCard(
           icon: Icons.photo_camera_outlined,
           label: 'MEMORIES',
@@ -57,9 +75,9 @@ class ProfileStatsRow extends StatelessWidget {
 
     return Row(
       children: [
-        for (var i = 0; i < items.length; i++) ...[
-          if (i > 0) const SizedBox(width: AppSpacing.sm),
-          Expanded(child: items[i]),
+        for (var i = 0; i < cards.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.md),
+          Expanded(child: cards[i]),
         ],
       ],
     );
@@ -81,12 +99,12 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.md,
-        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.lg,
+        horizontal: AppSpacing.md,
       ),
       decoration: BoxDecoration(
         color: AppColors.backgroundWhite,
-        borderRadius: AppRadius.lgAll,
+        borderRadius: AppRadius.xlAll,
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
@@ -99,14 +117,15 @@ class _StatCard extends StatelessWidget {
       child: Column(
         children: [
           Icon(icon, color: AppColors.primaryBlue, size: 22),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             value,
             style: AppTextStyles.titleMedium.copyWith(
               color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: AppSpacing.xxs),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             label,
             style: AppTextStyles.caption.copyWith(

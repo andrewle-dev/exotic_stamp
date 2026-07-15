@@ -48,6 +48,29 @@ void main() {
       expect(failure.code, FailureCode.redeemNotSupported);
     });
 
+    test('maps DEFAULT_CAMPAIGN_AMBIGUOUS to localized message', () {
+      final failure = mapper.fromJson({
+        'code': 'DEFAULT_CAMPAIGN_AMBIGUOUS',
+        'message':
+            'Multiple active default campaigns found (2); provide lineId to disambiguate or configure a single global default',
+        'status': 422,
+      });
+
+      expect(failure.code, FailureCode.defaultCampaignAmbiguous);
+      expect(failure.message, ErrorMapper.defaultCampaignAmbiguousMessage);
+      expect(failure.statusCode, 422);
+    });
+
+    test('maps ambiguous campaign message without backend code', () {
+      final failure = mapper.fromJson({
+        'message':
+            'Multiple active default campaigns found (2); provide lineId to disambiguate',
+      });
+
+      expect(failure.code, FailureCode.defaultCampaignAmbiguous);
+      expect(failure.message, ErrorMapper.defaultCampaignAmbiguousMessage);
+    });
+
     test('uses default message when backend message is missing', () {
       final failure = mapper.fromJson({'code': 'CAMPAIGN_NOT_ACTIVE'});
 

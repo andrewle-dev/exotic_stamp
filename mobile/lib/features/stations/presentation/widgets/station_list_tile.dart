@@ -36,8 +36,8 @@ class StationListTile extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.sm,
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
           ),
           child: Row(
             children: [
@@ -45,7 +45,7 @@ class StationListTile extends StatelessWidget {
                 imageUrl: imageUrl,
                 collectedStatus: station.collectedStatus,
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,13 +56,13 @@ class StationListTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: AppSpacing.xxs),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       station.code,
                       style: AppTextStyles.bodyMedium,
                     ),
                     if (distanceLabel != null) ...[
-                      const SizedBox(height: AppSpacing.xxs),
+                      const SizedBox(height: AppSpacing.xs),
                       Text(
                         distanceLabel!,
                         style: AppTextStyles.caption.copyWith(
@@ -138,10 +138,10 @@ class _CollectedBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(right: AppSpacing.xs),
+      margin: const EdgeInsets.only(right: AppSpacing.sm),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.xxs,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: _isCollected ? AppColors.blueTint : AppColors.surface,
@@ -183,9 +183,9 @@ class LineFilterChips extends StatelessWidget {
       height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
         itemCount: lines.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.xs),
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
         itemBuilder: (context, index) {
           final line = lines[index];
           final isSelected = line.id == selectedLineId;

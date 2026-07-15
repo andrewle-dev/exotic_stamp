@@ -17,10 +17,10 @@ void main() {
     );
 
     expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Book'), findsOneWidget);
+    expect(find.text('Stamp'), findsOneWidget);
     expect(find.text('Stations'), findsOneWidget);
-    expect(find.text('Rewards'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Rewards'), findsNothing);
   });
 
   testWidgets('tapping each tab invokes onTabSelected with correct index',
@@ -40,9 +40,8 @@ void main() {
 
     for (final entry in [
       ('Home', ShellTabIndex.home),
-      ('Book', ShellTabIndex.book),
+      ('Stamp', ShellTabIndex.book),
       ('Stations', ShellTabIndex.stations),
-      ('Rewards', ShellTabIndex.rewards),
       ('Profile', ShellTabIndex.profile),
     ]) {
       await tester.tap(find.text(entry.$1));

@@ -12,6 +12,8 @@ import metro.ExoticStamp.modules.reward.domain.event.RewardIssuedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.Map;
 
@@ -50,7 +52,7 @@ public class CommunityIntegrationListener {
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onStampCollected(StampCollectedEvent event) {
         try {
             referralCommandService.completePendingReferral(event.getUserId());

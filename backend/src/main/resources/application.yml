@@ -1,3 +1,6 @@
+server:
+  port: ${SERVER_PORT:8080}
+
 spring:
   datasource:
     url: ${DB_URL}
@@ -5,16 +8,35 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+  jpa:
+    open-in-view: false
+
   data:
     redis:
       host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
 
   mail:
     host: smtp.gmail.com
     port: 587
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+
+  servlet:
+    multipart:
+      max-file-size: ${STORAGE_MULTIPART_MAX_FILE_SIZE:5MB}
+      max-request-size: ${STORAGE_MULTIPART_MAX_REQUEST_SIZE:6MB}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
 
 application:
   frontend:
@@ -118,13 +140,30 @@ community:
   max-metadata-bytes: 2048
   referral-code-max-attempts: 5
 
+# Mobile client update / maintenance policy (not installed binary version).
+mobile:
+  app-config:
+    android:
+      minimum-supported-version: ${MOBILE_ANDROID_MIN_VERSION:0.1.0}
+      latest-version: ${MOBILE_ANDROID_LATEST_VERSION:0.1.0}
+      force-update: ${MOBILE_ANDROID_FORCE_UPDATE:false}
+      store-url: ${MOBILE_ANDROID_STORE_URL:}
+    ios:
+      minimum-supported-version: ${MOBILE_IOS_MIN_VERSION:0.1.0}
+      latest-version: ${MOBILE_IOS_LATEST_VERSION:0.1.0}
+      force-update: ${MOBILE_IOS_FORCE_UPDATE:false}
+      store-url: ${MOBILE_IOS_STORE_URL:}
+    maintenance:
+      enabled: ${MOBILE_MAINTENANCE_ENABLED:false}
+      message: ${MOBILE_MAINTENANCE_MESSAGE:}
+
 storage:
-  provider: local
+  provider: ${STORAGE_PROVIDER:local}
   local:
-    base-path: ${STORAGE_LOCAL_PATH:./uploads}
+    base-path: ${STORAGE_LOCAL_PATH:D:/Part-time/ExoticStamp/backend/uploads}
     base-url: ${STORAGE_LOCAL_URL:http://localhost:8080/uploads}
   file:
-    max-size-mb: 5
+    max-size-mb: ${STORAGE_FILE_MAX_SIZE_MB:5}
     allowed-types:
       - image/jpeg
       - image/png

@@ -16,7 +16,6 @@ import metro.ExoticStamp.modules.collection.application.view.ProgressView;
 import metro.ExoticStamp.modules.collection.application.view.ResolvedStationView;
 import metro.ExoticStamp.modules.collection.application.view.StampCollectView;
 import metro.ExoticStamp.modules.collection.domain.event.StampCollectedEvent;
-import metro.ExoticStamp.modules.collection.domain.exception.CampaignStationNotEligibleException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsAccuracyTooLowException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsInvalidException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsOutOfRangeException;
@@ -28,6 +27,7 @@ import metro.ExoticStamp.modules.collection.domain.model.CollectMethod;
 import metro.ExoticStamp.modules.collection.domain.model.CollectionPolicy;
 import metro.ExoticStamp.modules.collection.domain.model.StampDesign;
 import metro.ExoticStamp.modules.collection.domain.model.UserStamp;
+import metro.ExoticStamp.modules.collection.domain.policy.CollectionEligibilityPolicy;
 import metro.ExoticStamp.modules.collection.domain.repository.CampaignStationRepository;
 import metro.ExoticStamp.modules.collection.domain.repository.StampDesignRepository;
 import metro.ExoticStamp.modules.collection.domain.repository.UserStampRepository;
@@ -35,6 +35,7 @@ import metro.ExoticStamp.modules.metro.application.port.LineReadPort;
 import metro.ExoticStamp.modules.metro.application.port.StationReadPort;
 import metro.ExoticStamp.modules.metro.application.view.MetroStationView;
 import metro.ExoticStamp.modules.rbac.application.support.RbacTransactionCallbacks;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -65,6 +66,7 @@ public class CollectionCommandService {
     private final StationReadPort stationReadPort;
     private final LineReadPort lineReadPort;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
 
     @Transactional
     public CollectStampResultView collect(CollectStampCommand cmd) {
@@ -86,9 +88,10 @@ public class CollectionCommandService {
         ResolvedStationView station = stationScanResolverPort.resolve(scanType, cmd.payload().trim());
         Campaign campaign = defaultCampaignResolver.resolveActiveGlobalDefault(station.lineId());
 
-        if (!campaignStationRepository.exists(campaign.getId(), station.id())) {
-            throw new CampaignStationNotEligibleException(campaign.getId(), station.id());
-        }
+        CollectionEligibilityPolicy.assertCampaignStationEligible(
+                campaignStationRepository.exists(campaign.getId(), station.id()),
+                campaign.getId(),
+                station.id());
 
         StampDesign design = stampDesignResolver.resolveActive(campaign.getId(), station.id());
 
@@ -148,25 +151,29 @@ public class CollectionCommandService {
 
         cachePort.evictAllForUserCollection(cmd.userId(), station.lineId(), campaign.getId());
 
-        RbacTransactionCallbacks.afterCommit(() -> {
-            try {
-                eventPublisher.publishEvent(new StampCollectedEvent(
-                        this,
-                        UUID.randomUUID(),
-                        saved.getId(),
-                        cmd.userId(),
-                        station.id(),
-                        station.lineId(),
-                        campaign.getId(),
-                        saved.getCollectedAt(),
-                        collectMethod
-                ));
-                auditHelper.scheduleStampCollected(cmd.userId(), station.id(), campaign.getId(), design.getId());
-            } catch (Exception e) {
-                log.error("[Collection] after-commit hooks failed userId={} stationId={}: {}",
-                        cmd.userId(), station.id(), e.getMessage(), e);
-            }
-        });
+        // Publish inside the transaction so @TransactionalEventListener(AFTER_COMMIT) listeners
+        // run only after successful commit. Payload is immutable IDs — safe for @Async.
+        // Process crash after commit but before listener delivery is a known limitation (no outbox).
+        try {
+            eventPublisher.publishEvent(new StampCollectedEvent(
+                    this,
+                    UUID.randomUUID(),
+                    saved.getId(),
+                    cmd.userId(),
+                    station.id(),
+                    station.lineId(),
+                    campaign.getId(),
+                    saved.getCollectedAt(),
+                    collectMethod
+            ));
+        } catch (Exception e) {
+            log.error("[Collection] StampCollectedEvent publish failed userId={} stationId={}: {}",
+                    cmd.userId(), station.id(), e.getMessage(), e);
+            meterRegistry.counter("collection.stamp_collected.publish_failed").increment();
+        }
+
+        RbacTransactionCallbacks.afterCommit(() ->
+                auditHelper.scheduleStampCollected(cmd.userId(), station.id(), campaign.getId(), design.getId()));
 
         return buildResult(saved, true, station, design, campaign, gpsResult, scanType);
     }

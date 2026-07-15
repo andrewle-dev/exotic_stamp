@@ -5,18 +5,25 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
-import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../core/errors/failure.dart';
-import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_error_view.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
+import '../../../../shared/widgets/app_page_scaffold.dart';
+import '../../../../shared/widgets/app_version_footer.dart';
 import '../../domain/usecases/get_home_summary_usecase.dart';
 import '../cubit/home_cubit.dart';
 import '../cubit/home_state.dart';
-import '../widgets/home_progress_card.dart';
-import '../widgets/home_top_bar.dart';
-import '../widgets/recent_stamp_card.dart';
+import '../home_reload_signal.dart';
+import '../widgets/home_collect_cta.dart';
+import '../widgets/home_collection_card.dart';
+import '../widgets/home_header.dart';
+import '../widgets/home_milestone_row.dart';
+import '../widgets/home_banner_carousel.dart';
+import '../widgets/home_partial_error_banner.dart';
+import '../widgets/home_recent_stamps_section.dart';
+import '../widgets/home_shortcut_grid.dart';
+import '../widgets/home_social_proof_strip.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.cubit});
@@ -44,8 +51,45 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _HomeView extends StatelessWidget {
+class _HomeView extends StatefulWidget {
   const _HomeView();
+
+  @override
+  State<_HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends State<_HomeView> {
+  HomeReloadSignal? _reloadSignal;
+  int _lastHandledGeneration = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_reloadSignal != null) {
+      return;
+    }
+    _reloadSignal = Injection.instance.homeReloadSignal;
+    _lastHandledGeneration = _reloadSignal!.generation;
+    _reloadSignal!.addListener(_onReloadSignal);
+  }
+
+  void _onReloadSignal() {
+    final signal = _reloadSignal;
+    if (signal == null || !mounted) {
+      return;
+    }
+    if (signal.generation == _lastHandledGeneration) {
+      return;
+    }
+    _lastHandledGeneration = signal.generation;
+    context.read<HomeCubit>().refresh();
+  }
+
+  @override
+  void dispose() {
+    _reloadSignal?.removeListener(_onReloadSignal);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,136 +154,52 @@ class _HomeView extends StatelessWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
                 AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                AppPageScaffold.shellBottomInset,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  HomeTopBar(displayName: summary.displayName),
+                  const HomeHeader(),
                   if (summary.partialErrors.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.lg),
                     HomePartialErrorBanner(messages: summary.partialErrors),
                   ],
-                  if (summary.activeBanner != null) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    HomeActiveBanner(banner: summary.activeBanner!),
-                  ],
-                  const SizedBox(height: AppSpacing.lg),
-                  if (summary.progress != null)
-                    HomeProgressCard(
+                  const SizedBox(height: AppSpacing.xl),
+                  HomeBannerCarousel(banners: summary.promotionalBanners),
+                  const SizedBox(height: AppSpacing.xl),
+                  if (summary.progress != null) ...[
+                    HomeCollectionCard(
                       progress: summary.progress!,
-                      lineName: summary.lineName,
-                    )
-                  else
-                    const HomeProgressPlaceholder(),
-                  if (summary.nextReward != null) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    HomeNextRewardCard(nextReward: summary.nextReward!),
-                  ],
-                  const SizedBox(height: AppSpacing.xl),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Stamp gần đây',
-                          style: AppTextStyles.titleMedium,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => context.go(RouteNames.stampBook),
-                        child: const Text('Xem sổ'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (summary.recentStamps.isEmpty)
-                    const AppEmptyState(
-                      title: 'Chưa có stamp',
-                      message:
-                          'Chạm NFC tại ga metro để bắt đầu sưu tập stamp.',
-                      icon: Icons.collections_bookmark_outlined,
-                    )
-                  else
-                    SizedBox(
-                      height: 154,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: summary.recentStamps.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: AppSpacing.sm),
-                        itemBuilder: (context, index) {
-                          return RecentStampCard(
-                            stamp: summary.recentStamps[index],
-                          );
-                        },
-                      ),
+                      rankTitle: summary.rankTitle,
+                      rankSubtitle: summary.rankSubtitle,
                     ),
+                    if (summary.milestones.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      HomeMilestoneRow(milestones: summary.milestones),
+                    ],
+                  ] else
+                    const HomeCollectionPlaceholder(),
+                  const SizedBox(height: AppSpacing.xxl),
+                  HomeRecentStampsSection(stamps: summary.recentStamps),
                   const SizedBox(height: AppSpacing.xl),
-                  _ScanPromptCard(
-                    onTap: () => context.go(RouteNames.scan),
+                  HomeCollectCta(
+                    onTap: () => context.go(RouteNames.scanTapToCollect),
                   ),
+                  const SizedBox(height: AppSpacing.xl),
+                  const HomeShortcutGrid(),
+                  if (summary.socialProof != null) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    HomeSocialProofStrip(socialProof: summary.socialProof!),
+                  ],
+                  const AppVersionFooter(),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ScanPromptCard extends StatelessWidget {
-  const _ScanPromptCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.primaryBlue,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.nfc_rounded,
-                color: AppColors.backgroundWhite,
-                size: 32,
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Sẵn sàng thu thập',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.backgroundWhite,
-                      ),
-                    ),
-                    Text(
-                      'Chạm NFC tại ga để nhận stamp.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.backgroundWhite.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.backgroundWhite,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

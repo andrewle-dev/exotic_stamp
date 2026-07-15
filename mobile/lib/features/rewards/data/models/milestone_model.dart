@@ -12,6 +12,7 @@ class MilestoneModel {
     this.rewardType,
     this.rewardDescription,
     this.rewardImageUrl,
+    this.claimStatus,
   });
 
   factory MilestoneModel.fromJson(Map<String, dynamic> json) {
@@ -28,6 +29,7 @@ class MilestoneModel {
       rewardType: json['rewardType'] as String?,
       rewardDescription: json['rewardDescription'] as String?,
       rewardImageUrl: json['rewardImageUrl'] as String?,
+      claimStatus: _parseClaimStatus(json['claimStatus'] as String?),
     );
   }
 
@@ -41,6 +43,7 @@ class MilestoneModel {
   final String? rewardType;
   final String? rewardDescription;
   final String? rewardImageUrl;
+  final MilestoneClaimStatus? claimStatus;
 
   Milestone toEntity() {
     return Milestone(
@@ -54,6 +57,22 @@ class MilestoneModel {
       rewardType: rewardType,
       rewardDescription: rewardDescription,
       rewardImageUrl: rewardImageUrl,
+      claimStatus: claimStatus,
     );
+  }
+}
+
+MilestoneClaimStatus? _parseClaimStatus(String? raw) {
+  switch (raw?.toUpperCase()) {
+    case 'LOCKED':
+      return MilestoneClaimStatus.locked;
+    case 'IN_PROGRESS':
+      return MilestoneClaimStatus.inProgress;
+    case 'CLAIMABLE':
+      return MilestoneClaimStatus.claimable;
+    case 'CLAIMED':
+      return MilestoneClaimStatus.claimed;
+    default:
+      return null;
   }
 }

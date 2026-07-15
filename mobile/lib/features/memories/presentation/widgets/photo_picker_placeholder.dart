@@ -22,7 +22,7 @@ class PhotoPickerPlaceholder extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: AppRadius.xlAll,
+          borderRadius: AppRadius.xxlAll,
           border: Border.all(color: AppColors.border, width: 2),
         ),
         child: Column(
@@ -33,7 +33,7 @@ class PhotoPickerPlaceholder extends StatelessWidget {
               size: 56,
               color: AppColors.primaryBlue,
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               'Chọn hoặc chụp ảnh kỷ niệm',
               style: AppTextStyles.titleMedium.copyWith(
@@ -41,9 +41,9 @@ class PhotoPickerPlaceholder extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
               child: Text(
                 'Ảnh chỉ được lưu trên thiết bị của bạn. Ứng dụng không tải ảnh lên máy chủ.',
                 style: AppTextStyles.caption.copyWith(
@@ -52,7 +52,7 @@ class PhotoPickerPlaceholder extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.xl),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -61,7 +61,7 @@ class PhotoPickerPlaceholder extends StatelessWidget {
                   label: 'Thư viện',
                   onTap: onPickGallery,
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.lg),
                 _PickButton(
                   icon: Icons.photo_camera_outlined,
                   label: 'Chụp ảnh',
@@ -96,10 +96,10 @@ class _PickButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.primaryBlue,
         side: const BorderSide(color: AppColors.primaryBlue),
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.xlAll),
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
         ),
       ),
     );

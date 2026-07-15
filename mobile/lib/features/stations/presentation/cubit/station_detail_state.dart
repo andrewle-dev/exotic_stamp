@@ -7,6 +7,7 @@ enum StationDetailStatus {
   initial,
   loading,
   loaded,
+  inactive,
   notFound,
   failure,
 }

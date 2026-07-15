@@ -33,6 +33,9 @@ class UserReward extends Equatable {
     this.rewardType,
     this.rewardDescription,
     this.rewardImageUrl,
+    this.partnerName,
+    this.offerTitle,
+    this.isFavorite = false,
     this.issuedAt,
     this.expiresAt,
     this.redeemedAt,
@@ -48,11 +51,16 @@ class UserReward extends Equatable {
   final String rewardTitle;
   final String? rewardDescription;
   final String? rewardImageUrl;
+  final String? partnerName;
+  final String? offerTitle;
+  final bool isFavorite;
   final DateTime? issuedAt;
   final DateTime? expiresAt;
   final DateTime? redeemedAt;
   final UserRewardStatus status;
   final UserRewardVoucher? voucher;
+
+  String get displayOfferTitle => offerTitle ?? rewardTitle;
 
   bool get isAvailable => status == UserRewardStatus.available;
 
@@ -67,6 +75,9 @@ class UserReward extends Equatable {
         rewardTitle,
         rewardDescription,
         rewardImageUrl,
+        partnerName,
+        offerTitle,
+        isFavorite,
         issuedAt,
         expiresAt,
         redeemedAt,

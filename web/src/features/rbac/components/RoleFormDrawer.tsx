@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Shield } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input } from '../../../components/ui/FormField'
 import type { RoleResponse } from '../../../types/rbac'
 import {
@@ -97,39 +99,45 @@ export function RoleFormDrawer({ open, role, onClose, onSuccess }: RoleFormDrawe
     >
       <form id="role-form" className="space-y-4" onSubmit={onSubmit} noValidate>
         {isSystemRole ? (
-          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             System roles are protected and should not be modified casually.
           </p>
         ) : null}
 
-        <FormField label="Role code" htmlFor="roleCode" required error={errors.roleCode?.message}>
-          <Input
-            id="roleCode"
-            placeholder="MANAGER"
-            disabled={isSystemRole}
-            {...register('roleCode')}
-          />
-        </FormField>
-
-        <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-          <Input
-            id="description"
-            placeholder="Optional description"
-            disabled={isSystemRole}
-            {...register('description')}
-          />
-        </FormField>
-
-        {isEdit ? (
-          <FormField label="Status" htmlFor="status" error={errors.status?.message}>
+        <DrawerSectionCard
+          icon={Shield}
+          title="Role details"
+          description="Role code used for access control assignments."
+        >
+          <FormField label="Role code" htmlFor="roleCode" required error={errors.roleCode?.message}>
             <Input
-              id="status"
-              placeholder="ACTIVE"
+              id="roleCode"
+              placeholder="MANAGER"
               disabled={isSystemRole}
-              {...register('status')}
+              {...register('roleCode')}
             />
           </FormField>
-        ) : null}
+
+          <FormField label="Description" htmlFor="description" error={errors.description?.message}>
+            <Input
+              id="description"
+              placeholder="Optional description"
+              disabled={isSystemRole}
+              {...register('description')}
+            />
+          </FormField>
+
+          {isEdit ? (
+            <FormField label="Status" htmlFor="status" error={errors.status?.message}>
+              <Input
+                id="status"
+                placeholder="ACTIVE"
+                disabled={isSystemRole}
+                {...register('status')}
+              />
+            </FormField>
+          ) : null}
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

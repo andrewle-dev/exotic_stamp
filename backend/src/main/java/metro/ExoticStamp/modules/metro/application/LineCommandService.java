@@ -2,11 +2,15 @@ package metro.ExoticStamp.modules.metro.application;
 
 import lombok.RequiredArgsConstructor;
 import metro.ExoticStamp.modules.metro.application.command.CreateLineCommand;
+import metro.ExoticStamp.modules.metro.application.command.ReorderLinesCommand;
 import metro.ExoticStamp.modules.metro.application.command.UpdateLineCommand;
 import metro.ExoticStamp.modules.metro.application.mapper.MetroAppMapper;
 import metro.ExoticStamp.modules.metro.application.support.MetroAuditHelper;
 import metro.ExoticStamp.modules.metro.application.support.MetroEnumParser;
+import metro.ExoticStamp.common.reorder.ReorderValidation;
 import metro.ExoticStamp.modules.metro.application.view.LineView;
+import metro.ExoticStamp.common.reorder.ReorderItemView;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
 import metro.ExoticStamp.modules.metro.domain.event.LineCreatedEvent;
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateLineCodeException;
 import metro.ExoticStamp.modules.metro.domain.exception.LineNotFoundException;
@@ -19,7 +23,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -102,6 +112,35 @@ public class LineCommandService {
         line.setUpdatedAt(LocalDateTime.now());
         lineRepository.save(line);
         metroAuditHelper.scheduleLineDisabled(lineId.toString());
+    }
+
+    /**
+     * Dense-renumbers all lines to {@code 0..n-1} in the given order.
+     * {@code orderedIds} must be a permutation of every existing line id.
+     */
+    @Transactional
+    public ReorderResultView reorderLines(ReorderLinesCommand command) {
+        List<UUID> orderedIds = ReorderValidation.requireOrderedIds(command.getOrderedIds());
+        List<Line> allLines = lineRepository.findAll();
+        Set<UUID> scopeIds = allLines.stream().map(Line::getId).collect(Collectors.toSet());
+        ReorderValidation.requireExactScope(orderedIds, scopeIds, "lines");
+
+        Map<UUID, Line> byId = new HashMap<>();
+        for (Line line : allLines) {
+            byId.put(line.getId(), line);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<ReorderItemView> items = new ArrayList<>(orderedIds.size());
+        for (int i = 0; i < orderedIds.size(); i++) {
+            Line line = byId.get(orderedIds.get(i));
+            line.setSortOrder(i);
+            line.setUpdatedAt(now);
+            lineRepository.save(line);
+            metroAuditHelper.scheduleLineUpdated(line.getId().toString());
+            items.add(new ReorderItemView(line.getId(), i));
+        }
+        return new ReorderResultView(null, items.size(), items);
     }
 
     private static String blankToNull(String value) {

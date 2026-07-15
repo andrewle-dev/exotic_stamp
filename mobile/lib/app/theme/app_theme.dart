@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 import 'app_radius.dart';
-import 'app_text_styles.dart';
+import 'app_shadows.dart';
+import 'app_typography.dart';
 
 class AppTheme {
   static ThemeData light() {
@@ -12,7 +13,7 @@ class AppTheme {
       onPrimary: AppColors.backgroundWhite,
       secondary: AppColors.accentRed,
       onSecondary: AppColors.backgroundWhite,
-      error: AppColors.accentRed,
+      error: AppColors.error,
       onError: AppColors.backgroundWhite,
       surface: AppColors.backgroundWhite,
       onSurface: AppColors.textPrimary,
@@ -29,12 +30,14 @@ class AppTheme {
         selectionHandleColor: AppColors.primaryBlue,
       ),
       textTheme: const TextTheme(
-        headlineMedium: AppTextStyles.headlineMedium,
-        titleLarge: AppTextStyles.titleLarge,
-        titleMedium: AppTextStyles.titleMedium,
+        displayLarge: AppTextStyles.screenTitle,
+        displayMedium: AppTextStyles.displayMedium,
+        headlineMedium: AppTextStyles.displayMedium,
+        titleLarge: AppTextStyles.sectionTitle,
+        titleMedium: AppTextStyles.cardTitle,
         bodyLarge: AppTextStyles.bodyLarge,
-        bodyMedium: AppTextStyles.bodyMedium,
-        labelLarge: AppTextStyles.labelLarge,
+        bodyMedium: AppTextStyles.body,
+        labelLarge: AppTextStyles.button,
       ),
       appBarTheme: const AppBarTheme(
         centerTitle: false,
@@ -42,7 +45,16 @@ class AppTheme {
         foregroundColor: AppColors.textPrimary,
         surfaceTintColor: AppColors.backgroundWhite,
         elevation: 0,
-        titleTextStyle: AppTextStyles.titleLarge,
+        titleTextStyle: AppTextStyles.appTitle,
+      ),
+      cardTheme: CardThemeData(
+        color: AppColors.backgroundWhite,
+        elevation: AppShadows.cardElevation,
+        shadowColor: AppColors.shadow,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.xlAll,
+          side: const BorderSide(color: AppColors.border),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -57,19 +69,19 @@ class AppTheme {
           vertical: 20,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.lgAll,
+          borderRadius: AppRadius.xlAll,
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.lgAll,
+          borderRadius: AppRadius.xlAll,
           borderSide: const BorderSide(
             color: AppColors.primaryBlue,
             width: 1.4,
           ),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.lgAll,
-          borderSide: const BorderSide(color: AppColors.accentRed),
+          borderRadius: AppRadius.xlAll,
+          borderSide: const BorderSide(color: AppColors.error),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -78,15 +90,15 @@ class AppTheme {
           foregroundColor: AppColors.backgroundWhite,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: AppRadius.lgAll,
+            borderRadius: AppRadius.xlAll,
           ),
-          textStyle: AppTextStyles.labelLarge,
+          textStyle: AppTextStyles.button,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primaryBlue,
-          textStyle: AppTextStyles.labelMedium,
+          textStyle: AppTextStyles.linkLabel,
         ),
       ),
       checkboxTheme: CheckboxThemeData(

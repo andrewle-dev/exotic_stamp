@@ -24,10 +24,10 @@ class HomeProgressCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
         AppSpacing.xl,
+        AppSpacing.xl,
+        AppSpacing.xl,
+        AppSpacing.xxl,
       ),
       decoration: BoxDecoration(
         color: AppColors.backgroundWhite,
@@ -46,7 +46,7 @@ class HomeProgressCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
           ],
           SizedBox(
             width: 118,
@@ -98,7 +98,7 @@ class HomeProgressCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           Text(
             '${progress.percentage}% hoàn thành',
             style: AppTextStyles.bodyMedium.copyWith(
@@ -119,7 +119,7 @@ class HomeProgressPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(22),
@@ -152,7 +152,7 @@ class HomeActiveBanner extends StatelessWidget {
 
     return Container(
       height: 148,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         color: AppColors.primaryBlue,
@@ -191,7 +191,7 @@ class HomeNextRewardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.redTint,
         borderRadius: BorderRadius.circular(18),
@@ -204,7 +204,7 @@ class HomeNextRewardCard extends StatelessWidget {
             color: AppColors.accentRed,
             size: 32,
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,7 +216,7 @@ class HomeNextRewardCard extends StatelessWidget {
                     color: AppColors.accentRed,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xxs),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   nextReward.rewardTitle,
                   style: AppTextStyles.titleMedium,
@@ -249,7 +249,7 @@ class HomePartialErrorBanner extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.blueTint,
         borderRadius: BorderRadius.circular(12),

@@ -13,6 +13,7 @@ export const partnerFormSchema = z
   .object({
     name: z.string().trim().min(1, 'Name is required'),
     logoUrl: z.string().optional(),
+    bannerImageUrl: z.string().optional(),
     contactEmail: z
       .string()
       .optional()
@@ -60,6 +61,7 @@ export type PartnerFormValues = z.infer<typeof partnerFormSchema>
 export const defaultPartnerFormValues: PartnerFormValues = {
   name: '',
   logoUrl: '',
+  bannerImageUrl: '',
   contactEmail: '',
   contractStartDate: '',
   contractEndDate: '',

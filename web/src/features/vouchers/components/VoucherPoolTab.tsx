@@ -1,12 +1,24 @@
 import { useMemo, useState } from 'react'
 import { Eye } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { MaskedValue } from '../../../components/ui/SecretField'
-import { Input } from '../../../components/ui/FormField'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
 import { formatDateTime } from '../../../lib/formatting/date'
 import { maskVoucherCode } from '../../../lib/formatting/masking'
@@ -15,6 +27,7 @@ import type { MilestoneResponse } from '../../../types/milestones'
 import type { VoucherPoolResponse, VoucherStatus } from '../../../types/vouchers'
 import { resolveMilestoneLabel, buildMilestoneOptions } from '../../rewards/utils/resolve-labels'
 import { useDisableVoucher, useVouchers } from '../hooks'
+import { EMPTY_VOUCHER_FILTERS, type VoucherFilters } from '../filter-schema'
 import { VoucherDetailDrawer } from './VoucherDetailDrawer'
 
 const VOUCHER_STATUSES: VoucherStatus[] = [
@@ -25,6 +38,10 @@ const VOUCHER_STATUSES: VoucherStatus[] = [
   'DISABLED',
 ]
 
+/**
+ * Search applies client-side to the current API page (ID and assigned user).
+ * Milestone and status filters use the server list endpoint.
+ */
 function filterVouchersPage(
   vouchers: VoucherPoolResponse[],
   search: string,
@@ -47,14 +64,29 @@ interface VoucherPoolTabProps {
 }
 
 export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [milestoneFilter, setMilestoneFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<VoucherFilters>({ emptyFilters: EMPTY_VOUCHER_FILTERS })
+
   const [detailVoucher, setDetailVoucher] = useState<VoucherPoolResponse | null>(null)
   const [disablingVoucher, setDisablingVoucher] = useState<VoucherPoolResponse | null>(null)
+
+  const { milestoneId: milestoneFilter, status: statusFilter } = appliedFilters
 
   const listParams = useMemo(
     () => ({
@@ -76,20 +108,51 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
     [data?.content, search],
   )
 
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    milestoneFilter
+      ? buildLabeledFilterTag({
+          id: 'milestone',
+          label: 'Milestone',
+          value: resolveMilestoneLabel(milestoneFilter, milestones).label,
+          accent: 'milestone',
+          onRemove: () => removeFilter('milestoneId', ''),
+        })
+      : null,
+    statusFilter
+      ? buildLabeledFilterTag({
+          id: 'status',
+          label: 'Status',
+          value: statusFilter.replace(/_/g, ' '),
+          accent: 'status',
+          onRemove: () => removeFilter('status', ''),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${filteredContent.length} filtered voucher${filteredContent.length === 1 ? '' : 's'}`
+    : `Showing ${filteredContent.length} voucher${filteredContent.length === 1 ? '' : 's'}`
+
   const columns: DataTableColumn<VoucherPoolResponse>[] = useMemo(
     () => [
       {
         id: 'code',
         header: 'Voucher code',
+        defaultWidth: 160,
+        minWidth: 120,
+        truncate: false,
         cell: (row) => <MaskedValue value={row.code} maskFn={maskVoucherCode} />,
       },
       {
         id: 'milestone',
         header: 'Milestone',
+        ...COL_WIDTH.entity,
         cell: (row) => {
           const { label, unknown } = resolveMilestoneLabel(row.milestoneId, milestones)
           return (
-            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'} title={row.milestoneId}>
+            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'}>
               {label}
             </span>
           )
@@ -98,31 +161,33 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.status} />,
       },
       {
-        id: 'assignedUserId',
-        header: 'Assigned user ID',
-        cell: (row) =>
-          row.assignedUserId ? (
-            <span className="font-mono text-xs">{row.assignedUserId}</span>
-          ) : (
-            '—'
-          ),
+        id: 'assigned',
+        header: 'Assignment',
+        ...COL_WIDTH.badge,
+        truncate: false,
+        cell: (row) => (row.assignedUserId ? 'Assigned' : 'Unassigned'),
       },
       {
         id: 'assignedAt',
         header: 'Assigned at',
+        ...COL_WIDTH.date,
         cell: (row) => formatDateTime(row.assignedAt),
       },
       {
         id: 'expiresAt',
         header: 'Expires at',
+        ...COL_WIDTH.date,
         cell: (row) => formatDateTime(row.expiresAt),
       },
       {
         id: 'createdAt',
         header: 'Created at',
+        ...COL_WIDTH.date,
         cell: (row) => formatDateTime(row.createdAt),
       },
     ],
@@ -144,39 +209,27 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
         use the server list endpoint.
       </p>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="voucher-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="voucher-search"
-            placeholder="Search by ID or assigned user…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label
-            htmlFor="voucher-milestone-filter"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Milestone
-          </label>
-          <select
+      <ListFilterToolbar
+        searchId="voucher-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by ID or assigned user…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([
+          Boolean(milestoneFilter),
+          Boolean(statusFilter),
+        ])}
+        filterSubtitle="Narrow the list by milestone and voucher status."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="voucher-milestone-filter" label="Milestone" accent="milestone">
+          <FilterSelect
             id="voucher-milestone-filter"
-            value={milestoneFilter}
-            onChange={(e) => {
-              setMilestoneFilter(e.target.value)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-48"
+            value={draftFilters.milestoneId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, milestoneId: e.target.value }))
+            }
           >
             <option value="">All milestones</option>
             {milestoneOptions.map((opt) => (
@@ -184,21 +237,16 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
                 {opt.label}
               </option>
             ))}
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label htmlFor="voucher-status-filter" className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
-          <select
+        <FilterGroup id="voucher-status-filter" label="Status" accent="status">
+          <FilterSelect
             id="voucher-status-filter"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+            value={draftFilters.status}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, status: e.target.value }))
+            }
           >
             <option value="">All statuses</option>
             {VOUCHER_STATUSES.map((status) => (
@@ -206,15 +254,15 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
                 {status.replace(/_/g, ' ')}
               </option>
             ))}
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
 
-        <Button variant="secondary" onClick={() => setSearch(searchInput.trim())}>
-          Apply
-        </Button>
-      </div>
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="voucher-pool"
         columns={columns}
         data={filteredContent}
         getRowId={(row) => row.id}
@@ -222,6 +270,7 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
         error={error}
         onRetry={() => void refetch()}
         caption="Voucher pool"
+        actionsWidth={72}
         emptyTitle="No vouchers found"
         emptyDescription="Import voucher codes or adjust filters on this page."
         rowActions={(row) => (
@@ -243,10 +292,7 @@ export function VoucherPoolTab({ milestones }: VoucherPoolTabProps) {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 

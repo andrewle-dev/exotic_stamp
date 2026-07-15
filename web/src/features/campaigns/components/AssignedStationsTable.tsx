@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import type { CampaignStationResponse } from '../../../types/campaigns'
@@ -38,6 +39,9 @@ export function AssignedStationsTable({
       {
         id: 'station',
         header: 'Station',
+        ...COL_WIDTH.entity,
+        defaultWidth: 200,
+        truncate: false,
         cell: (row) => (
           <div>
             <p className="font-medium text-foreground">{row.name}</p>
@@ -47,17 +51,21 @@ export function AssignedStationsTable({
       {
         id: 'displayName',
         header: 'Display name',
+        ...COL_WIDTH.title,
         cell: (row) => row.displayName ?? '—',
       },
       {
         id: 'line',
         header: 'Line',
+        ...COL_WIDTH.code,
         cell: (row) => (row.lineId ? (lineMap.get(row.lineId) ?? '—') : '—'),
       },
       {
-        id: 'sortOrder',
-        header: 'Sort order',
+        id: 'lineSequence',
+        header: 'Line sequence',
         align: 'right',
+        ...COL_WIDTH.number,
+        defaultWidth: 120,
         cell: (row) => row.sortOrder ?? '—',
       },
     ],
@@ -67,6 +75,7 @@ export function AssignedStationsTable({
   return (
     <>
       <DataTable
+        tableId="campaign-assigned-stations"
         columns={columns}
         data={stations}
         getRowId={(row) => row.stationId}
@@ -74,6 +83,7 @@ export function AssignedStationsTable({
         error={error}
         onRetry={onRetry}
         caption="Assigned stations"
+        actionsWidth={72}
         emptyTitle="No stations assigned"
         emptyDescription="Add stations to make them available in this campaign for mobile collectors."
         rowActions={(row) => (

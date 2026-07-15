@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Eye, Pencil, Plus } from 'lucide-react'
+import { SearchFilterCard } from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
-import { Input } from '../../../components/ui/FormField'
 import type { RoleResponse } from '../../../types/rbac'
 import { useRoles } from '../hooks'
 import { RoleFormDrawer } from './RoleFormDrawer'
@@ -40,21 +41,27 @@ export function RolesTab() {
       {
         id: 'role',
         header: 'Role',
+        ...COL_WIDTH.name,
         cell: (row) => row.role ?? '—',
       },
       {
         id: 'description',
         header: 'Description',
+        ...COL_WIDTH.description,
         cell: (row) => row.description?.trim() || '—',
       },
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => (row.status ? <StatusBadge status={row.status} /> : '—'),
       },
       {
         id: 'systemRole',
         header: 'System role',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) =>
           row.systemRole ? <StatusBadge status="ACTIVE" label="System" /> : '—',
       },
@@ -80,29 +87,17 @@ export function RolesTab() {
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="role-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="role-search"
-            placeholder="Search by role or description…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-        <Button variant="secondary" onClick={() => setSearch(searchInput.trim())}>
-          Apply
-        </Button>
-      </div>
+      <SearchFilterCard
+        id="role-search"
+        label="Search"
+        placeholder="Search by role or description…"
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={() => setSearch(searchInput.trim())}
+      />
 
       <DataTable
+        tableId="rbac-roles"
         columns={columns}
         data={filteredRoles}
         getRowId={(row) => row.id}
@@ -110,6 +105,7 @@ export function RolesTab() {
         error={error}
         onRetry={() => void refetch()}
         caption="Roles"
+        actionsWidth={128}
         emptyTitle="No roles found"
         emptyDescription="Create a role or adjust your search."
         rowActions={(row) => (

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../domain/entities/stamp_book.dart';
@@ -24,60 +25,94 @@ class StampBookSummaryCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.blueTint,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.xlAll,
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            stampBook.campaignName ?? 'Sổ stamp',
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.textSecondary,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Collection Status',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      stampBook.lineName,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundWhite,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Icon(
+                  Icons.emoji_events_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 22,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            stampBook.lineName,
-            style: AppTextStyles.titleLarge.copyWith(
-              color: AppColors.primaryBlue,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlue,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '$percentage% hoàn thành',
+                  '$percentage% COMPLETED',
                   style: AppTextStyles.labelMedium.copyWith(
                     color: AppColors.backgroundWhite,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ),
               const Spacer(),
               Text(
-                '$collected / $total stamp',
-                style: AppTextStyles.titleMedium,
+                '$collected / $total Stamps',
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               value: progressValue,
               minHeight: 8,
-              backgroundColor: AppColors.border,
+              backgroundColor: AppColors.backgroundWhite,
               valueColor: const AlwaysStoppedAnimation(AppColors.primaryBlue),
             ),
           ),

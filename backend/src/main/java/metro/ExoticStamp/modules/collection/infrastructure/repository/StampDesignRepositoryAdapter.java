@@ -63,6 +63,11 @@ public class StampDesignRepositoryAdapter implements StampDesignRepository {
     }
 
     @Override
+    public long countActiveByCampaignId(UUID campaignId) {
+        return jpaStampDesignRepository.countActiveByCampaignId(campaignId);
+    }
+
+    @Override
     public StampDesign save(StampDesign stampDesign) {
         try {
             return jpaStampDesignRepository.save(stampDesign);

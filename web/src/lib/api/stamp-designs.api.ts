@@ -8,6 +8,7 @@ import type {
   StampDesignsListParams,
   UpdateStampDesignRequest,
 } from '../../types/stamp-designs'
+import type { ReorderResponse, ReorderStampDesignsRequest } from '../../types/reorder'
 
 const BASE = '/api/v1/admin/stamp-designs'
 
@@ -18,6 +19,7 @@ export async function listStampDesigns(
     params: {
       page: params.page ?? 0,
       size: params.size ?? 20,
+      ...(params.campaignId ? { campaignId: params.campaignId } : {}),
     },
   })
   return unwrapApiResponse(data)
@@ -45,4 +47,11 @@ export async function updateStampDesign(
 
 export async function deleteStampDesign(id: string): Promise<void> {
   await apiClient.delete(`${BASE}/${id}`)
+}
+
+export async function reorderStampDesigns(
+  body: ReorderStampDesignsRequest,
+): Promise<ReorderResponse> {
+  const { data } = await apiClient.patch<ApiResponse<ReorderResponse>>(`${BASE}/reorder`, body)
+  return unwrapApiResponse(data)
 }

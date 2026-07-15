@@ -1,41 +1,54 @@
 import { useMemo, useState } from 'react'
-import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowUpDown, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
-import { Input } from '../../../components/ui/FormField'
 import { ImageWithFallback } from '../../../components/ui/ImageWithFallback'
 import { formatDateTime } from '../../../lib/formatting/date'
 import { isForbiddenError } from '../../../lib/api/errors'
-import type {
-  StampDesignResponse,
-  StampDesignStatus,
-  StampRarity,
-} from '../../../types/stamp-designs'
+import type { StampDesignResponse } from '../../../types/stamp-designs'
 import { useCampaigns } from '../../campaigns/hooks'
 import { useStationsList } from '../../stations/hooks'
 import { useDeleteStampDesign, useStampDesigns } from '../hooks'
 import { StampDesignFormDrawer } from '../components/StampDesignFormDrawer'
 import { StampDesignDetailDrawer } from '../components/StampDesignDetailDrawer'
+import { StampDesignsReorderDrawer } from '../components/StampDesignsReorderDrawer'
 import { resolveCampaignLabel, resolveStationLabel } from '../utils/resolve-labels'
-
-type RarityFilter = StampRarity | 'ALL'
-type StatusFilter = StampDesignStatus | 'ALL'
+import {
+  EMPTY_STAMP_FILTERS,
+  STAMP_RARITY_LABELS,
+  type StampDesignFilters,
+  type StampRarityFilter,
+  type StampStatusFilter,
+} from '../filter-schema'
 
 /**
- * Search, campaign, station, rarity, and status filters are applied client-side to the
- * current API page only. The list endpoint supports page/size query params only.
+ * Station, rarity, status, and search filters are applied client-side to the current API page.
+ * When a campaign is selected, the list is loaded server-side for that campaign (full scope for reorder).
  */
 function filterStampDesignsPage(
   designs: StampDesignResponse[],
   search: string,
   campaignFilter: string,
   stationFilter: string,
-  rarityFilter: RarityFilter,
-  statusFilter: StatusFilter,
+  rarityFilter: StampRarityFilter,
+  statusFilter: StampStatusFilter,
 ): StampDesignResponse[] {
   const needle = search.trim().toLowerCase()
 
@@ -63,20 +76,46 @@ function filterStampDesignsPage(
 }
 
 export function StampDesignsPage() {
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [campaignFilter, setCampaignFilter] = useState('')
-  const [stationFilter, setStationFilter] = useState('')
-  const [rarityFilter, setRarityFilter] = useState<RarityFilter>('ALL')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<StampDesignFilters>({ emptyFilters: EMPTY_STAMP_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [reorderOpen, setReorderOpen] = useState(false)
   const [editingDesign, setEditingDesign] = useState<StampDesignResponse | null>(null)
   const [deletingDesign, setDeletingDesign] = useState<StampDesignResponse | null>(null)
   const [detailDesign, setDetailDesign] = useState<StampDesignResponse | null>(null)
 
-  const listParams = useMemo(() => ({ page, size }), [page, size])
+  const {
+    campaignId: campaignFilter,
+    stationId: stationFilter,
+    rarity: rarityFilter,
+    status: statusFilter,
+  } = appliedFilters
+
+  const listParams = useMemo(
+    () => ({
+      page,
+      size,
+      ...(campaignFilter ? { campaignId: campaignFilter } : {}),
+    }),
+    [page, size, campaignFilter],
+  )
   const { data, isLoading, error, refetch } = useStampDesigns(listParams)
   const { data: campaignsPage } = useCampaigns({ page: 0, size: 200 })
   const { data: stationsPage } = useStationsList({ page: 0, size: 500 })
@@ -84,13 +123,18 @@ export function StampDesignsPage() {
 
   const campaigns = useMemo(() => campaignsPage?.content ?? [], [campaignsPage?.content])
   const stations = useMemo(() => stationsPage?.content ?? [], [stationsPage?.content])
+  const selectedCampaign = useMemo(
+    () => campaigns.find((c) => c.id === campaignFilter),
+    [campaigns, campaignFilter],
+  )
 
   const filteredContent = useMemo(
     () =>
       filterStampDesignsPage(
         data?.content ?? [],
         search,
-        campaignFilter,
+        // Campaign already applied server-side when selected.
+        campaignFilter ? '' : campaignFilter,
         stationFilter,
         rarityFilter,
         statusFilter,
@@ -98,11 +142,64 @@ export function StampDesignsPage() {
     [data?.content, search, campaignFilter, stationFilter, rarityFilter, statusFilter],
   )
 
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    campaignFilter
+      ? buildLabeledFilterTag({
+          id: 'campaign',
+          label: 'Campaign',
+          value: (() => {
+            const campaign = campaigns.find((c) => c.id === campaignFilter)
+            return campaign ? campaign.displayName || campaign.name : campaignFilter
+          })(),
+          accent: 'campaign',
+          onRemove: () => removeFilter('campaignId', ''),
+        })
+      : null,
+    stationFilter
+      ? buildLabeledFilterTag({
+          id: 'station',
+          label: 'Station',
+          value: (() => {
+            const station = stations.find((s) => s.id === stationFilter)
+            return station ? `${station.code} — ${station.name}` : stationFilter
+          })(),
+          accent: 'station',
+          onRemove: () => removeFilter('stationId', ''),
+        })
+      : null,
+    rarityFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'rarity',
+          label: 'Rarity',
+          value: STAMP_RARITY_LABELS[rarityFilter],
+          accent: 'rarity',
+          onRemove: () => removeFilter('rarity', 'ALL'),
+        })
+      : null,
+    statusFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'status',
+          label: 'Status',
+          value: statusFilter,
+          accent: 'status',
+          onRemove: () => removeFilter('status', 'ALL'),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${filteredContent.length} filtered stamp design${filteredContent.length === 1 ? '' : 's'}`
+    : `Showing ${filteredContent.length} stamp design${filteredContent.length === 1 ? '' : 's'}`
+
   const columns: DataTableColumn<StampDesignResponse>[] = useMemo(
     () => [
       {
         id: 'preview',
         header: 'Preview',
+        ...COL_WIDTH.thumbnail,
+        truncate: false,
         cell: (row) => (
           <ImageWithFallback
             src={row.previewImageUrl || row.imageUrl}
@@ -112,14 +209,20 @@ export function StampDesignsPage() {
           />
         ),
       },
-      { id: 'name', header: 'Name', cell: (row) => row.name },
+      {
+        id: 'name',
+        header: 'Name',
+        ...COL_WIDTH.name,
+        cell: (row) => row.name,
+      },
       {
         id: 'campaign',
         header: 'Campaign',
+        ...COL_WIDTH.entity,
         cell: (row) => {
           const { label, unknown } = resolveCampaignLabel(row.campaignId, campaigns)
           return (
-            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'} title={row.campaignId}>
+            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'}>
               {label}
             </span>
           )
@@ -128,10 +231,12 @@ export function StampDesignsPage() {
       {
         id: 'station',
         header: 'Station',
+        ...COL_WIDTH.entity,
+        defaultWidth: 160,
         cell: (row) => {
           const { label, unknown } = resolveStationLabel(row.stationId, stations)
           return (
-            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'} title={row.stationId}>
+            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'}>
               {label}
             </span>
           )
@@ -140,24 +245,23 @@ export function StampDesignsPage() {
       {
         id: 'rarity',
         header: 'Rarity',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) =>
           row.rarity ? <StatusBadge status={row.rarity} /> : <span className="text-muted-foreground">—</span>,
       },
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) =>
           row.status ? <StatusBadge status={row.status} /> : <span className="text-muted-foreground">—</span>,
       },
       {
-        id: 'sortOrder',
-        header: 'Sort order',
-        align: 'right',
-        cell: (row) => row.sortOrder ?? '—',
-      },
-      {
         id: 'updatedAt',
         header: 'Updated at',
+        ...COL_WIDTH.date,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">
             {row.updatedAt ? formatDateTime(row.updatedAt) : '—'}
@@ -178,52 +282,61 @@ export function StampDesignsPage() {
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Stamp Designs</h2>
           <p className="text-sm text-muted-foreground">
-            Configure stamp artwork per campaign and station with rarity and status controls.
+            Manage campaign-specific collectible stamp artwork per station, with rarity and
+            status controls.
           </p>
         </div>
-        <Button
-          size="md"
-          onClick={() => {
-            setEditingDesign(null)
-            setDrawerOpen(true)
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Create stamp design
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="md"
+            disabled={!campaignFilter}
+            title={
+              campaignFilter
+                ? undefined
+                : 'Select a campaign filter to reorder stamp designs'
+            }
+            onClick={() => setReorderOpen(true)}
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            Reorder
+          </Button>
+          <Button
+            size="md"
+            onClick={() => {
+              setEditingDesign(null)
+              setDrawerOpen(true)
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Create stamp design
+          </Button>
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Search and filters apply to the current page only. Pagination uses the server list endpoint.
-      </p>
-
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="stamp-design-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="stamp-design-search"
-            placeholder="Search by name or description…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="stamp-campaign-filter" className="text-xs font-medium text-muted-foreground">
-            Campaign
-          </label>
-          <select
+      <ListFilterToolbar
+        searchId="stamp-design-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by name or description…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([
+          Boolean(campaignFilter),
+          Boolean(stationFilter),
+          rarityFilter !== 'ALL',
+          statusFilter !== 'ALL',
+        ])}
+        filterSubtitle="Narrow the list with campaign and metadata filters."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="stamp-campaign-filter" label="Campaign" accent="campaign">
+          <FilterSelect
             id="stamp-campaign-filter"
-            value={campaignFilter}
-            onChange={(e) => setCampaignFilter(e.target.value)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-48"
+            value={draftFilters.campaignId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, campaignId: e.target.value }))
+            }
           >
             <option value="">All campaigns</option>
             {campaigns.map((c) => (
@@ -231,18 +344,16 @@ export function StampDesignsPage() {
                 {c.displayName || c.name} ({c.code})
               </option>
             ))}
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label htmlFor="stamp-station-filter" className="text-xs font-medium text-muted-foreground">
-            Station
-          </label>
-          <select
+        <FilterGroup id="stamp-station-filter" label="Station" accent="station">
+          <FilterSelect
             id="stamp-station-filter"
-            value={stationFilter}
-            onChange={(e) => setStationFilter(e.target.value)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-48"
+            value={draftFilters.stationId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, stationId: e.target.value }))
+            }
           >
             <option value="">All stations</option>
             {stations.map((s) => (
@@ -250,55 +361,52 @@ export function StampDesignsPage() {
                 {s.code} — {s.name}
               </option>
             ))}
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label htmlFor="stamp-rarity-filter" className="text-xs font-medium text-muted-foreground">
-            Rarity
-          </label>
-          <select
+        <FilterGroup id="stamp-rarity-filter" label="Rarity" accent="rarity">
+          <FilterSelect
             id="stamp-rarity-filter"
-            value={rarityFilter}
-            onChange={(e) => setRarityFilter(e.target.value as RarityFilter)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-36"
+            value={draftFilters.rarity}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                rarity: e.target.value as StampRarityFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="COMMON">Common</option>
             <option value="RARE">Rare</option>
             <option value="EPIC">Epic</option>
             <option value="LEGENDARY">Legendary</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label htmlFor="stamp-status-filter" className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
-          <select
+        <FilterGroup id="stamp-status-filter" label="Status" accent="status">
+          <FilterSelect
             id="stamp-status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-36"
+            value={draftFilters.status}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                status: e.target.value as StampStatusFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="DRAFT">Draft</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
 
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSearch(searchInput.trim())
-          }}
-        >
-          Apply
-        </Button>
-      </div>
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="stamp-designs"
         columns={columns}
         data={filteredContent}
         getRowId={(row) => row.id}
@@ -306,8 +414,9 @@ export function StampDesignsPage() {
         error={error}
         onRetry={() => void refetch()}
         caption="Stamp designs"
+        actionsWidth={128}
         emptyTitle="No stamp designs found"
-        emptyDescription="Create a stamp design or adjust filters on this page."
+        emptyDescription="Create a campaign-specific stamp design or adjust filters on this page."
         rowActions={(row) => (
           <>
             <Button
@@ -348,10 +457,7 @@ export function StampDesignsPage() {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 
@@ -365,6 +471,19 @@ export function StampDesignsPage() {
           setEditingDesign(null)
         }}
       />
+
+      {campaignFilter ? (
+        <StampDesignsReorderDrawer
+          open={reorderOpen}
+          campaignId={campaignFilter}
+          campaignLabel={
+            selectedCampaign
+              ? `${selectedCampaign.code} · ${selectedCampaign.name}`
+              : undefined
+          }
+          onClose={() => setReorderOpen(false)}
+        />
+      ) : null}
 
       <StampDesignDetailDrawer
         open={Boolean(detailDesign)}

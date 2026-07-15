@@ -8,6 +8,7 @@ import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
 import metro.ExoticStamp.modules.rbac.domain.exception.RoleAlreadyAssignedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 
@@ -78,5 +79,43 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("INTERNAL_ERROR", response.getBody().code());
         assertFalse(response.getBody().message().contains("boom"));
+    }
+
+    @Test
+    void foreignKeyViolation_returnsClearMilestoneMessage() {
+        request = new MockHttpServletRequest("POST", "/api/v1/admin/rewards");
+        String pg = "ERROR: insert or update on table \"rewards\" violates foreign key constraint \"fk_rewards_milestone_id\"\n"
+                + "Detail: Key (milestone_id)=(a52d3d70-37bc-473d-b68a-162694f39a1e) is not present in table \"milestones\".";
+        var response = handler.handleDataIntegrityViolation(
+                new DataIntegrityViolationException("could not execute statement", new RuntimeException(pg)),
+                request);
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("FOREIGN_KEY_VIOLATION", response.getBody().code());
+        assertTrue(response.getBody().message().contains("milestone_id"));
+        assertTrue(response.getBody().message().contains("a52d3d70-37bc-473d-b68a-162694f39a1e"));
+    }
+
+    @Test
+    void checkConstraint_returnsAllowedRewardTypes() {
+        request = new MockHttpServletRequest("POST", "/api/v1/admin/rewards");
+        String pg = "ERROR: new row for relation \"rewards\" violates check constraint \"chk_rewards_reward_type\"";
+        var response = handler.handleDataIntegrityViolation(
+                new DataIntegrityViolationException("could not execute statement", new RuntimeException(pg)),
+                request);
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("CHECK_CONSTRAINT_VIOLATION", response.getBody().code());
+        assertTrue(response.getBody().message().contains("VOUCHER"));
+    }
+
+    @Test
+    void notNullViolation_returnsClearColumnMessage() {
+        request = new MockHttpServletRequest("POST", "/api/v1/admin/rewards");
+        String pg = "ERROR: null value in column \"created_at\" of relation \"rewards\" violates not-null constraint";
+        var response = handler.handleDataIntegrityViolation(
+                new DataIntegrityViolationException("could not execute statement", new RuntimeException(pg)),
+                request);
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("NOT_NULL_VIOLATION", response.getBody().code());
+        assertTrue(response.getBody().message().contains("created_at"));
     }
 }

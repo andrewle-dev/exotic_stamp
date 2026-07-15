@@ -81,6 +81,10 @@ public class CollectionResponseMapper {
                                 .sequence(s.sequence())
                                 .collected(s.collected())
                                 .stampDesignUrl(s.stampDesignUrl())
+                                .stampDesignName(s.stampDesignName())
+                                .stampDesignDescription(s.stampDesignDescription())
+                                .rarity(s.rarity())
+                                .collectedAt(s.collectedAt())
                                 .build())
                         .toList())
                 .build();

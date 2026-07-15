@@ -5,6 +5,7 @@ import metro.ExoticStamp.infra.storage.FileValidator;
 import metro.ExoticStamp.infra.storage.StorageProperties;
 import metro.ExoticStamp.infra.storage.StorageService;
 import metro.ExoticStamp.modules.metro.application.command.CreateStationCommand;
+import metro.ExoticStamp.modules.metro.application.command.ReorderStationsCommand;
 import metro.ExoticStamp.modules.metro.application.command.RotateStationQrCommand;
 import metro.ExoticStamp.modules.metro.application.command.UpdateScanKeysCommand;
 import metro.ExoticStamp.modules.metro.application.mapper.MetroAppMapper;
@@ -15,6 +16,7 @@ import metro.ExoticStamp.modules.metro.domain.event.StationQrRotatedEvent;
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateNfcTagException;
 import metro.ExoticStamp.modules.metro.domain.exception.InvalidStationStatusException;
 import metro.ExoticStamp.modules.metro.domain.exception.LineNotFoundException;
+import metro.ExoticStamp.common.reorder.ReorderConflictException;
 import metro.ExoticStamp.modules.metro.domain.exception.StationInactiveException;
 import metro.ExoticStamp.modules.metro.domain.exception.StationNotFoundException;
 import metro.ExoticStamp.modules.metro.domain.model.Line;
@@ -42,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -183,6 +186,47 @@ class StationCommandServiceTest {
         when(stationRepository.existsByNfcTagIdAndIdNot("NFC_DUP", STATION_ID)).thenReturn(true);
         assertThrows(DuplicateNfcTagException.class, () -> stationCommandService.updateScanKeys(
                 UpdateScanKeysCommand.builder().stationId(STATION_ID).nfcTagId("NFC_DUP").build()));
+    }
+
+    @Test
+    void reorderStations_twoPhaseDenseRenumber() {
+        UUID s2 = UUID.fromString("00000000-0000-0000-0000-000000000502");
+        Station a = Station.builder().id(STATION_ID).lineId(LINE_ID).code("S1").name("A").sortOrder(0)
+                .collectorCount(0).status(MetroStatus.ACTIVE).scanKeyStatus(ScanKeyStatus.INACTIVE)
+                .createdAt(LocalDateTime.now()).build();
+        Station b = Station.builder().id(s2).lineId(LINE_ID).code("S2").name("B").sortOrder(1)
+                .collectorCount(0).status(MetroStatus.DRAFT).scanKeyStatus(ScanKeyStatus.INACTIVE)
+                .createdAt(LocalDateTime.now()).build();
+        when(lineRepository.findById(LINE_ID)).thenReturn(Optional.of(activeLine()));
+        when(stationRepository.findAllByLineId(LINE_ID)).thenReturn(List.of(a, b));
+        when(stationRepository.save(any(Station.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = stationCommandService.reorderStations(
+                ReorderStationsCommand.builder()
+                        .lineId(LINE_ID)
+                        .orderedIds(List.of(s2, STATION_ID))
+                        .build());
+
+        assertEquals(2, result.updatedCount());
+        assertEquals(LINE_ID, result.scopeId());
+        assertEquals(0, b.getSortOrder());
+        assertEquals(1, a.getSortOrder());
+        verify(stationRepository).flush();
+        verify(stationRepository, times(4)).save(any(Station.class));
+    }
+
+    @Test
+    void reorderStations_incompleteSet_throwsConflict() {
+        Station a = activeStation();
+        when(lineRepository.findById(LINE_ID)).thenReturn(Optional.of(activeLine()));
+        when(stationRepository.findAllByLineId(LINE_ID)).thenReturn(List.of(a));
+
+        assertThrows(ReorderConflictException.class, () ->
+                stationCommandService.reorderStations(
+                        ReorderStationsCommand.builder()
+                                .lineId(LINE_ID)
+                                .orderedIds(List.of())
+                                .build()));
     }
 
     private static Line activeLine() {

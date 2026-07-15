@@ -1,22 +1,51 @@
 import 'dart:io';
 
+import '../storage/local_preferences.dart';
+
 /// API and environment configuration.
 class ApiConfig {
   const ApiConfig._();
 
   static const appName = 'Metro Stamp';
 
+  // Installed app version for UI chrome comes from package_info_plus.
+  // Update/maintenance policy is fetched from GET /mobile/app-config.
+
   static const _host = String.fromEnvironment('API_HOST', defaultValue: '');
   static const _port = String.fromEnvironment('API_PORT', defaultValue: '8080');
 
+  /// Optional runtime override (debug / physical device LAN IP).
+  static String? _runtimeHostOverride;
+  static String? _runtimePortOverride;
+
+  /// Apply in-app override (persisted via [LocalPreferences]).
+  static void applyRuntimeOverride({String? host, String? port}) {
+    _runtimeHostOverride =
+        host == null || host.trim().isEmpty ? null : host.trim();
+    _runtimePortOverride =
+        port == null || port.trim().isEmpty ? null : port.trim();
+  }
+
+  static Future<void> loadFromPreferences(LocalPreferences preferences) async {
+    applyRuntimeOverride(
+      host: preferences.apiHostOverride,
+      port: preferences.apiPortOverride,
+    );
+  }
+
   /// API base including `/api/v1` prefix.
   ///
-  /// - Android emulator default: `http://10.0.2.2:8080/api/v1`
-  /// - iOS simulator / desktop: `http://localhost:8080/api/v1`
-  /// - Physical device: `--dart-define=API_HOST=<LAN-IP>` (same port via `API_PORT`)
+  /// Priority:
+  /// 1. In-app override (debug screen)
+  /// 2. `--dart-define=API_HOST=<LAN-IP>` (+ optional `API_PORT`)
+  /// 3. Android emulator: `http://10.0.2.2:8080/api/v1`
+  /// 4. iOS simulator / desktop: `http://localhost:8080/api/v1`
   static String get baseUrl {
-    if (_host.isNotEmpty) {
-      return 'http://$_host:$_port/api/v1';
+    final host = _runtimeHostOverride ??
+        (_host.isNotEmpty ? _host : null);
+    final port = _runtimePortOverride ?? _port;
+    if (host != null && host.isNotEmpty) {
+      return 'http://$host:$port/api/v1';
     }
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8080/api/v1';

@@ -8,6 +8,7 @@ enum RewardsStatus {
   loading,
   loaded,
   noRewardsYet,
+  rewardPending,
   failure,
 }
 

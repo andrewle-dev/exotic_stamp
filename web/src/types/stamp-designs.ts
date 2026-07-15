@@ -48,4 +48,5 @@ export type PageResponseStampDesignResponse = PageResponse<StampDesignResponse>
 export interface StampDesignsListParams {
   page?: number
   size?: number
+  campaignId?: string
 }

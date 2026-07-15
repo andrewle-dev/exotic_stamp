@@ -1,22 +1,36 @@
 import { useMemo, useState } from 'react'
 import { BarChart3, Eye, Pencil, Plus, Upload } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  ACTIVE_STATE_FILTER_LABELS,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
-import { Input } from '../../../components/ui/FormField'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
 import { isForbiddenError } from '../../../lib/api/errors'
 import type { MilestoneResponse } from '../../../types/milestones'
 import type { PartnerResponse } from '../../../types/partners'
-import type { RewardResponse, RewardType } from '../../../types/rewards'
+import type { RewardResponse } from '../../../types/rewards'
 import {
   formatExpiryDays,
   formatRewardValue,
   formatStock,
   resolveMilestoneLabel,
   resolvePartnerLabel,
+  buildMilestoneOptions,
 } from '../utils/resolve-labels'
 import {
   useActivateReward,
@@ -24,18 +38,28 @@ import {
   useRewardVoucherStats,
   useRewards,
 } from '../hooks'
+import {
+  EMPTY_REWARD_FILTERS,
+  REWARD_TYPE_LABELS,
+  type RewardActiveFilter,
+  type RewardFilters,
+  type RewardTypeFilter,
+} from '../filter-schema'
 import { RewardFormDrawer } from './RewardFormDrawer'
 import { RewardDetailDrawer } from './RewardDetailDrawer'
 import { BulkUploadVouchersDrawer } from './BulkUploadVouchersDrawer'
 
-type ActiveFilter = 'ALL' | 'ACTIVE_ONLY' | 'INACTIVE_ONLY'
-type RewardTypeFilter = RewardType | 'ALL'
-
+/**
+ * Search, inactive, reward type, milestone, and partner filters apply client-side to the
+ * current API page. Active-only uses the server list endpoint (activeOnly).
+ */
 function filterRewardsPage(
   rewards: RewardResponse[],
   search: string,
-  activeFilter: ActiveFilter,
+  activeFilter: RewardActiveFilter,
   rewardTypeFilter: RewardTypeFilter,
+  milestoneId: string,
+  partnerId: string,
 ): RewardResponse[] {
   const needle = search.trim().toLowerCase()
 
@@ -47,6 +71,12 @@ function filterRewardsPage(
       return false
     }
     if (rewardTypeFilter !== 'ALL' && reward.rewardType !== rewardTypeFilter) {
+      return false
+    }
+    if (milestoneId && reward.milestoneId !== milestoneId) {
+      return false
+    }
+    if (partnerId && reward.partnerId !== partnerId) {
       return false
     }
     if (!needle) {
@@ -72,6 +102,7 @@ function VoucherStatsButton({
     <Button
       variant="ghost"
       size="sm"
+      className="px-2"
       onClick={onViewDetail}
       aria-label="View voucher stats"
       title={
@@ -91,17 +122,37 @@ interface RewardsTabProps {
 }
 
 export function RewardsTab({ milestones, partners }: RewardsTabProps) {
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('ALL')
-  const [rewardTypeFilter, setRewardTypeFilter] = useState<RewardTypeFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<RewardFilters>({ emptyFilters: EMPTY_REWARD_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingReward, setEditingReward] = useState<RewardResponse | null>(null)
   const [detailReward, setDetailReward] = useState<RewardResponse | null>(null)
   const [bulkUploadReward, setBulkUploadReward] = useState<RewardResponse | null>(null)
   const [togglingReward, setTogglingReward] = useState<RewardResponse | null>(null)
+
+  const {
+    active: activeFilter,
+    rewardType: rewardTypeFilter,
+    milestoneId: milestoneFilter,
+    partnerId: partnerFilter,
+  } = appliedFilters
 
   const listParams = useMemo(
     () => ({
@@ -117,26 +168,84 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
   const deactivateMutation = useDeactivateReward()
   const toggleMutation = togglingReward?.active ? deactivateMutation : activateMutation
 
+  const milestoneOptions = buildMilestoneOptions(milestones)
+
   const filteredContent = useMemo(
-    () => filterRewardsPage(data?.content ?? [], search, activeFilter, rewardTypeFilter),
-    [data?.content, search, activeFilter, rewardTypeFilter],
+    () =>
+      filterRewardsPage(
+        data?.content ?? [],
+        search,
+        activeFilter,
+        rewardTypeFilter,
+        milestoneFilter,
+        partnerFilter,
+      ),
+    [data?.content, search, activeFilter, rewardTypeFilter, milestoneFilter, partnerFilter],
   )
+
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    activeFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'active',
+          label: 'Active',
+          value: ACTIVE_STATE_FILTER_LABELS[activeFilter],
+          accent: 'status',
+          onRemove: () => removeFilter('active', 'ALL'),
+        })
+      : null,
+    rewardTypeFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'rewardType',
+          label: 'Reward type',
+          value: REWARD_TYPE_LABELS[rewardTypeFilter],
+          accent: 'reward',
+          onRemove: () => removeFilter('rewardType', 'ALL'),
+        })
+      : null,
+    milestoneFilter
+      ? buildLabeledFilterTag({
+          id: 'milestone',
+          label: 'Milestone',
+          value: resolveMilestoneLabel(milestoneFilter, milestones).label,
+          accent: 'milestone',
+          onRemove: () => removeFilter('milestoneId', ''),
+        })
+      : null,
+    partnerFilter
+      ? buildLabeledFilterTag({
+          id: 'partner',
+          label: 'Partner',
+          value: resolvePartnerLabel(partnerFilter, partners).label,
+          accent: 'partner',
+          onRemove: () => removeFilter('partnerId', ''),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${filteredContent.length} filtered reward${filteredContent.length === 1 ? '' : 's'}`
+    : `Showing ${filteredContent.length} reward${filteredContent.length === 1 ? '' : 's'}`
 
   const columns: DataTableColumn<RewardResponse>[] = useMemo(
     () => [
-      { id: 'name', header: 'Name', cell: (row) => row.name },
+      { id: 'name', header: 'Name', ...COL_WIDTH.name, cell: (row) => row.name },
       {
         id: 'rewardType',
         header: 'Reward type',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.rewardType} />,
       },
       {
         id: 'milestone',
         header: 'Milestone',
+        ...COL_WIDTH.entity,
         cell: (row) => {
           const { label, unknown } = resolveMilestoneLabel(row.milestoneId, milestones)
           return (
-            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'} title={row.milestoneId}>
+            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'}>
               {label}
             </span>
           )
@@ -145,6 +254,7 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
       {
         id: 'partner',
         header: 'Partner',
+        ...COL_WIDTH.entity,
         cell: (row) => {
           const { label, unknown } = resolvePartnerLabel(row.partnerId, partners)
           return (
@@ -158,29 +268,38 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
         id: 'valueAmount',
         header: 'Value amount',
         align: 'right',
+        ...COL_WIDTH.number,
+        defaultWidth: 120,
         cell: (row) => formatRewardValue(row.valueAmount),
       },
       {
         id: 'expiryDays',
         header: 'Expiry days',
         align: 'right',
+        ...COL_WIDTH.number,
+        defaultWidth: 110,
         cell: (row) => formatExpiryDays(row.expiryDays),
       },
       {
         id: 'stock',
         header: 'Stock',
         align: 'right',
+        ...COL_WIDTH.number,
+        defaultWidth: 110,
         cell: (row) => formatStock(row.totalStock, row.issuedCount),
       },
       {
         id: 'issued',
         header: 'Issued',
         align: 'right',
+        ...COL_WIDTH.number,
         cell: (row) => row.issuedCount ?? '—',
       },
       {
         id: 'active',
         header: 'Active',
+        ...COL_WIDTH.badgeSm,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.active ? 'ACTIVE' : 'INACTIVE'} />,
       },
     ],
@@ -210,73 +329,101 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Search, inactive filter, and reward type filter apply to the current page only. Active-only
-        filter uses the server list endpoint.
+        Search, inactive, reward type, milestone, and partner filters apply to the current page only.
+        Active-only uses the server list endpoint.
       </p>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="reward-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="reward-search"
-            placeholder="Search by name or description…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="reward-active-filter" className="text-xs font-medium text-muted-foreground">
-            Active
-          </label>
-          <select
+      <ListFilterToolbar
+        searchId="reward-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by name or description…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([
+          activeFilter !== 'ALL',
+          rewardTypeFilter !== 'ALL',
+          Boolean(milestoneFilter),
+          Boolean(partnerFilter),
+        ])}
+        filterSubtitle="Narrow the list by activation status, reward type, milestone, and partner."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="reward-active-filter" label="Active" accent="status">
+          <FilterSelect
             id="reward-active-filter"
-            value={activeFilter}
-            onChange={(e) => {
-              setActiveFilter(e.target.value as ActiveFilter)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+            value={draftFilters.active}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                active: e.target.value as RewardActiveFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="ACTIVE_ONLY">Active only</option>
             <option value="INACTIVE_ONLY">Inactive only</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label
-            htmlFor="reward-type-filter"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Reward type
-          </label>
-          <select
+        <FilterGroup id="reward-type-filter" label="Reward type" accent="reward">
+          <FilterSelect
             id="reward-type-filter"
-            value={rewardTypeFilter}
-            onChange={(e) => setRewardTypeFilter(e.target.value as RewardTypeFilter)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-44"
+            value={draftFilters.rewardType}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                rewardType: e.target.value as RewardTypeFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="VOUCHER">Voucher</option>
             <option value="DIGITAL_STICKER">Digital sticker</option>
             <option value="BONUS_STAMP">Bonus stamp</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <Button variant="secondary" onClick={() => setSearch(searchInput.trim())}>
-          Apply
-        </Button>
-      </div>
+        <FilterGroup id="reward-milestone-filter" label="Milestone" accent="milestone">
+          <FilterSelect
+            id="reward-milestone-filter"
+            value={draftFilters.milestoneId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, milestoneId: e.target.value }))
+            }
+          >
+            <option value="">All milestones</option>
+            {milestoneOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </FilterSelect>
+        </FilterGroup>
+
+        <FilterGroup id="reward-partner-filter" label="Partner" accent="partner">
+          <FilterSelect
+            id="reward-partner-filter"
+            value={draftFilters.partnerId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, partnerId: e.target.value }))
+            }
+          >
+            <option value="">All partners</option>
+            {partners.map((partner) => (
+              <option key={partner.id} value={partner.id}>
+                {partner.name}
+              </option>
+            ))}
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
+
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="rewards"
         columns={columns}
         data={filteredContent}
         getRowId={(row) => row.id}
@@ -284,6 +431,7 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
         error={error}
         onRetry={() => void refetch()}
         caption="Rewards"
+        actionsWidth={280}
         emptyTitle="No rewards found"
         emptyDescription="Create a reward or adjust filters on this page."
         rowActions={(row) => (
@@ -291,6 +439,7 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
             <Button
               variant="ghost"
               size="sm"
+              className="px-2"
               onClick={() => setDetailReward(row)}
               aria-label="View reward"
             >
@@ -299,6 +448,7 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
             <Button
               variant="ghost"
               size="sm"
+              className="px-2"
               onClick={() => {
                 setEditingReward(row)
                 setDrawerOpen(true)
@@ -313,6 +463,7 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="px-2"
                   onClick={() => setBulkUploadReward(row)}
                   aria-label="Upload voucher codes"
                 >
@@ -323,7 +474,9 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
             <Button
               variant="ghost"
               size="sm"
-              className={row.active ? 'text-destructive' : 'text-emerald-700'}
+              className={
+                row.active ? 'px-2 text-destructive' : 'px-2 text-emerald-700'
+              }
               onClick={() => setTogglingReward(row)}
               aria-label={row.active ? 'Deactivate reward' : 'Activate reward'}
             >
@@ -340,10 +493,7 @@ export function RewardsTab({ milestones, partners }: RewardsTabProps) {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 

@@ -29,6 +29,9 @@ public class Partner extends BaseEntity {
     @Column(name = "logo_url", length = 255)
     private String logoUrl;
 
+    @Column(name = "banner_image_url", length = 255)
+    private String bannerImageUrl;
+
     @Column(name = "contact_email", length = 100)
     private String contactEmail;
 
@@ -40,6 +43,34 @@ public class Partner extends BaseEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    /**
+     * Null contract dates are treated as open-ended.
+     * When set, today must fall within [start, end] inclusive.
+     */
+    public boolean isWithinContractWindow(LocalDate today) {
+        if (today == null) {
+            return false;
+        }
+        if (contractStartDate != null && today.isBefore(contractStartDate)) {
+            return false;
+        }
+        if (contractEndDate != null && today.isAfter(contractEndDate)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Eligibility for mobile Home promotional carousel:
+     * active + non-blank banner + valid contract window.
+     */
+    public boolean isEligibleForPromotion(LocalDate today) {
+        return active
+                && bannerImageUrl != null
+                && !bannerImageUrl.isBlank()
+                && isWithinContractWindow(today);
+    }
 
     @PrePersist
     public void onPrePersist() {
@@ -60,6 +91,12 @@ public class Partner extends BaseEntity {
         if (logoUrl != null) {
             logoUrl = logoUrl.trim();
         }
+        if (bannerImageUrl != null) {
+            bannerImageUrl = bannerImageUrl.trim();
+            if (bannerImageUrl.isEmpty()) {
+                bannerImageUrl = null;
+            }
+        }
         if (contactEmail != null) {
             contactEmail = contactEmail.trim();
         }
@@ -74,6 +111,9 @@ public class Partner extends BaseEntity {
         }
         if (logoUrl != null && logoUrl.length() > 255) {
             throw new IllegalArgumentException("Partner logoUrl length must be <= 255");
+        }
+        if (bannerImageUrl != null && bannerImageUrl.length() > 255) {
+            throw new IllegalArgumentException("Partner bannerImageUrl length must be <= 255");
         }
         if (contactEmail != null && contactEmail.length() > 100) {
             throw new IllegalArgumentException("Partner contactEmail length must be <= 100");

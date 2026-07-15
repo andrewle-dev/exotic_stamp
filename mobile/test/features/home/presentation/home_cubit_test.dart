@@ -76,4 +76,64 @@ void main() {
           .having((s) => s.failure?.code, 'code', FailureCode.networkError),
     ],
   );
+
+  blocTest<HomeCubit, HomeState>(
+    'silent refresh keeps previous summary while fetching',
+    build: () {
+      when(() => repository.getHomeSummary()).thenAnswer((_) async => summary);
+      return cubit;
+    },
+    seed: () => HomeState(status: HomeStatus.loaded, summary: summary),
+    act: (cubit) => cubit.refresh(),
+    expect: () => [
+      isA<HomeState>()
+          .having((s) => s.status, 'status', HomeStatus.loaded)
+          .having((s) => s.isRefreshing, 'isRefreshing', true)
+          .having((s) => s.summary?.progress?.collected, 'collected', 3),
+      isA<HomeState>()
+          .having((s) => s.status, 'status', HomeStatus.loaded)
+          .having((s) => s.isRefreshing, 'isRefreshing', false)
+          .having((s) => s.summary?.progress?.total, 'total', 10),
+    ],
+  );
+
+  blocTest<HomeCubit, HomeState>(
+    'stale refresh response is ignored when a newer request wins',
+    build: () {
+      var calls = 0;
+      when(() => repository.getHomeSummary()).thenAnswer((_) async {
+        calls++;
+        if (calls == 1) {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          return const HomeSummary(
+            displayName: 'Stale',
+            progress: CollectionProgress(
+              lineId: 'line-1',
+              collected: 0,
+              total: 0,
+              percentage: 0,
+            ),
+          );
+        }
+        return summary;
+      });
+      return cubit;
+    },
+    seed: () => HomeState(status: HomeStatus.loaded, summary: summary),
+    act: (cubit) async {
+      final first = cubit.refresh();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await cubit.load();
+      await first;
+    },
+    wait: const Duration(milliseconds: 80),
+    expect: () => [
+      isA<HomeState>().having((s) => s.isRefreshing, 'isRefreshing', true),
+      isA<HomeState>().having((s) => s.status, 'status', HomeStatus.loading),
+      isA<HomeState>()
+          .having((s) => s.status, 'status', HomeStatus.loaded)
+          .having((s) => s.summary?.displayName, 'name', 'An Nguyen')
+          .having((s) => s.summary?.progress?.collected, 'collected', 3),
+    ],
+  );
 }

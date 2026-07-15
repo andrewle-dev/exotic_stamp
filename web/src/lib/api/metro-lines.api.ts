@@ -9,6 +9,7 @@ import type {
   PageResponseLineResponse,
   UpdateLineRequest,
 } from '../../types/metro-lines'
+import type { ReorderLinesRequest, ReorderResponse } from '../../types/reorder'
 
 const BASE = '/api/v1/admin/metro/lines'
 
@@ -47,4 +48,9 @@ export async function updateMetroLine(
 
 export async function deleteMetroLine(id: string): Promise<void> {
   await apiClient.delete(`${BASE}/${id}`)
+}
+
+export async function reorderMetroLines(body: ReorderLinesRequest): Promise<ReorderResponse> {
+  const { data } = await apiClient.patch<ApiResponse<ReorderResponse>>(`${BASE}/reorder`, body)
+  return unwrapApiResponse(data)
 }

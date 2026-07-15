@@ -8,6 +8,7 @@ import type {
   PageResponseMilestoneResponse,
   UpdateMilestoneRequest,
 } from '../../types/milestones'
+import type { ReorderMilestonesRequest, ReorderResponse } from '../../types/reorder'
 
 const BASE = '/api/v1/admin/rewards/milestones'
 
@@ -45,4 +46,9 @@ export async function updateMilestone(
 
 export async function deleteMilestone(id: string): Promise<void> {
   await apiClient.delete(`${BASE}/${id}`)
+}
+
+export async function reorderMilestones(body: ReorderMilestonesRequest): Promise<ReorderResponse> {
+  const { data } = await apiClient.patch<ApiResponse<ReorderResponse>>(`${BASE}/reorder`, body)
+  return unwrapApiResponse(data)
 }

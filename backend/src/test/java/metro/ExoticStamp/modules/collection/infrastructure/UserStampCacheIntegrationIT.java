@@ -74,4 +74,17 @@ class UserStampCacheIntegrationIT {
         cache.evictAllForUserCollection(userId, lineId, campaignId);
         assertTrue(cache.getUserProgress(userId, lineId).isEmpty());
     }
+
+    @Test
+    void evictAllForUserCollection_clearsProgressCachedUnderDifferentLineKey() {
+        UUID userId = UUID.randomUUID();
+        UUID homeLineId = UUID.randomUUID();
+        UUID stationLineId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        cache.putUserProgress(userId, homeLineId,
+                ProgressView.builder().lineId(homeLineId).collected(0).total(0).percentage(0).build());
+        // Collect path evicts with station line id; Home may have cached under another line key.
+        cache.evictAllForUserCollection(userId, stationLineId, campaignId);
+        assertTrue(cache.getUserProgress(userId, homeLineId).isEmpty());
+    }
 }

@@ -1,8 +1,10 @@
 import { useEffect, useMemo } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Ticket } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Textarea } from '../../../components/ui/FormField'
 import { formatNumber } from '../../../lib/formatting/number'
 import type { RewardResponse } from '../../../types/rewards'
 import {
@@ -66,43 +68,49 @@ export function BulkUploadVouchersDrawer({ open, reward, onClose }: BulkUploadVo
       onClose={onClose}
       width="lg"
     >
-      <form id="bulk-upload-form" className="space-y-6" onSubmit={onSubmit} noValidate>
-        <FormField
-          label="Voucher codes"
-          htmlFor="codesText"
-          required
-          error={errors.codesText?.message}
-          hint="One code per line. Blank lines are ignored; duplicates are removed before upload."
+      <form id="bulk-upload-form" className="space-y-4" onSubmit={onSubmit} noValidate>
+        <DrawerSectionCard
+          icon={Ticket}
+          title="Voucher codes"
+          description="Paste one code per line."
         >
-          <textarea
-            id="codesText"
-            rows={10}
-            placeholder={'GRAB-XXXX-XXXX\nCOFFEE-1234-5678'}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 font-mono text-sm"
-            {...register('codesText')}
-          />
-        </FormField>
+          <FormField
+            label="Codes"
+            htmlFor="codesText"
+            required
+            error={errors.codesText?.message}
+            help="Blank lines are ignored; duplicates are removed before upload."
+          >
+            <Textarea
+              id="codesText"
+              rows={10}
+              placeholder={'GRAB-XXXX-XXXX\nCOFFEE-1234-5678'}
+              className="font-mono"
+              {...register('codesText')}
+            />
+          </FormField>
 
-        {codesText?.trim() ? (
-          <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm">
-            <p className="font-medium text-foreground">Pre-submit summary</p>
-            <ul className="mt-2 space-y-1 text-muted-foreground">
-              <li>Total lines: {summary.totalLines}</li>
-              <li>Valid non-empty codes: {summary.validCodes}</li>
-              <li>Duplicate lines removed: {summary.duplicatesRemoved}</li>
-            </ul>
-          </div>
-        ) : null}
+          {codesText?.trim() ? (
+            <div className="rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+              <p className="font-medium text-foreground">Pre-submit summary</p>
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                <li>Total lines: {summary.totalLines}</li>
+                <li>Valid non-empty codes: {summary.validCodes}</li>
+                <li>Duplicate lines removed: {summary.duplicatesRemoved}</li>
+              </ul>
+            </div>
+          ) : null}
 
-        {stats ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
-            <p className="font-medium text-emerald-800">Upload complete</p>
-            <ul className="mt-2 space-y-1 text-emerald-700">
-              <li>Available: {formatNumber(stats.availableCount)}</li>
-              <li>Redeemed: {formatNumber(stats.redeemedCount)}</li>
-            </ul>
-          </div>
-        ) : null}
+          {stats ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
+              <p className="font-medium text-emerald-800">Upload complete</p>
+              <ul className="mt-2 space-y-1 text-emerald-700">
+                <li>Available: {formatNumber(stats.availableCount)}</li>
+                <li>Redeemed: {formatNumber(stats.redeemedCount)}</li>
+              </ul>
+            </div>
+          ) : null}
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

@@ -7,7 +7,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Published after a successful stamp collect (after transaction commit). Payload is immutable.
+ * Published inside the collect transaction; listeners must use
+ * {@code @TransactionalEventListener(phase = AFTER_COMMIT)} so delivery happens only after commit.
+ * Payload is immutable IDs/primitives — safe for {@code @Async} (no lazy JPA access).
+ * Process crash after commit before listener runs is a known limitation without an outbox.
  */
 public final class StampCollectedEvent extends ApplicationEvent {
 

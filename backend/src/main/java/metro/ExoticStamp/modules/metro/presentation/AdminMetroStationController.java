@@ -12,8 +12,10 @@ import metro.ExoticStamp.modules.metro.application.StationQueryService;
 import metro.ExoticStamp.modules.metro.application.command.RotateStationQrCommand;
 import metro.ExoticStamp.modules.metro.presentation.dto.MetroStatusApi;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.CreateStationRequest;
+import metro.ExoticStamp.modules.metro.presentation.dto.request.ReorderStationsRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.UpdateScanKeysRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.UpdateStationRequest;
+import metro.ExoticStamp.common.reorder.ReorderResponse;
 import metro.ExoticStamp.modules.metro.presentation.dto.response.StationDetailResponse;
 import metro.ExoticStamp.modules.metro.presentation.dto.response.StationResponse;
 import metro.ExoticStamp.modules.metro.presentation.dto.response.StationStatsResponse;
@@ -95,6 +97,18 @@ public class AdminMetroStationController {
         return ResponseEntity.ok(ApiResponse.ok(
                 presentationMapper.toResponse(stationCommandService.updateStation(
                         presentationMapper.toUpdateStationCommand(id, request)))));
+    }
+
+    @PatchMapping("/reorder")
+    @PreAuthorize("hasRole('ADMIN') and hasAuthority('METRO_STATION_MANAGE')")
+    @Operation(summary = "Reorder stations on a line",
+            description = "Dense-renumbers all stations on the given line to 0..n-1. "
+                    + "orderedIds must be a permutation of every station id on that line (all statuses).",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<ApiResponse<ReorderResponse>> reorder(@Valid @RequestBody ReorderStationsRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                presentationMapper.toResponse(stationCommandService.reorderStations(
+                        presentationMapper.toReorderStationsCommand(request)))));
     }
 
     @PatchMapping("/{id}/scan-keys")

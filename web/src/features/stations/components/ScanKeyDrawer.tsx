@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, KeyRound, Shield } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField, Input } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Input, Select } from '../../../components/ui/FormField'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { SecretField } from '../../../components/ui/SecretField'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
@@ -89,61 +90,68 @@ export function ScanKeyDrawer({ open, stationId, onClose }: ScanKeyDrawerProps) 
     const readiness = scanKeyReadinessStatus(station)
 
     return (
-      <form id="scan-keys-form" className="space-y-5" onSubmit={onSubmit} noValidate>
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <form id="scan-keys-form" className="space-y-4" onSubmit={onSubmit} noValidate>
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           Scan keys are sensitive. Do not expose them in screenshots or shared logs.
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Scan key status:</span>
-          <StatusBadge status={readiness} />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">NFC Tag ID</p>
-          <SecretField value={station.nfcTagId} ariaLabel="NFC tag ID" />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">QR Code Value</p>
-          <SecretField value={station.qrCodeValue} ariaLabel="QR code value" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-          <div>
-            <p className="font-medium uppercase tracking-wide">Last QR rotated</p>
-            <p className="mt-0.5 text-foreground">{formatDateTime(station.lastQrRotatedAt)}</p>
+        <DrawerSectionCard
+          icon={Shield}
+          title="Current keys"
+          description="Masked values currently assigned to this station."
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Scan key status:</span>
+            <StatusBadge status={readiness} />
           </div>
-          <div>
-            <p className="font-medium uppercase tracking-wide">Last scan key update</p>
-            <p className="mt-0.5 text-foreground">{formatDateTime(station.lastScanKeyUpdatedAt)}</p>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">NFC Tag ID</p>
+            <SecretField value={station.nfcTagId} ariaLabel="NFC tag ID" />
           </div>
-        </div>
 
-        <hr className="border-border" />
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">QR Code Value</p>
+            <SecretField value={station.qrCodeValue} ariaLabel="QR code value" />
+          </div>
 
-        <p className="text-sm font-medium text-foreground">Update scan keys</p>
+          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+            <div>
+              <p className="font-medium uppercase tracking-wide">Last QR rotated</p>
+              <p className="mt-0.5 text-foreground">{formatDateTime(station.lastQrRotatedAt)}</p>
+            </div>
+            <div>
+              <p className="font-medium uppercase tracking-wide">Last scan key update</p>
+              <p className="mt-0.5 text-foreground">{formatDateTime(station.lastScanKeyUpdatedAt)}</p>
+            </div>
+          </div>
+        </DrawerSectionCard>
 
-        <FormField label="NFC Tag ID" htmlFor="nfcTagId" error={errors.nfcTagId?.message}>
-          <Input id="nfcTagId" disabled={updateMutation.isPending} {...register('nfcTagId')} />
-        </FormField>
+        <DrawerSectionCard
+          icon={KeyRound}
+          title="Update scan keys"
+          description="Changes affect live station collection."
+        >
+          <FormField label="NFC Tag ID" htmlFor="nfcTagId" error={errors.nfcTagId?.message}>
+            <Input id="nfcTagId" disabled={updateMutation.isPending} {...register('nfcTagId')} />
+          </FormField>
 
-        <FormField label="QR Code Value" htmlFor="qrCodeValue" error={errors.qrCodeValue?.message}>
-          <Input id="qrCodeValue" disabled={updateMutation.isPending} {...register('qrCodeValue')} />
-        </FormField>
+          <FormField label="QR Code Value" htmlFor="qrCodeValue" error={errors.qrCodeValue?.message}>
+            <Input id="qrCodeValue" disabled={updateMutation.isPending} {...register('qrCodeValue')} />
+          </FormField>
 
-        <FormField label="Scan key status" htmlFor="scanKeyStatus" error={errors.scanKeyStatus?.message}>
-          <select
-            id="scanKeyStatus"
-            disabled={updateMutation.isPending}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            {...register('scanKeyStatus')}
-          >
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </FormField>
+          <FormField label="Scan key status" htmlFor="scanKeyStatus" error={errors.scanKeyStatus?.message}>
+            <Select
+              id="scanKeyStatus"
+              disabled={updateMutation.isPending}
+              {...register('scanKeyStatus')}
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </Select>
+          </FormField>
+        </DrawerSectionCard>
       </form>
     )
   }

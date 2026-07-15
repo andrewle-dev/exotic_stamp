@@ -15,7 +15,8 @@ export function ImageWithFallback({
   className,
   fallbackClassName,
 }: ImageWithFallbackProps) {
-  const [broken, setBroken] = useState(false)
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null)
+  const broken = Boolean(src) && brokenSrc === src
 
   if (!src || broken) {
     return (
@@ -36,7 +37,7 @@ export function ImageWithFallback({
       src={src}
       alt={alt}
       className={cn('rounded-md border border-border object-cover', className)}
-      onError={() => setBroken(true)}
+      onError={() => setBrokenSrc(src)}
     />
   )
 }

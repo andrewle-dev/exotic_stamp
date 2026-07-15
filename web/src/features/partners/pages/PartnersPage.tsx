@@ -1,15 +1,29 @@
 import { useMemo, useState } from 'react'
 import { Eye, Pencil, Plus } from 'lucide-react'
+import {
+  ACTIVE_STATE_FILTER_LABELS,
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH, ACTIONS_WIDTH_WITH_LABEL } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
-import { Input } from '../../../components/ui/FormField'
 import { ImageWithFallback } from '../../../components/ui/ImageWithFallback'
 import { formatDate } from '../../../lib/formatting/date'
 import { isForbiddenError } from '../../../lib/api/errors'
+import { cn } from '../../../lib/utils/cn'
 import type { PartnerResponse } from '../../../types/partners'
 import {
   useActivatePartner,
@@ -19,13 +33,16 @@ import {
 import { PartnerFormDrawer } from '../components/PartnerFormDrawer'
 import { PartnerDetailDrawer } from '../components/PartnerDetailDrawer'
 import { deriveContractStatus } from '../utils/contract-status'
-
-type ActiveFilter = 'ALL' | 'ACTIVE_ONLY' | 'INACTIVE_ONLY'
+import {
+  EMPTY_PARTNER_FILTERS,
+  type PartnerActiveFilter,
+  type PartnerFilters,
+} from '../filter-schema'
 
 function filterPartnersPage(
   partners: PartnerResponse[],
   search: string,
-  activeFilter: ActiveFilter,
+  activeFilter: PartnerActiveFilter,
 ): PartnerResponse[] {
   const needle = search.trim().toLowerCase()
 
@@ -44,15 +61,31 @@ function filterPartnersPage(
 }
 
 export function PartnersPage() {
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<PartnerFilters>({ emptyFilters: EMPTY_PARTNER_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingPartner, setEditingPartner] = useState<PartnerResponse | null>(null)
   const [detailPartner, setDetailPartner] = useState<PartnerResponse | null>(null)
   const [togglingPartner, setTogglingPartner] = useState<PartnerResponse | null>(null)
+
+  const { active: activeFilter } = appliedFilters
 
   const listParams = useMemo(
     () => ({
@@ -73,11 +106,31 @@ export function PartnersPage() {
     [data?.content, search, activeFilter],
   )
 
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    activeFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'active',
+          label: 'Active',
+          value: ACTIVE_STATE_FILTER_LABELS[activeFilter],
+          accent: 'status',
+          onRemove: () => removeFilter('active', 'ALL'),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${filteredContent.length} filtered partner${filteredContent.length === 1 ? '' : 's'}`
+    : `Showing ${filteredContent.length} partner${filteredContent.length === 1 ? '' : 's'}`
+
   const columns: DataTableColumn<PartnerResponse>[] = useMemo(
     () => [
       {
         id: 'logo',
         header: 'Logo',
+        ...COL_WIDTH.thumbnail,
+        truncate: false,
         cell: (row) => (
           <ImageWithFallback
             src={row.logoUrl}
@@ -87,25 +140,30 @@ export function PartnersPage() {
           />
         ),
       },
-      { id: 'name', header: 'Name', cell: (row) => row.name },
+      { id: 'name', header: 'Name', ...COL_WIDTH.name, cell: (row) => row.name },
       {
         id: 'contactEmail',
         header: 'Contact email',
+        ...COL_WIDTH.email,
         cell: (row) => row.contactEmail ?? '—',
       },
       {
         id: 'contractStart',
         header: 'Contract start',
+        ...COL_WIDTH.date,
         cell: (row) => formatDate(row.contractStartDate),
       },
       {
         id: 'contractEnd',
         header: 'Contract end',
+        ...COL_WIDTH.date,
         cell: (row) => formatDate(row.contractEndDate),
       },
       {
         id: 'contractStatus',
         header: 'Contract status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => (
           <StatusBadge
             status={deriveContractStatus(row.contractStartDate, row.contractEndDate)}
@@ -115,6 +173,8 @@ export function PartnersPage() {
       {
         id: 'active',
         header: 'Active',
+        ...COL_WIDTH.badgeSm,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.active ? 'ACTIVE' : 'INACTIVE'} />,
       },
     ],
@@ -146,59 +206,40 @@ export function PartnersPage() {
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Search and inactive filter apply to the current page only. Active-only filter uses the
-        server list endpoint.
-      </p>
-
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="partner-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="partner-search"
-            placeholder="Search by name or email…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="partner-active-filter" className="text-xs font-medium text-muted-foreground">
-            Active
-          </label>
-          <select
+      <ListFilterToolbar
+        searchId="partner-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by name or email…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([activeFilter !== 'ALL'])}
+        filterSubtitle="Narrow the list by partner activation status."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="partner-active-filter" label="Active" accent="status">
+          <FilterSelect
             id="partner-active-filter"
-            value={activeFilter}
-            onChange={(e) => {
-              setActiveFilter(e.target.value as ActiveFilter)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+            value={draftFilters.active}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                active: e.target.value as PartnerActiveFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="ACTIVE_ONLY">Active only</option>
             <option value="INACTIVE_ONLY">Inactive only</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
 
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSearch(searchInput.trim())
-          }}
-        >
-          Apply
-        </Button>
-      </div>
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="partners"
         columns={columns}
         data={filteredContent}
         getRowId={(row) => row.id}
@@ -206,6 +247,7 @@ export function PartnersPage() {
         error={error}
         onRetry={() => void refetch()}
         caption="Partners"
+        actionsWidth={ACTIONS_WIDTH_WITH_LABEL}
         emptyTitle="No partners found"
         emptyDescription="Create a partner or adjust filters on this page."
         rowActions={(row) => (
@@ -213,6 +255,7 @@ export function PartnersPage() {
             <Button
               variant="ghost"
               size="sm"
+              className="px-2"
               onClick={() => setDetailPartner(row)}
               aria-label="View partner"
             >
@@ -221,6 +264,7 @@ export function PartnersPage() {
             <Button
               variant="ghost"
               size="sm"
+              className="px-2"
               onClick={() => {
                 setEditingPartner(row)
                 setDrawerOpen(true)
@@ -232,7 +276,10 @@ export function PartnersPage() {
             <Button
               variant="ghost"
               size="sm"
-              className={row.active ? 'text-destructive' : 'text-emerald-700'}
+              className={cn(
+                'px-2',
+                row.active ? 'text-destructive' : 'text-emerald-700',
+              )}
               onClick={() => setTogglingPartner(row)}
               aria-label={row.active ? 'Deactivate partner' : 'Activate partner'}
             >
@@ -249,10 +296,7 @@ export function PartnersPage() {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 

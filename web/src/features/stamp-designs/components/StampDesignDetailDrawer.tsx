@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { Check, Copy } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
 import { Button } from '../../../components/ui/Button'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
@@ -8,7 +7,6 @@ import { SkeletonText } from '../../../components/ui/LoadingSkeleton'
 import { ErrorState } from '../../../components/ui/ErrorState'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
 import { formatDateTime } from '../../../lib/formatting/date'
-import { useCopyToClipboard } from '../../../lib/utils/useCopyToClipboard'
 import { isForbiddenError, isNotFoundError } from '../../../lib/api/errors'
 import type { CampaignResponse } from '../../../types/campaigns'
 import type { StationResponse } from '../../../types/stations'
@@ -33,35 +31,6 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="text-sm text-foreground">{children}</dd>
     </div>
-  )
-}
-
-function UrlCopyRow({ label, url }: { label: string; url?: string }) {
-  const { copied, copy } = useCopyToClipboard()
-
-  if (!url) {
-    return (
-      <DetailRow label={label}>
-        <span className="text-muted-foreground">—</span>
-      </DetailRow>
-    )
-  }
-
-  return (
-    <DetailRow label={label}>
-      <div className="flex items-start gap-2">
-        <code className="flex-1 break-all rounded bg-secondary px-2 py-1 text-xs">{url}</code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => void copy(url)}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
-      </div>
-    </DetailRow>
   )
 }
 
@@ -93,7 +62,11 @@ export function StampDesignDetailDrawer({
     <FormDrawer
       open={open}
       title="Stamp Design Details"
-      description={design?.name}
+      description={
+        design
+          ? `${design.name} — campaign-specific collectible artwork for this station.`
+          : 'Campaign-specific collectible stamp artwork for a station.'
+      }
       onClose={onClose}
       footer={footer}
       width="lg"
@@ -129,18 +102,12 @@ export function StampDesignDetailDrawer({
 
           <dl className="grid gap-4 sm:grid-cols-2">
             <DetailRow label="Name">{design.name}</DetailRow>
-            <DetailRow label="Sort order">{design.sortOrder ?? '—'}</DetailRow>
 
             <DetailRow label="Campaign">
               {(() => {
                 const { label, unknown } = resolveCampaignLabel(design.campaignId, campaigns)
                 return (
-                  <span className={unknown ? 'text-amber-700' : undefined}>
-                    {label}
-                    <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
-                      {design.campaignId}
-                    </span>
-                  </span>
+                  <span className={unknown ? 'text-amber-700' : undefined}>{label}</span>
                 )
               })()}
             </DetailRow>
@@ -149,12 +116,7 @@ export function StampDesignDetailDrawer({
               {(() => {
                 const { label, unknown } = resolveStationLabel(design.stationId, stations)
                 return (
-                  <span className={unknown ? 'text-amber-700' : undefined}>
-                    {label}
-                    <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
-                      {design.stationId}
-                    </span>
-                  </span>
+                  <span className={unknown ? 'text-amber-700' : undefined}>{label}</span>
                 )
               })()}
             </DetailRow>
@@ -165,25 +127,18 @@ export function StampDesignDetailDrawer({
               </div>
             ) : null}
 
-            <div className="sm:col-span-2">
-              <UrlCopyRow label="Full image URL" url={design.imageUrl} />
-            </div>
-
-            {design.previewImageUrl ? (
-              <div className="sm:col-span-2">
-                <UrlCopyRow label="Preview image URL" url={design.previewImageUrl} />
-              </div>
-            ) : null}
+            <DetailRow label="Main stamp artwork">
+              {design.imageUrl ? 'Uploaded' : '—'}
+            </DetailRow>
+            <DetailRow label="Thumbnail / preview">
+              {design.previewImageUrl ? 'Uploaded' : 'Falls back to main artwork'}
+            </DetailRow>
 
             <DetailRow label="Created at">
               {design.createdAt ? formatDateTime(design.createdAt) : '—'}
             </DetailRow>
             <DetailRow label="Updated at">
               {design.updatedAt ? formatDateTime(design.updatedAt) : '—'}
-            </DetailRow>
-
-            <DetailRow label="ID">
-              <span className="font-mono text-xs">{design.id}</span>
             </DetailRow>
           </dl>
         </div>

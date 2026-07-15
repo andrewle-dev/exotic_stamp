@@ -1,0 +1,253 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Docker: Validate Compose",
+      "type": "shell",
+      "command": "docker compose config",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "envFile": "${workspaceFolder}/.env"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docker: Start Infrastructure",
+      "type": "shell",
+      "command": "docker compose up -d; docker compose ps",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "envFile": "${workspaceFolder}/.env"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docker: Ensure Healthy Infrastructure",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Docker: Start Infrastructure",
+        "Docker: Wait Until Healthy"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docker: Wait Until Healthy",
+      "type": "shell",
+      "command": "$deadline = (Get-Date).AddSeconds(90); do { $pg = docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' exotic-stamp-postgres 2>$null; $rd = docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' exotic-stamp-redis 2>$null; Write-Host \"postgres=$pg redis=$rd\"; if ($pg -eq 'healthy' -and $rd -eq 'healthy') { Write-Host 'Infrastructure healthy.'; exit 0 }; Start-Sleep -Seconds 3 } while ((Get-Date) -lt $deadline); Write-Host 'Timed out waiting for healthy postgres/redis.'; docker compose ps; docker compose logs --tail=80 postgres redis; exit 1",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "envFile": "${workspaceFolder}/.env",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docker: Stop Infrastructure",
+      "type": "shell",
+      "command": "docker compose down",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "envFile": "${workspaceFolder}/.env"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docker: Infrastructure Logs",
+      "type": "shell",
+      "command": "docker compose logs -f --tail=100 postgres redis",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "envFile": "${workspaceFolder}/.env"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Backend: Run Dev",
+      "type": "shell",
+      "command": ".\\mvnw.cmd spring-boot:run",
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "envFile": "${workspaceFolder}/.env",
+        "env": {
+          "SPRING_PROFILES_ACTIVE": "dev"
+        }
+      },
+      "dependsOn": [
+        "Docker: Start Infrastructure",
+        "Docker: Wait Until Healthy"
+      ],
+      "dependsOrder": "sequence",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Backend: Clean Test",
+      "type": "shell",
+      "command": ".\\mvnw.cmd clean test",
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "envFile": "${workspaceFolder}/.env",
+        "env": {
+          "SPRING_PROFILES_ACTIVE": "dev"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Backend: Package",
+      "type": "shell",
+      "command": ".\\mvnw.cmd clean package",
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "envFile": "${workspaceFolder}/.env"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Web: Install",
+      "type": "shell",
+      "command": "npm install",
+      "options": {
+        "cwd": "${workspaceFolder}/web"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Web: Run Dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/web",
+        "envFile": "${workspaceFolder}/web/.env"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Mobile: Pub Get",
+      "type": "shell",
+      "command": "flutter pub get",
+      "options": {
+        "cwd": "${workspaceFolder}/mobile"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Mobile: Run",
+      "type": "shell",
+      "command": "flutter run",
+      "options": {
+        "cwd": "${workspaceFolder}/mobile"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Full Local Stack",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Docker: Start Infrastructure",
+        "Docker: Wait Until Healthy",
+        "Backend: Run Dev Core",
+        "Web: Ensure Env Then Dev"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Backend: Run Dev Core",
+      "type": "shell",
+      "command": ".\\mvnw.cmd spring-boot:run",
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "envFile": "${workspaceFolder}/.env",
+        "env": {
+          "SPRING_PROFILES_ACTIVE": "dev"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Web: Ensure Env Then Dev",
+      "type": "shell",
+      "command": "if (-not (Test-Path .env)) { Copy-Item .env.example .env }; npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/web",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-Command"]
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

@@ -106,7 +106,7 @@ void main() {
   );
 
   blocTest<ScanFlowCubit, ScanFlowState>(
-    'nfc unavailable enables QR fallback',
+    'nfc unavailable keeps NFC-first waiting without QR fallback when QR UI disabled',
     build: () {
       when(() => nfcReader.checkAvailability())
           .thenAnswer((_) async => NfcAvailabilityStatus.unavailable);
@@ -120,8 +120,9 @@ void main() {
         ScanFlowPhase.checkingNfcAvailability,
       ),
       isA<ScanFlowState>()
-          .having((s) => s.phase, 'phase', ScanFlowPhase.qrFallbackReady)
-          .having((s) => s.qrFallbackAvailable, 'qrFallback', true),
+          .having((s) => s.phase, 'phase', ScanFlowPhase.waitingForNfc)
+          // ScanCapabilities.enableQrFlow defaults to false.
+          .having((s) => s.qrFallbackAvailable, 'qrFallback', false),
     ],
   );
 

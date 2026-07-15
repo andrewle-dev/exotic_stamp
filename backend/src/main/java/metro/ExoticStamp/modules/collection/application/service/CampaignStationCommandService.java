@@ -3,6 +3,7 @@ package metro.ExoticStamp.modules.collection.application.service;
 import lombok.RequiredArgsConstructor;
 import metro.ExoticStamp.modules.collection.application.support.CampaignAuditHelper;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignNotFoundException;
+import metro.ExoticStamp.modules.collection.domain.exception.CampaignStationDuplicateException;
 import metro.ExoticStamp.modules.collection.domain.exception.InvalidStationException;
 import metro.ExoticStamp.modules.collection.domain.model.Campaign;
 import metro.ExoticStamp.modules.collection.domain.repository.CampaignRepository;
@@ -26,6 +27,22 @@ public class CampaignStationCommandService {
     private final StationReadPort stationReadPort;
     private final LineReadPort lineReadPort;
     private final CampaignAuditHelper campaignAuditHelper;
+
+    /**
+     * Idempotent assign used by stamp-design create/update so admin can select
+     * campaign + station in one step without a prior assign call.
+     */
+    @Transactional
+    public void ensureAssigned(UUID campaignId, UUID stationId) {
+        if (campaignStationRepository.exists(campaignId, stationId)) {
+            return;
+        }
+        try {
+            assign(campaignId, stationId);
+        } catch (CampaignStationDuplicateException ignored) {
+            // Concurrent assign won the race — membership already present.
+        }
+    }
 
     @Transactional
     public void assign(UUID campaignId, UUID stationId) {

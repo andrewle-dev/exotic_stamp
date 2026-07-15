@@ -1,10 +1,10 @@
 package metro.ExoticStamp.modules.collection.application.support;
 
 import lombok.RequiredArgsConstructor;
-import metro.ExoticStamp.modules.collection.domain.exception.CampaignNotActiveException;
 import metro.ExoticStamp.modules.collection.domain.exception.DefaultCampaignAmbiguousException;
 import metro.ExoticStamp.modules.collection.domain.exception.DefaultCampaignNotFoundException;
 import metro.ExoticStamp.modules.collection.domain.model.Campaign;
+import metro.ExoticStamp.modules.collection.domain.policy.CollectionEligibilityPolicy;
 import metro.ExoticStamp.modules.collection.domain.repository.CampaignRepository;
 import org.springframework.stereotype.Component;
 
@@ -33,12 +33,15 @@ public class DefaultCampaignResolver {
      * @param optionalLineId optional filter when multiple active defaults exist
      */
     public Campaign resolveActiveGlobalDefault(UUID optionalLineId) {
-        List<Campaign> inWindow = activeDefaultsInWindow();
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<Campaign> inWindow = campaignRepository.findAllActiveDefaults().stream()
+                .filter(c -> CollectionEligibilityPolicy.isInWindow(c, now))
+                .toList();
         if (inWindow.isEmpty()) {
             throw new DefaultCampaignNotFoundException(optionalLineId);
         }
         if (inWindow.size() == 1) {
-            return assertCollectable(inWindow.getFirst());
+            return assertCollectable(inWindow.getFirst(), now);
         }
         if (optionalLineId == null) {
             throw new DefaultCampaignAmbiguousException(inWindow.size());
@@ -50,7 +53,7 @@ public class DefaultCampaignResolver {
             throw new DefaultCampaignNotFoundException(optionalLineId);
         }
         if (forLine.size() == 1) {
-            return assertCollectable(forLine.getFirst());
+            return assertCollectable(forLine.getFirst(), now);
         }
         throw new DefaultCampaignAmbiguousException(forLine.size());
     }
@@ -67,24 +70,8 @@ public class DefaultCampaignResolver {
         return resolveActiveGlobalDefault(lineId);
     }
 
-    private List<Campaign> activeDefaultsInWindow() {
-        return campaignRepository.findAllActiveDefaults().stream()
-                .filter(this::isInWindow)
-                .toList();
-    }
-
-    private Campaign assertCollectable(Campaign campaign) {
-        if (!campaign.isActiveForCollection()) {
-            throw new CampaignNotActiveException(campaign.getId());
-        }
-        if (!isInWindow(campaign)) {
-            throw new CampaignNotActiveException(campaign.getId());
-        }
+    private Campaign assertCollectable(Campaign campaign, LocalDateTime now) {
+        CollectionEligibilityPolicy.assertCampaignCollectable(campaign, now);
         return campaign;
-    }
-
-    private boolean isInWindow(Campaign campaign) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        return !now.isBefore(campaign.getStartAt()) && !now.isAfter(campaign.getEndAt());
     }
 }

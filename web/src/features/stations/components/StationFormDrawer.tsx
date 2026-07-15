@@ -1,8 +1,11 @@
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { FileText, Image, MapPin, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField, Input } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
+import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 import type { StationResponse } from '../../../types/stations'
 import type { LineResponse } from '../../../types/metro-lines'
 import {
@@ -21,7 +24,7 @@ interface StationFormDrawerProps {
   onSuccess?: () => void
 }
 
-function toPayload(values: StationFormValues) {
+function toPayload(values: StationFormValues, existingSortOrder?: number) {
   return {
     lineId: values.lineId,
     code: values.code.trim(),
@@ -29,7 +32,8 @@ function toPayload(values: StationFormValues) {
     displayName: values.displayName?.trim() || undefined,
     description: values.description?.trim() || undefined,
     address: values.address?.trim() || undefined,
-    sortOrder: values.sortOrder,
+    // Ordering is managed via Stations reorder drawer — preserve on edit, default on create.
+    sortOrder: existingSortOrder ?? 0,
     latitude: parseOptionalNumber(values.latitude),
     longitude: parseOptionalNumber(values.longitude),
     zoneRadiusMeters: parseOptionalNumber(values.zoneRadiusMeters),
@@ -56,6 +60,7 @@ export function StationFormDrawer({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isDirty },
   } = useForm<StationFormValues>({
     resolver: zodResolver(stationFormSchema),
@@ -72,7 +77,6 @@ export function StationFormDrawer({
         displayName: station.displayName ?? '',
         description: station.description ?? '',
         address: station.address ?? '',
-        sortOrder: station.sortOrder ?? 0,
         latitude: station.latitude != null ? String(station.latitude) : '',
         longitude: station.longitude != null ? String(station.longitude) : '',
         zoneRadiusMeters:
@@ -90,7 +94,7 @@ export function StationFormDrawer({
   }, [open, station, lines, reset])
 
   const onSubmit = handleSubmit(async (values) => {
-    const payload = toPayload(values)
+    const payload = toPayload(values, isEdit ? station?.sortOrder : undefined)
     if (isEdit && station) {
       const { lineId, ...updateBody } = payload
       void lineId
@@ -106,110 +110,159 @@ export function StationFormDrawer({
     <FormDrawer
       open={open}
       title={isEdit ? 'Edit Station' : 'Create Station'}
-      description={isEdit ? `Update ${station?.name}` : 'Add a new metro station'}
+      description={
+        isEdit
+          ? 'Update station profile, location metadata, and discovery media.'
+          : 'Add a metro station profile with location metadata and discovery media.'
+      }
       formId="station-form"
       isSubmitting={isSubmitting}
       isDirty={isDirty}
       saveLabel={isEdit ? 'Save changes' : 'Create station'}
       error={mutation.error}
       onClose={onClose}
+      width="lg"
     >
       <form id="station-form" className="space-y-4" onSubmit={onSubmit} noValidate>
-        {!isEdit ? (
-          <FormField label="Metro line" htmlFor="lineId" required error={errors.lineId?.message}>
-            <select
-              id="lineId"
-              disabled={isSubmitting}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              {...register('lineId')}
-            >
-              <option value="">Select line…</option>
-              {lines.map((line) => (
-                <option key={line.id} value={line.id}>
-                  {line.code} — {line.name}
-                </option>
-              ))}
-            </select>
-          </FormField>
-        ) : null}
-
-        <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
-          <Input id="code" disabled={isSubmitting} {...register('code')} />
-        </FormField>
-
-        <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
-          <Input id="name" disabled={isSubmitting} {...register('name')} />
-        </FormField>
-
-        <FormField label="Display name" htmlFor="displayName" error={errors.displayName?.message}>
-          <Input id="displayName" disabled={isSubmitting} {...register('displayName')} />
-        </FormField>
-
-        <FormField label="Address" htmlFor="address" error={errors.address?.message}>
-          <Input id="address" disabled={isSubmitting} {...register('address')} />
-        </FormField>
-
-        <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-          <textarea
-            id="description"
-            rows={2}
-            disabled={isSubmitting}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            {...register('description')}
-          />
-        </FormField>
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Latitude" htmlFor="latitude" error={errors.latitude?.message}>
-            <Input id="latitude" type="number" step="any" disabled={isSubmitting} {...register('latitude')} />
-          </FormField>
-          <FormField label="Longitude" htmlFor="longitude" error={errors.longitude?.message}>
-            <Input id="longitude" type="number" step="any" disabled={isSubmitting} {...register('longitude')} />
-          </FormField>
-        </div>
-
-        <FormField
-          label="Zone radius (meters)"
-          htmlFor="zoneRadiusMeters"
-          error={errors.zoneRadiusMeters?.message}
+        <DrawerSectionCard
+          icon={MapPin}
+          title="Placement"
+          description="Line assignment and location coordinates."
         >
-          <Input
-            id="zoneRadiusMeters"
-            type="number"
-            disabled={isSubmitting}
-            {...register('zoneRadiusMeters')}
-          />
-        </FormField>
+          {!isEdit ? (
+            <FormField label="Metro line" htmlFor="lineId" required error={errors.lineId?.message}>
+              <Select id="lineId" disabled={isSubmitting} {...register('lineId')}>
+                <option value="">Select line…</option>
+                {lines.map((line) => (
+                  <option key={line.id} value={line.id}>
+                    {line.code} — {line.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          ) : null}
 
-        <FormField label="Sort order" htmlFor="sortOrder" error={errors.sortOrder?.message}>
-          <Input
-            id="sortOrder"
-            type="number"
-            disabled={isSubmitting}
-            {...register('sortOrder', { valueAsNumber: true })}
-          />
-        </FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Latitude" htmlFor="latitude" error={errors.latitude?.message}>
+              <Input
+                id="latitude"
+                type="number"
+                step="any"
+                disabled={isSubmitting}
+                {...register('latitude')}
+              />
+            </FormField>
+            <FormField label="Longitude" htmlFor="longitude" error={errors.longitude?.message}>
+              <Input
+                id="longitude"
+                type="number"
+                step="any"
+                disabled={isSubmitting}
+                {...register('longitude')}
+              />
+            </FormField>
+          </div>
 
-        <FormField label="Image URL" htmlFor="imageUrl" error={errors.imageUrl?.message}>
-          <Input id="imageUrl" disabled={isSubmitting} {...register('imageUrl')} />
-        </FormField>
-
-        <FormField label="Stamp preview URL" htmlFor="stampPreviewUrl" error={errors.stampPreviewUrl?.message}>
-          <Input id="stampPreviewUrl" disabled={isSubmitting} {...register('stampPreviewUrl')} />
-        </FormField>
-
-        <FormField label="Status" htmlFor="status" error={errors.status?.message}>
-          <select
-            id="status"
-            disabled={isSubmitting}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            {...register('status')}
+          <FormField
+            label="Zone radius (meters)"
+            htmlFor="zoneRadiusMeters"
+            error={errors.zoneRadiusMeters?.message}
           >
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </FormField>
+            <Input
+              id="zoneRadiusMeters"
+              type="number"
+              disabled={isSubmitting}
+              {...register('zoneRadiusMeters')}
+            />
+          </FormField>
+        </DrawerSectionCard>
+
+        <DrawerSectionCard
+          icon={FileText}
+          title="Details"
+          description="Station identity and address information."
+        >
+          <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
+            <Input id="code" disabled={isSubmitting} {...register('code')} />
+          </FormField>
+
+          <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
+            <Input id="name" disabled={isSubmitting} {...register('name')} />
+          </FormField>
+
+          <FormField label="Display name" htmlFor="displayName" error={errors.displayName?.message}>
+            <Input id="displayName" disabled={isSubmitting} {...register('displayName')} />
+          </FormField>
+
+          <FormField label="Address" htmlFor="address" error={errors.address?.message}>
+            <Input id="address" disabled={isSubmitting} {...register('address')} />
+          </FormField>
+
+          <FormField label="Description" htmlFor="description" error={errors.description?.message}>
+            <Textarea
+              id="description"
+              rows={2}
+              disabled={isSubmitting}
+              {...register('description')}
+            />
+          </FormField>
+        </DrawerSectionCard>
+
+        <DrawerSectionCard
+          icon={Image}
+          title="Discovery media"
+        >
+
+          <Controller
+            name="imageUrl"
+            control={control}
+            render={({ field }) => (
+              <AssetImageFieldCard
+                id="imageUrl"
+                title="Station cover image"
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                error={errors.imageUrl?.message}
+                formDirty={isDirty}
+                previewSize="lg"
+                objectFit="cover"
+                help="Used in station discovery and station detail screens. Recommended: square image (1:1), ideally 2048×2048 or 2560×2560."
+              />
+            )}
+          />
+
+          <Controller
+            name="stampPreviewUrl"
+            control={control}
+            render={({ field }) => (
+              <AssetImageFieldCard
+                id="stampPreviewUrl"
+                title="Station card preview"
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                error={errors.stampPreviewUrl?.message}
+                formDirty={isDirty}
+                previewSize="lg"
+                objectFit="cover"
+                help="Used for station cards, lists, and previews. Recommended: square image (1:1)."
+              />
+            )}
+          />
+        </DrawerSectionCard>
+
+        <DrawerSectionCard
+          icon={Send}
+          title="Publishing"
+          description="Visibility status. List order is managed via Reorder Stations."
+        >
+          <FormField label="Status" htmlFor="status" error={errors.status?.message}>
+            <Select id="status" disabled={isSubmitting} {...register('status')}>
+              <option value="DRAFT">Draft</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </Select>
+          </FormField>
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

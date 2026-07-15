@@ -7,6 +7,7 @@ public record UpdatePartnerCommand(
         UUID id,
         String name,
         String logoUrl,
+        String bannerImageUrl,
         String contactEmail,
         LocalDate contractStartDate,
         LocalDate contractEndDate

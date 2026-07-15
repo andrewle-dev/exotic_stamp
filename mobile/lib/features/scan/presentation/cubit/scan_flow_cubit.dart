@@ -1,10 +1,12 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/config/scan_capabilities.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/location/app_location_service.dart';
 import '../../../../core/nfc/nfc_availability.dart';
 import '../../../../core/nfc/nfc_reader.dart';
 import '../../../../core/utils/idempotency_key_generator.dart';
+import '../../../home/presentation/home_reload_signal.dart';
 import '../../domain/entities/collect_status_outcome.dart';
 import '../../domain/entities/scan_payload.dart';
 import '../../domain/entities/scan_type.dart';
@@ -21,12 +23,14 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
     required AppLocationService locationService,
     required IdempotencyKeyGenerator idempotencyKeyGenerator,
     NfcReader? nfcReader,
+    HomeReloadSignal? homeReloadSignal,
   })  : _resolveScanUseCase = resolveScanUseCase,
         _collectStampUseCase = collectStampUseCase,
         _checkCollectStatusUseCase = checkCollectStatusUseCase,
         _locationService = locationService,
         _idempotencyKeyGenerator = idempotencyKeyGenerator,
         _nfcReader = nfcReader ?? NfcReader(),
+        _homeReloadSignal = homeReloadSignal,
         super(const ScanFlowState());
 
   final ResolveScanUseCase _resolveScanUseCase;
@@ -35,6 +39,11 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
   final AppLocationService _locationService;
   final IdempotencyKeyGenerator _idempotencyKeyGenerator;
   final NfcReader _nfcReader;
+  final HomeReloadSignal? _homeReloadSignal;
+
+  void _notifyHomeCollectionChanged() {
+    _homeReloadSignal?.requestReload();
+  }
 
   Future<void> initialize() async {
     emit(
@@ -48,20 +57,23 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
     );
 
     final availability = await _nfcReader.checkAvailability();
-    final qrFallback = availability != NfcAvailabilityStatus.enabled;
+    // QR UI temporarily hidden — keep flag false unless ScanCapabilities.enableQrFlow.
+    final qrFallback = ScanCapabilities.enableQrFlow &&
+        availability != NfcAvailabilityStatus.enabled;
 
     emit(
       state.copyWith(
         nfcAvailability: availability,
         qrFallbackAvailable: qrFallback,
-        phase: qrFallback
-            ? ScanFlowPhase.qrFallbackReady
-            : ScanFlowPhase.waitingForNfc,
+        phase: ScanFlowPhase.waitingForNfc,
       ),
     );
   }
 
   void enableQrFallback() {
+    if (!ScanCapabilities.enableQrFlow) {
+      return;
+    }
     emit(
       state.copyWith(
         phase: ScanFlowPhase.qrFallbackReady,
@@ -78,6 +90,9 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
   }
 
   Future<void> onQrPayloadRead(String payload) async {
+    if (!ScanCapabilities.enableQrFlow) {
+      return;
+    }
     await _handlePayload(
       ScanPayload(scanType: ScanType.qr, payload: payload.trim()),
       readingPhase: ScanFlowPhase.qrFallbackReady,
@@ -192,6 +207,19 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
         return;
       }
 
+      _notifyHomeCollectionChanged();
+
+      if (result.sponsorAd != null) {
+        emit(
+          state.copyWith(
+            phase: ScanFlowPhase.preStampAd,
+            collectResult: result,
+            clearFailure: true,
+          ),
+        );
+        return;
+      }
+
       emit(
         state.copyWith(
           phase: ScanFlowPhase.success,
@@ -262,6 +290,7 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
             );
             return;
           }
+          _notifyHomeCollectionChanged();
           emit(
             state.copyWith(
               phase: ScanFlowPhase.success,
@@ -330,11 +359,70 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
   }
 
   Future<void> resumeWaitingForNfc() async {
-    if (state.qrFallbackAvailable) {
-      emit(state.copyWith(phase: ScanFlowPhase.qrFallbackReady));
+    emit(state.copyWith(phase: ScanFlowPhase.waitingForNfc));
+  }
+
+  void acknowledgePreStampAd() {
+    if (state.phase != ScanFlowPhase.preStampAd || state.collectResult == null) {
       return;
     }
-    emit(state.copyWith(phase: ScanFlowPhase.waitingForNfc));
+    emit(
+      state.copyWith(
+        phase: ScanFlowPhase.success,
+        clearFailure: true,
+      ),
+    );
+  }
+
+  Future<void> refreshLocation() async {
+    if (state.scanPayload == null) {
+      return;
+    }
+
+    emit(state.copyWith(phase: ScanFlowPhase.checkingLocation, clearFailure: true));
+    final location = await _locationService.getCurrentReading();
+    if (!location.isSuccess) {
+      final issue = location.issue;
+      emit(
+        state.copyWith(
+          phase: issue == null
+              ? ScanFlowPhase.unknownError
+              : _phaseForLocationIssue(issue),
+          statusMessage: location.message,
+          failure: const Failure(
+            code: FailureCode.unknown,
+            message: 'Không thể xác minh vị trí.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        gpsReading: location.reading,
+        awaitingCollectConfirmation: state.resolvedStation != null,
+        phase: state.resolvedStation == null
+            ? ScanFlowPhase.resolvingStation
+            : ScanFlowPhase.checkingLocation,
+        clearFailure: true,
+      ),
+    );
+
+    if (state.resolvedStation == null && state.scanPayload != null) {
+      try {
+        final station = await _resolveScanUseCase(state.scanPayload!);
+        emit(
+          state.copyWith(
+            resolvedStation: station,
+            awaitingCollectConfirmation: true,
+            phase: ScanFlowPhase.checkingLocation,
+          ),
+        );
+      } on Failure catch (failure) {
+        emit(_failureState(failure));
+      }
+    }
   }
 
   NfcReader get nfcReader => _nfcReader;

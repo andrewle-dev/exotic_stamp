@@ -34,6 +34,9 @@ public class StampBookResponse {
         private Integer sequence;
         private boolean collected;
         private String stampDesignUrl;
+        private String stampDesignName;
+        private String stampDesignDescription;
+        private String rarity;
         private java.time.LocalDateTime collectedAt;
     }
 }

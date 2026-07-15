@@ -22,6 +22,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:change_me}
+      timeout: 3s
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}

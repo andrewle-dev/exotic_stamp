@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { disableVoucher, getVoucher, importVouchers, listVouchers } from '../../lib/api/vouchers.api'
+import { analyticsKeys } from '../../lib/query/keys/analytics'
 import { rewardKeys } from '../../lib/query/keys/rewards'
 import { voucherKeys } from '../../lib/query/keys/vouchers'
-import type { ImportVouchersRequest, VouchersListParams } from '../../types/vouchers'
+import { invalidateKeys } from '../../lib/query/invalidate'
+import type {
+  ImportVouchersRequest,
+  VoucherPoolResponse,
+  VouchersListParams,
+} from '../../types/vouchers'
 
 export function useVouchers(params: VouchersListParams) {
   return useQuery({
@@ -19,17 +25,30 @@ export function useVoucher(id: string | undefined) {
   })
 }
 
+function cacheVoucherDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  voucher: VoucherPoolResponse,
+) {
+  queryClient.setQueryData(voucherKeys.detail(voucher.id), voucher)
+}
+
 export function useDisableVoucher() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id }: { id: string; rewardId?: string }) => disableVoucher(id),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: voucherKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: voucherKeys.detail(variables.id) })
+    onSuccess: async (voucher, variables) => {
+      cacheVoucherDetail(queryClient, voucher)
+      const keys = [voucherKeys.lists(), analyticsKeys.collectionStats()] as const
+      await invalidateKeys(queryClient, [...keys])
       if (variables.rewardId) {
-        void queryClient.invalidateQueries({
-          queryKey: rewardKeys.voucherStats(variables.rewardId),
-        })
+        await invalidateKeys(queryClient, [
+          rewardKeys.voucherStats(variables.rewardId),
+          rewardKeys.detail(variables.rewardId),
+          rewardKeys.lists(),
+        ])
+      } else {
+        // Disable from voucher pool may not know reward id — refresh reward aggregates.
+        await invalidateKeys(queryClient, [rewardKeys.all])
       }
     },
   })
@@ -39,10 +58,12 @@ export function useImportVouchers() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: ImportVouchersRequest) => importVouchers(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: voucherKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: rewardKeys.all })
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, [
+        voucherKeys.lists(),
+        rewardKeys.all,
+        analyticsKeys.collectionStats(),
+      ])
     },
   })
 }

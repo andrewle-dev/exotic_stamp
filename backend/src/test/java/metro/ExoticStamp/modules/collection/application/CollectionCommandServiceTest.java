@@ -14,6 +14,7 @@ import metro.ExoticStamp.modules.collection.application.view.CollectStampResultV
 import metro.ExoticStamp.modules.collection.application.view.ProgressView;
 import metro.ExoticStamp.modules.collection.application.view.ResolvedStationView;
 import metro.ExoticStamp.modules.collection.domain.event.StampCollectedEvent;
+import metro.ExoticStamp.modules.collection.domain.exception.CampaignStationNotEligibleException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsOutOfRangeException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsRequiredException;
 import metro.ExoticStamp.modules.collection.domain.exception.StampAlreadyCollectedException;
@@ -33,6 +34,8 @@ import metro.ExoticStamp.modules.metro.application.port.StationReadPort;
 import metro.ExoticStamp.modules.metro.application.view.MetroLineView;
 import metro.ExoticStamp.modules.metro.application.view.MetroStationView;
 import metro.ExoticStamp.modules.metro.domain.exception.StationInactiveException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class CollectionCommandServiceTest {
@@ -80,6 +84,8 @@ class CollectionCommandServiceTest {
     @Mock private CollectionRuntimeAuditHelper auditHelper;
     @Mock private StationReadPort stationReadPort;
     @Mock private LineReadPort lineReadPort;
+    @Mock private MeterRegistry meterRegistry;
+    @Mock private Counter publishFailedCounter;
 
     private Clock clock;
     private CollectionCommandService service;
@@ -87,6 +93,8 @@ class CollectionCommandServiceTest {
     @BeforeEach
     void setUp() {
         clock = Clock.fixed(Instant.parse("2025-06-01T12:00:00Z"), ZoneOffset.UTC);
+        lenient().when(meterRegistry.counter("collection.stamp_collected.publish_failed"))
+                .thenReturn(publishFailedCounter);
         service = new CollectionCommandService(
                 stationScanResolverPort,
                 defaultCampaignResolver,
@@ -102,7 +110,8 @@ class CollectionCommandServiceTest {
                 auditHelper,
                 stationReadPort,
                 lineReadPort,
-                clock
+                clock,
+                meterRegistry
         );
     }
 
@@ -162,6 +171,19 @@ class CollectionCommandServiceTest {
                 "ANDROID", "1.0.0", null);
 
         assertThrows(StampAlreadyCollectedException.class, () -> service.collect(cmd));
+        verify(userStampRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void collect_campaignStationIneligible_rejected() {
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
+        when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(false);
+
+        assertThrows(CampaignStationNotEligibleException.class,
+                () -> service.collect(defaultCommand(UUID.randomUUID())));
         verify(userStampRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
     }
@@ -247,6 +269,7 @@ class CollectionCommandServiceTest {
         doThrow(new RuntimeException("broker down")).when(eventPublisher).publishEvent(any(ApplicationEvent.class));
 
         assertDoesNotThrow(() -> service.collect(defaultCommand(UUID.randomUUID())));
+        verify(publishFailedCounter).increment();
     }
 
     @Test

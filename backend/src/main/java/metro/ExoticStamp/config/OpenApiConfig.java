@@ -28,6 +28,10 @@ import org.springframework.context.annotation.Configuration;
                 @Tag(
                         name = "Collection Runtime",
                         description = "Canonical MVP collection APIs at /api/v1/collection (collect, stamp book, my stamps)"
+                ),
+                @Tag(
+                        name = "Mobile App Config",
+                        description = "Mobile client update and maintenance policy (not installed binary version)"
                 )
         },
         info = @Info(
@@ -51,7 +55,7 @@ import org.springframework.context.annotation.Configuration;
                         description = "Local development server"
                 ),
                 @Server(
-                        url = "https://backend.facewashfox.com",
+                        url = "https://backend.exoticstamp.com",
                         description = "Production Server"
                 )
         },

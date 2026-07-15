@@ -2,7 +2,6 @@ package metro.ExoticStamp.common.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -32,7 +31,7 @@ public abstract class BaseEntity {
     private String createdBy;
 
     @CreatedDate
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
     @LastModifiedBy
@@ -42,4 +41,25 @@ public abstract class BaseEntity {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * Defensive defaults when JPA auditing is not enabled (no {@code @EnableJpaAuditing}).
+     * Without this, Hibernate may INSERT {@code created_at = NULL} and Postgres rejects
+     * the row with a generic data-integrity 409.
+     */
+    @PrePersist
+    protected void touchOnCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        if (updatedAt == null) {
+            updatedAt = now;
+        }
+    }
+
+    @PreUpdate
+    protected void touchOnUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

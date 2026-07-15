@@ -15,16 +15,21 @@ class HomeState extends Equatable {
     this.status = HomeStatus.initial,
     this.summary,
     this.failure,
+    this.isRefreshing = false,
   });
 
   final HomeStatus status;
   final HomeSummary? summary;
   final Failure? failure;
 
+  /// Soft refetch in progress; previous [summary] remains visible.
+  final bool isRefreshing;
+
   HomeState copyWith({
     HomeStatus? status,
     HomeSummary? summary,
     Failure? failure,
+    bool? isRefreshing,
     bool clearSummary = false,
     bool clearFailure = false,
   }) {
@@ -32,9 +37,10 @@ class HomeState extends Equatable {
       status: status ?? this.status,
       summary: clearSummary ? null : (summary ?? this.summary),
       failure: clearFailure ? null : (failure ?? this.failure),
+      isRefreshing: isRefreshing ?? this.isRefreshing,
     );
   }
 
   @override
-  List<Object?> get props => [status, summary, failure];
+  List<Object?> get props => [status, summary, failure, isRefreshing];
 }

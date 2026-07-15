@@ -30,6 +30,7 @@ void main() {
         name: '5 Stamps',
         requiredStampCount: 5,
         rewardTitle: 'Coffee Voucher',
+        claimStatus: MilestoneClaimStatus.claimed,
       ),
     ],
     rewards: [
@@ -37,6 +38,8 @@ void main() {
         id: 'reward-1',
         campaignId: 'campaign-1',
         milestoneId: 'milestone-1',
+        partnerName: 'Metro BrewStop',
+        offerTitle: 'Coffee Voucher',
         rewardTitle: 'Coffee Voucher',
         status: UserRewardStatus.available,
       ),
@@ -69,16 +72,16 @@ void main() {
 
     expect(find.text('Coffee Voucher'), findsWidgets);
     expect(find.text('Milestones sync delayed'), findsOneWidget);
-    expect(find.text('Chưa có phần thưởng'), findsNothing);
+    expect(find.text('No vouchers yet'), findsNothing);
+    expect(find.text('Redeem'), findsOneWidget);
   });
 
-  testWidgets('milestone timeline does not fake progress when progress missing',
+  testWidgets('milestone timeline renders backend claim status only',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: MilestoneTimelineItem(
           milestone: overviewWithRewards.milestones.first,
-          collectedStampCount: null,
           isFirst: true,
           isLast: true,
         ),
@@ -86,7 +89,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.check_rounded), findsNothing);
-    expect(find.text('5'), findsOneWidget);
+    expect(find.text('Claimed'), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 }

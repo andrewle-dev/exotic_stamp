@@ -76,9 +76,64 @@ void main() {
     await tester.pumpWidget(buildSubject());
     await tester.pump();
 
-    expect(find.text('Xin chào, An Nguyen'), findsOneWidget);
+    expect(find.text('Metro Stamp'), findsOneWidget);
     expect(find.byType(AppEmptyState), findsOneWidget);
     expect(find.text('Chưa có stamp'), findsOneWidget);
+    expect(find.text('0/5 STAMPS'), findsOneWidget);
+  });
+
+  testWidgets('renders fourteen of fourteen stamps from progress', (tester) async {
+    when(() => cubit.state).thenReturn(
+      const HomeState(
+        status: HomeStatus.loaded,
+        summary: HomeSummary(
+          displayName: 'An Nguyen',
+          progress: CollectionProgress(
+            lineId: 'line-1',
+            collected: 14,
+            total: 14,
+            percentage: 100,
+          ),
+        ),
+      ),
+    );
+    when(() => cubit.load()).thenAnswer((_) async {});
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pump();
+
+    expect(find.text('14/14 STAMPS'), findsOneWidget);
+  });
+
+  testWidgets('loading state does not show zero stamp progress', (tester) async {
+    when(() => cubit.state)
+        .thenReturn(const HomeState(status: HomeStatus.loading));
+    when(() => cubit.load()).thenAnswer((_) async {});
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pump();
+
+    expect(find.byType(AppLoadingView), findsOneWidget);
+    expect(find.textContaining('STAMPS'), findsNothing);
+  });
+
+  testWidgets('missing progress shows placeholder not 0/0', (tester) async {
+    when(() => cubit.state).thenReturn(
+      const HomeState(
+        status: HomeStatus.loaded,
+        summary: HomeSummary(displayName: 'An Nguyen'),
+      ),
+    );
+    when(() => cubit.load()).thenAnswer((_) async {});
+
+    await tester.pumpWidget(buildSubject());
+    await tester.pump();
+
+    expect(find.text('0/0 STAMPS'), findsNothing);
+    expect(
+      find.textContaining('Tiến độ sưu tập sẽ hiển thị'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows recent stamp cards when data exists', (tester) async {
@@ -135,7 +190,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Recent stamps unavailable'), findsOneWidget);
-    expect(find.text('Xin chào, An Nguyen'), findsOneWidget);
-    expect(find.text('2/5'), findsOneWidget);
+    expect(find.text('Metro Stamp'), findsOneWidget);
+    expect(find.text('2/5 STAMPS'), findsOneWidget);
   });
 }

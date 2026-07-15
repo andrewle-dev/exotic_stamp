@@ -39,6 +39,13 @@ class FileValidatorTest {
     }
 
     @Test
+    void validate_unsupportedMime_rejected() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "a.svg", "image/svg+xml", new byte[10]);
+        assertThrows(InvalidImageTypeException.class, () -> validator.validate(file));
+    }
+
+    @Test
     void validate_exceedsSize_throws() {
         byte[] huge = new byte[6 * 1024 * 1024];
         MockMultipartFile file = new MockMultipartFile(

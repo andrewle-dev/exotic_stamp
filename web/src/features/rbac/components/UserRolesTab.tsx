@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField, Input } from '../../../components/ui/FormField'
 import { ApiErrorAlert } from '../../../components/feedback/ApiErrorAlert'
@@ -59,21 +60,26 @@ export function UserRolesTab() {
       {
         id: 'role',
         header: 'Role',
+        ...COL_WIDTH.name,
         cell: (row) => row.role ?? '—',
       },
       {
         id: 'description',
         header: 'Description',
+        ...COL_WIDTH.description,
         cell: (row) => row.description?.trim() || '—',
       },
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => (row.status ? <StatusBadge status={row.status} /> : '—'),
       },
       {
         id: 'systemRole',
         header: 'System',
+        ...COL_WIDTH.badgeSm,
         cell: (row) => (row.systemRole ? 'Yes' : '—'),
       },
     ],
@@ -205,6 +211,7 @@ export function UserRolesTab() {
           </div>
 
           <DataTable
+            tableId="rbac-user-roles"
             columns={columns}
             data={userRoles}
             getRowId={(row) => row.id}
@@ -212,6 +219,7 @@ export function UserRolesTab() {
             error={error}
             onRetry={() => void refetch()}
             caption={`Roles for user ${loadedUserId}`}
+            actionsWidth={72}
             emptyTitle={isFetched ? 'No roles assigned' : 'Loading…'}
             emptyDescription="Assign a role using the form above."
             rowActions={(row) => (

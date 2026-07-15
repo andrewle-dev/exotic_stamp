@@ -10,170 +10,241 @@ import '../../domain/entities/user_reward.dart';
 class RewardVoucherCard extends StatelessWidget {
   const RewardVoucherCard({
     required this.reward,
-    required this.onTap,
+    required this.onRedeemTap,
     super.key,
+    this.onFavoriteTap,
   });
 
   final UserReward reward;
-  final VoidCallback onTap;
+  final VoidCallback? onRedeemTap;
+  final VoidCallback? onFavoriteTap;
 
   @override
   Widget build(BuildContext context) {
     final mediaResolver = MediaUrlResolver();
     final imageUrl = mediaResolver.resolve(reward.rewardImageUrl);
     final disabled = reward.status != UserRewardStatus.available;
+    final partnerName = reward.partnerName ?? reward.milestoneName ?? 'Partner';
 
     return Opacity(
       opacity: disabled ? 0.65 : 1,
-      child: Material(
-        color: AppColors.backgroundWhite,
-        borderRadius: BorderRadius.circular(24),
-        elevation: 0,
-        child: InkWell(
-          onTap: disabled ? null : onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.backgroundWhite,
           borderRadius: BorderRadius.circular(24),
-          child: Ink(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.shadow,
+              blurRadius: 12,
+              offset: Offset(0, 4),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: imageUrl != null
-                              ? CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  fit: BoxFit.cover,
-                                )
-                              : ColoredBox(
-                                  color: AppColors.blueTint,
-                                  child: Icon(
-                                    Icons.card_giftcard_outlined,
-                                    color: AppColors.primaryBlue.withValues(
-                                      alpha: disabled ? 0.5 : 1,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              reward.rewardTitle,
-                              style: AppTextStyles.titleMedium,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (reward.milestoneName != null) ...[
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                reward.milestoneName!,
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: AppColors.textSecondary,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: imageUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              fit: BoxFit.cover,
+                            )
+                          : ColoredBox(
+                              color: AppColors.blueTint,
+                              child: Icon(
+                                Icons.storefront_outlined,
+                                color: AppColors.primaryBlue.withValues(
+                                  alpha: disabled ? 0.5 : 1,
                                 ),
                               ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      _StatusChip(status: reward.status),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: AppColors.blueSurface,
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(24),
+                            ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _footerText(reward),
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          partnerName,
+                          style: AppTextStyles.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (reward.expiresAt != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            'Expires ${_formatDate(reward.expiresAt!)}',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
-                        ),
-                      ),
-                      if (!disabled)
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.primaryBlue,
-                        ),
-                    ],
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  IconButton(
+                    onPressed: onFavoriteTap,
+                    icon: Icon(
+                      reward.isFavorite
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      color: reward.isFavorite
+                          ? Colors.amber.shade700
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return CustomPaint(
+                    size: Size(constraints.maxWidth, 1),
+                    painter: _DottedDividerPainter(),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      reward.displayOfferTitle,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  OutlinedButton(
+                    onPressed: disabled ? null : onRedeemTap,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryBlue,
+                      side: const BorderSide(color: AppColors.primaryBlue),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xl,
+                        vertical: AppSpacing.md,
+                      ),
+                    ),
+                    child: Text(
+                      _actionLabel(reward.status),
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  static String _footerText(UserReward reward) {
-    switch (reward.status) {
-      case UserRewardStatus.available:
-        return 'Xem chi tiết voucher';
-      case UserRewardStatus.used:
-        return 'Đã sử dụng';
-      case UserRewardStatus.expired:
-        return 'Đã hết hạn';
-      case UserRewardStatus.pending:
-        return 'Đang chờ mã voucher';
-      case UserRewardStatus.unavailable:
-        return 'Không khả dụng';
-    }
+  static String _formatDate(DateTime date) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  static String _actionLabel(UserRewardStatus status) {
+    return switch (status) {
+      UserRewardStatus.available => 'Redeem',
+      UserRewardStatus.used => 'Redeemed',
+      UserRewardStatus.expired => 'Expired',
+      UserRewardStatus.pending => 'Pending',
+      UserRewardStatus.unavailable => 'Unavailable',
+    };
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
+class _DottedDividerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dashWidth = 4.0;
+    const dashSpace = 4.0;
+    final paint = Paint()
+      ..color = AppColors.primaryBlue.withValues(alpha: 0.35)
+      ..strokeWidth = 1;
 
-  final UserRewardStatus status;
+    var startX = 0.0;
+    while (startX < size.width) {
+      canvas.drawLine(
+        Offset(startX, 0),
+        Offset(startX + dashWidth, 0),
+        paint,
+      );
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class RewardHistoryTile extends StatelessWidget {
+  const RewardHistoryTile({required this.reward, super.key});
+
+  final UserReward reward;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      UserRewardStatus.available => ('Khả dụng', AppColors.primaryBlue),
-      UserRewardStatus.used => ('Đã dùng', AppColors.textSecondary),
-      UserRewardStatus.expired => ('Hết hạn', AppColors.accentRed),
-      UserRewardStatus.pending => ('Chờ mã', AppColors.accentRed),
-      UserRewardStatus.unavailable => ('Không dùng', AppColors.textSecondary),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: AppColors.blueTint,
+        child: Icon(
+          Icons.receipt_long_outlined,
+          color: AppColors.primaryBlue.withValues(alpha: 0.8),
+        ),
       ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+      title: Text(
+        reward.displayOfferTitle,
+        style: AppTextStyles.bodyLarge,
       ),
-      child: Text(
-        label,
+      subtitle: Text(
+        reward.partnerName ?? reward.milestoneName ?? '',
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
+      trailing: Text(
+        RewardVoucherCard._actionLabel(reward.status),
         style: AppTextStyles.caption.copyWith(
-          color: color,
+          color: AppColors.textSecondary,
           fontWeight: FontWeight.w700,
         ),
       ),

@@ -38,6 +38,14 @@ public interface JpaMilestoneRepository extends JpaRepository<Milestone, UUID> {
     @Query("""
             SELECT m FROM Milestone m
             WHERE m.deletedAt IS NULL
+              AND m.campaignId = :campaignId
+            ORDER BY m.sortOrder ASC, m.stampsRequired ASC
+            """)
+    List<Milestone> findAllByCampaignIdOrderBySortOrderAsc(@Param("campaignId") UUID campaignId);
+
+    @Query("""
+            SELECT m FROM Milestone m
+            WHERE m.deletedAt IS NULL
               AND (:campaignId IS NULL OR m.campaignId = :campaignId)
               AND (:status IS NULL OR m.status = :status)
             ORDER BY m.sortOrder ASC, m.stampsRequired ASC

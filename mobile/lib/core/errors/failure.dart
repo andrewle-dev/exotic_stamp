@@ -14,6 +14,7 @@ enum FailureCode {
   gpsOutsideRange,
   stationInactive,
   campaignInactive,
+  defaultCampaignAmbiguous,
   redeemNotSupported,
   networkError,
   unknown,

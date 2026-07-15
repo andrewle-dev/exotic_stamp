@@ -7,6 +7,7 @@ enum VoucherDetailStatus {
   initial,
   loading,
   loaded,
+  redeeming,
   failure,
 }
 

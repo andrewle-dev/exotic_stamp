@@ -7,9 +7,12 @@ import {
   listPartners,
   updatePartner,
 } from '../../lib/api/partners.api'
+import { analyticsKeys } from '../../lib/query/keys/analytics'
 import { partnerKeys } from '../../lib/query/keys/partners'
+import { invalidateKeys } from '../../lib/query/invalidate'
 import type {
   CreatePartnerRequest,
+  PartnerResponse,
   PartnersListParams,
   UpdatePartnerRequest,
 } from '../../types/partners'
@@ -29,12 +32,20 @@ export function usePartner(id: string | undefined) {
   })
 }
 
+function cachePartnerDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  partner: PartnerResponse,
+) {
+  queryClient.setQueryData(partnerKeys.detail(partner.id), partner)
+}
+
 export function useCreatePartner() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: CreatePartnerRequest) => createPartner(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.lists() })
+    onSuccess: async (partner) => {
+      cachePartnerDetail(queryClient, partner)
+      await invalidateKeys(queryClient, [partnerKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -44,9 +55,9 @@ export function useUpdatePartner() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdatePartnerRequest }) =>
       updatePartner(id, body),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.detail(variables.id) })
+    onSuccess: async (partner) => {
+      cachePartnerDetail(queryClient, partner)
+      await invalidateKeys(queryClient, [partnerKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -55,9 +66,9 @@ export function useActivatePartner() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => activatePartner(id),
-    onSuccess: (_data, id) => {
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.detail(id) })
+    onSuccess: async (partner) => {
+      cachePartnerDetail(queryClient, partner)
+      await invalidateKeys(queryClient, [partnerKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }
@@ -66,9 +77,9 @@ export function useDeactivatePartner() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deactivatePartner(id),
-    onSuccess: (_data, id) => {
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: partnerKeys.detail(id) })
+    onSuccess: async (partner) => {
+      cachePartnerDetail(queryClient, partner)
+      await invalidateKeys(queryClient, [partnerKeys.lists(), analyticsKeys.collectionStats()])
     },
   })
 }

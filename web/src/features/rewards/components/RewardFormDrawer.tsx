@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Gift, Link2, Package } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField, Input } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
 import type { MilestoneResponse } from '../../../types/milestones'
 import type { PartnerResponse } from '../../../types/partners'
 import type { RewardResponse } from '../../../types/rewards'
@@ -113,67 +115,55 @@ export function RewardFormDrawer({
       onClose={onClose}
       width="lg"
     >
-      <form id="reward-form" className="space-y-6" onSubmit={onSubmit} noValidate>
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Assignment
-          </h3>
-
+      <form id="reward-form" className="space-y-4" onSubmit={onSubmit} noValidate>
+        <DrawerSectionCard
+          icon={Link2}
+          title="Assignment"
+          description="Link this reward to a milestone and optional partner."
+        >
           <FormField
             label="Milestone"
             htmlFor="milestoneId"
             required
             error={errors.milestoneId?.message}
           >
-            <select
-              id="milestoneId"
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              {...register('milestoneId')}
-            >
+            <Select id="milestoneId" {...register('milestoneId')}>
               <option value="">Select milestone…</option>
               {milestoneOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </FormField>
 
           <FormField label="Partner" htmlFor="partnerId" error={errors.partnerId?.message}>
-            <select
-              id="partnerId"
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              {...register('partnerId')}
-            >
+            <Select id="partnerId" {...register('partnerId')}>
               {partnerOptions.map((opt) => (
                 <option key={opt.value || 'none'} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </FormField>
-        </div>
+        </DrawerSectionCard>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Reward details
-          </h3>
-
+        <DrawerSectionCard
+          icon={Gift}
+          title="Reward details"
+          description="Type, name, and description shown to collectors."
+        >
           <FormField
             label="Reward type"
             htmlFor="rewardType"
             required
             error={errors.rewardType?.message}
           >
-            <select
-              id="rewardType"
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              {...register('rewardType')}
-            >
+            <Select id="rewardType" {...register('rewardType')}>
               <option value="VOUCHER">Voucher</option>
               <option value="DIGITAL_STICKER">Digital sticker</option>
               <option value="BONUS_STAMP">Bonus stamp</option>
-            </select>
+            </Select>
           </FormField>
 
           <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
@@ -181,27 +171,26 @@ export function RewardFormDrawer({
           </FormField>
 
           <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-            <textarea
+            <Textarea
               id="description"
               placeholder="Redeem at Highlands Coffee…"
               rows={3}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
               {...register('description')}
             />
           </FormField>
-        </div>
+        </DrawerSectionCard>
 
-        <div className="space-y-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Stock &amp; expiry
-          </h3>
-
+        <DrawerSectionCard
+          icon={Package}
+          title="Stock & expiry"
+          description="Monetary value, validity window, and inventory."
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               label="Value (₫)"
               htmlFor="valueAmount"
               error={errors.valueAmount?.message}
-              hint="0 for non-monetary rewards"
+              help="Use 0 for non-monetary rewards."
             >
               <Input
                 id="valueAmount"
@@ -217,7 +206,7 @@ export function RewardFormDrawer({
               label="Expiry days"
               htmlFor="expiryDays"
               error={errors.expiryDays?.message}
-              hint="Days from issue date"
+              help="Days from the issue date until the reward expires."
             >
               <Input
                 id="expiryDays"
@@ -234,7 +223,7 @@ export function RewardFormDrawer({
             label="Total stock"
             htmlFor="totalStock"
             error={errors.totalStock?.message}
-            hint="Maximum vouchers that can be issued"
+            help="Maximum number of vouchers that can be issued from this reward."
           >
             <Input
               id="totalStock"
@@ -245,7 +234,7 @@ export function RewardFormDrawer({
               {...register('totalStock')}
             />
           </FormField>
-        </div>
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

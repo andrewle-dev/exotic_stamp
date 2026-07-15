@@ -45,9 +45,7 @@ class StampCollectedEventListenerTest {
     void duplicate_doesNotIncrementMeter() {
         UUID eventId = UUID.randomUUID();
         when(stampCollectedDedupPort.claimFirstProcessing(eventId)).thenReturn(false);
-        StampCollectedEvent event = new StampCollectedEvent(
-                this,
-                eventId,
+        StampCollectedEvent event = new StampCollectedEvent(this, eventId,
                 STAMP_ID,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -65,9 +63,7 @@ class StampCollectedEventListenerTest {
         when(meterRegistry.counter("collection.stamp_collected")).thenReturn(counter);
         UUID eventId = UUID.randomUUID();
         when(stampCollectedDedupPort.claimFirstProcessing(eventId)).thenReturn(true);
-        StampCollectedEvent event = new StampCollectedEvent(
-                this,
-                eventId,
+        StampCollectedEvent event = new StampCollectedEvent(this, eventId,
                 STAMP_ID,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -85,9 +81,7 @@ class StampCollectedEventListenerTest {
         UUID eventId = UUID.randomUUID();
         when(stampCollectedDedupPort.claimFirstProcessing(eventId)).thenReturn(true);
         doThrow(new RuntimeException("meter down")).when(meterRegistry).counter(eq("collection.stamp_collected"));
-        StampCollectedEvent event = new StampCollectedEvent(
-                this,
-                eventId,
+        StampCollectedEvent event = new StampCollectedEvent(this, eventId,
                 STAMP_ID,
                 UUID.randomUUID(),
                 UUID.randomUUID(),

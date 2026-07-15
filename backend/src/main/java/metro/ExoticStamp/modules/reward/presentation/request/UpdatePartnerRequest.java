@@ -14,6 +14,9 @@ public class UpdatePartnerRequest {
     @Size(max = 255)
     private String logoUrl;
 
+    @Size(max = 255)
+    private String bannerImageUrl;
+
     @Size(max = 100)
     private String contactEmail;
 

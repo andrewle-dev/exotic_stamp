@@ -28,10 +28,10 @@ import metro.ExoticStamp.modules.auth.domain.model.AccessToken;
 import metro.ExoticStamp.modules.auth.domain.model.OtpType;
 import metro.ExoticStamp.modules.auth.domain.repository.AccessTokenRepository;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
+import metro.ExoticStamp.modules.user.application.port.UserAccountPort;
 import metro.ExoticStamp.modules.user.domain.exception.UserFieldAlreadyTakenException;
 import metro.ExoticStamp.modules.user.domain.model.User;
 import metro.ExoticStamp.modules.user.domain.model.UserStatus;
-import metro.ExoticStamp.modules.user.domain.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +63,7 @@ class AuthCommandServiceTest {
 
     private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    @Mock private UserRepository userRepository;
+    @Mock private UserAccountPort userAccountPort;
     @Mock private AccessTokenRepository accessTokenRepository;
     @Mock private RoleQueryService roleQueryService;
     @Mock private AccessTokenPort accessTokenPort;
@@ -117,10 +117,10 @@ class AuthCommandServiceTest {
                 .lastname("B")
                 .phoneNumber("+10000000001")
                 .build();
-        when(userRepository.existsByEmail(cmd.getEmail())).thenReturn(false);
-        when(userRepository.existsByUsername(cmd.getUsername())).thenReturn(false);
+        when(userAccountPort.existsByEmail(cmd.getEmail())).thenReturn(false);
+        when(userAccountPort.existsByUsername(cmd.getUsername())).thenReturn(false);
         when(passwordEncoder.encode(cmd.getPassword())).thenReturn("hash");
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+        when(userAccountPort.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             u.setId(USER_ID);
             return u;
@@ -132,12 +132,12 @@ class AuthCommandServiceTest {
         verify(otpStore).save(eq("new@test.com"), eq(OtpType.EMAIL_VERIFY), anyString());
         verify(otpStore).saveCooldown("new@test.com", OtpType.EMAIL_VERIFY);
         verify(otpStore).incrementAttempts("new@test.com", OtpType.EMAIL_VERIFY);
-        verify(userRepository).save(argThat(u -> u.getStatus() == UserStatus.PENDING_VERIFIED));
+        verify(userAccountPort).save(argThat(u -> u.getStatus() == UserStatus.PENDING_VERIFIED));
     }
 
     @Test
     void register_duplicateEmail_throws() {
-        when(userRepository.existsByEmail("dup@test.com")).thenReturn(true);
+        when(userAccountPort.existsByEmail("dup@test.com")).thenReturn(true);
         RegisterCommand cmd = RegisterCommand.builder()
                 .email("dup@test.com")
                 .username("u")
@@ -148,8 +148,8 @@ class AuthCommandServiceTest {
 
     @Test
     void register_duplicateUsername_throws() {
-        when(userRepository.existsByEmail("a@test.com")).thenReturn(false);
-        when(userRepository.existsByUsername("taken")).thenReturn(true);
+        when(userAccountPort.existsByEmail("a@test.com")).thenReturn(false);
+        when(userAccountPort.existsByUsername("taken")).thenReturn(true);
         RegisterCommand cmd = RegisterCommand.builder()
                 .email("a@test.com")
                 .username("taken")
@@ -160,9 +160,9 @@ class AuthCommandServiceTest {
 
     @Test
     void register_duplicatePhone_throws() {
-        when(userRepository.existsByEmail("a@test.com")).thenReturn(false);
-        when(userRepository.existsByUsername("user")).thenReturn(false);
-        when(userRepository.existsByPhoneNumber("+10000000009")).thenReturn(true);
+        when(userAccountPort.existsByEmail("a@test.com")).thenReturn(false);
+        when(userAccountPort.existsByUsername("user")).thenReturn(false);
+        when(userAccountPort.existsByPhoneNumber("+10000000009")).thenReturn(true);
         RegisterCommand cmd = RegisterCommand.builder()
                 .email("a@test.com")
                 .username("user")
@@ -181,7 +181,7 @@ class AuthCommandServiceTest {
                 .userAgent("test")
                 .deviceFingerprint("12345678901234567890")
                 .build();
-        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches(cmd.getPassword(), activeUser.getPassword())).thenReturn(true);
         when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
         when(accessTokenPort.issueAccessToken(eq(activeUser), anyList()))
@@ -203,7 +203,7 @@ class AuthCommandServiceTest {
                 .identifier("user@test.com")
                 .password("wrong")
                 .build();
-        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches(cmd.getPassword(), activeUser.getPassword())).thenReturn(false);
         assertThrows(InvalidCredentialsException.class, () -> authCommandService.login(cmd));
     }
@@ -215,7 +215,7 @@ class AuthCommandServiceTest {
                 .identifier("user@test.com")
                 .password("secret")
                 .build();
-        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
         assertThrows(AccountNotVerifiedException.class, () -> authCommandService.login(cmd));
         verify(passwordEncoder, never()).matches(anyString(), anyString());
     }
@@ -227,7 +227,7 @@ class AuthCommandServiceTest {
                 .identifier("user@test.com")
                 .password("wrong")
                 .build();
-        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
         assertThrows(AccountNotVerifiedException.class, () -> authCommandService.login(cmd));
         verify(passwordEncoder, never()).matches(anyString(), anyString());
     }
@@ -239,7 +239,7 @@ class AuthCommandServiceTest {
                 .identifier("user@test.com")
                 .password("secret")
                 .build();
-        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches(cmd.getPassword(), activeUser.getPassword())).thenReturn(true);
         assertThrows(UserNotActiveException.class, () -> authCommandService.login(cmd));
     }
@@ -248,7 +248,7 @@ class AuthCommandServiceTest {
     void verifyAccount_success_activatesUser() {
         activeUser.setStatus(UserStatus.PENDING_VERIFIED);
         when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(Optional.of("123456"));
-        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
 
         authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "123456"));
 
@@ -298,7 +298,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
         when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHash(hash)).thenReturn(Optional.of(record));
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
         when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
         when(accessTokenRevocation.getDeviceAccessJti(USER_ID, "fp")).thenReturn(Optional.of("old-jti"));
         when(accessTokenPort.issueAccessToken(eq(activeUser), anyList()))
@@ -351,7 +351,7 @@ class AuthCommandServiceTest {
 
     @Test
     void forgotPassword_queuesOtpForExistingUser() {
-        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
         authCommandService.forgotPassword(ForgotPasswordCommand.builder().email("user@test.com").build());
         verify(otpStore).delete("user@test.com", OtpType.FORGOT_PASSWORD);
         verify(otpStore).save(eq("user@test.com"), eq(OtpType.FORGOT_PASSWORD), anyString());
@@ -366,7 +366,7 @@ class AuthCommandServiceTest {
 
         authCommandService.forgotPassword(ForgotPasswordCommand.builder().email("user@test.com").build());
 
-        verify(userRepository, never()).findByEmail(anyString());
+        verify(userAccountPort, never()).findByEmail(anyString());
         verify(mailService, never()).sendOtpEmail(anyString(), anyString());
     }
 
@@ -377,7 +377,7 @@ class AuthCommandServiceTest {
 
         authCommandService.forgotPassword(ForgotPasswordCommand.builder().email("user@test.com").build());
 
-        verify(userRepository, never()).findByEmail(anyString());
+        verify(userAccountPort, never()).findByEmail(anyString());
         verify(mailService, never()).sendOtpEmail(anyString(), anyString());
     }
 
@@ -389,16 +389,16 @@ class AuthCommandServiceTest {
                 .newPassword("new-secret")
                 .build();
         when(otpStore.find("user@test.com", OtpType.FORGOT_PASSWORD)).thenReturn(Optional.of("123456"));
-        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.encode("new-secret")).thenReturn("new-hash");
-        when(userRepository.incrementTokenVersionById(USER_ID)).thenReturn(1);
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
 
         authCommandService.resetPassword(cmd);
 
         assertEquals("new-hash", activeUser.getPassword());
         verify(accessTokenRepository).revokeAllByUserId(USER_ID, AccessToken.REASON_PASSWORD_RESET);
         verify(refreshTokenStore).revokeAllForUser(USER_ID);
-        verify(userRepository).incrementTokenVersionById(USER_ID);
+        verify(userAccountPort).incrementTokenVersionById(USER_ID);
         verify(otpStore).delete("user@test.com", OtpType.FORGOT_PASSWORD);
     }
 
@@ -420,14 +420,14 @@ class AuthCommandServiceTest {
                 .identifier("user@test.com")
                 .password("old-secret")
                 .build();
-        when(userRepository.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail(cmd.getIdentifier())).thenReturn(Optional.of(activeUser));
         when(passwordEncoder.matches("old-secret", "new-hash")).thenReturn(false);
         assertThrows(InvalidCredentialsException.class, () -> authCommandService.login(cmd));
     }
 
     @Test
     void resendVerificationOtp_unknownEmail_returnsWithoutSending() {
-        when(userRepository.findByEmail("missing@test.com")).thenReturn(Optional.empty());
+        when(userAccountPort.findByEmail("missing@test.com")).thenReturn(Optional.empty());
 
         assertDoesNotThrow(() ->
                 authCommandService.resendVerificationOtp(new ResendVerificationCommand("missing@test.com")));
@@ -437,7 +437,7 @@ class AuthCommandServiceTest {
 
     @Test
     void resendVerificationOtp_verifiedUser_returnsWithoutSending() {
-        when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
+        when(userAccountPort.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
 
         assertDoesNotThrow(() ->
                 authCommandService.resendVerificationOtp(new ResendVerificationCommand("user@test.com")));
@@ -464,7 +464,7 @@ class AuthCommandServiceTest {
                 .status(UserStatus.PENDING_VERIFIED)
                 .build();
         pending.setId(USER_ID);
-        when(userRepository.findByEmail("p@test.com")).thenReturn(Optional.of(pending));
+        when(userAccountPort.findByEmail("p@test.com")).thenReturn(Optional.of(pending));
 
         assertDoesNotThrow(() ->
                 authCommandService.resendVerificationOtp(new ResendVerificationCommand("p@test.com")));
@@ -492,10 +492,10 @@ class AuthCommandServiceTest {
                 .password("p")
                 .build();
         AtomicInteger saves = new AtomicInteger();
-        when(userRepository.existsByEmail(cmd.getEmail())).thenAnswer(inv -> saves.get() > 0);
-        when(userRepository.existsByUsername(cmd.getUsername())).thenReturn(false);
+        when(userAccountPort.existsByEmail(cmd.getEmail())).thenAnswer(inv -> saves.get() > 0);
+        when(userAccountPort.existsByUsername(cmd.getUsername())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hash");
-        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+        when(userAccountPort.save(any(User.class))).thenAnswer(inv -> {
             if (saves.incrementAndGet() > 1) {
                 throw new UserFieldAlreadyTakenException("email", cmd.getEmail());
             }

@@ -16,6 +16,9 @@ public interface StationRepository {
 
     Station save(Station station);
 
+    /** Flushes pending persistence work (needed for two-phase unique-safe renumber). */
+    void flush();
+
     List<Station> findAllByLineId(UUID lineId);
 
     List<Station> findAllByLineIdAndStatus(UUID lineId, MetroStatus status);

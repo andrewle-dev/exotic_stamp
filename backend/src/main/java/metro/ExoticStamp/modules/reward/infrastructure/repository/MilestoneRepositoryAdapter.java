@@ -52,6 +52,11 @@ public class MilestoneRepositoryAdapter implements MilestoneRepository {
     }
 
     @Override
+    public List<Milestone> findAllByCampaignIdOrderBySortOrderAsc(UUID campaignId) {
+        return jpaMilestoneRepository.findAllByCampaignIdOrderBySortOrderAsc(campaignId);
+    }
+
+    @Override
     public boolean existsById(UUID id) {
         return jpaMilestoneRepository.existsById(id);
     }

@@ -9,6 +9,7 @@ class Station extends Equatable {
     required this.code,
     required this.name,
     this.displayName,
+    this.lineName,
     this.latitude,
     this.longitude,
     this.imageUrl,
@@ -22,6 +23,7 @@ class Station extends Equatable {
   final String code;
   final String name;
   final String? displayName;
+  final String? lineName;
   final double? latitude;
   final double? longitude;
   final String? imageUrl;
@@ -42,6 +44,7 @@ class Station extends Equatable {
         code,
         name,
         displayName,
+        lineName,
         latitude,
         longitude,
         imageUrl,

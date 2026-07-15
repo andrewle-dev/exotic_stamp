@@ -93,7 +93,7 @@ function MonoValue({ children }: { children: React.ReactNode }) {
 export function SettingsPage() {
   const { user, profile, logout } = useAuth()
 
-  const apiHost = useMemo(getApiHost, [])
+  const apiHost = useMemo(() => getApiHost(), [])
   const [environment, setEnvironment] = useState(CONFIGURED_ENV)
   const [pendingEnvironment, setPendingEnvironment] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)

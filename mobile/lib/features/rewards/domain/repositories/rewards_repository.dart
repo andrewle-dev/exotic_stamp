@@ -19,4 +19,7 @@ abstract class RewardsRepository {
   });
 
   Future<VoucherDetail> getVoucherDetail({required String id});
+
+  /// Confirms voucher redemption with backend/mock repository.
+  Future<VoucherDetail> redeemVoucher({required String id});
 }

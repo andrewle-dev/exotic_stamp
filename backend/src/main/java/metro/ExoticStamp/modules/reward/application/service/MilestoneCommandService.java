@@ -1,7 +1,12 @@
 package metro.ExoticStamp.modules.reward.application.service;
 
 import lombok.RequiredArgsConstructor;
+import metro.ExoticStamp.common.reorder.InvalidReorderException;
+import metro.ExoticStamp.common.reorder.ReorderItemView;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
+import metro.ExoticStamp.common.reorder.ReorderValidation;
 import metro.ExoticStamp.modules.reward.application.command.CreateMilestoneCommand;
+import metro.ExoticStamp.modules.reward.application.command.ReorderMilestonesCommand;
 import metro.ExoticStamp.modules.reward.application.command.UpdateMilestoneCommand;
 import metro.ExoticStamp.modules.reward.application.mapper.RewardAppMapper;
 import metro.ExoticStamp.modules.reward.application.support.RewardAuditHelper;
@@ -20,7 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -117,6 +128,40 @@ public class MilestoneCommandService {
         m.setDeletedAt(LocalDateTime.now(clock));
         milestoneRepository.save(m);
         rewardAuditHelper.scheduleMilestoneDisabled(id);
+    }
+
+    /**
+     * Dense-renumbers all non-deleted milestones in a campaign to {@code 0..n-1}.
+     */
+    @Transactional
+    public ReorderResultView reorder(ReorderMilestonesCommand command) {
+        UUID campaignId = command.campaignId();
+        if (campaignId == null) {
+            throw new InvalidReorderException("campaignId is required");
+        }
+
+        List<UUID> orderedIds = ReorderValidation.requireOrderedIds(command.orderedIds());
+        List<Milestone> scope = milestoneRepository.findAllByCampaignIdOrderBySortOrderAsc(campaignId);
+        Set<UUID> scopeIds = scope.stream().map(Milestone::getId).collect(Collectors.toSet());
+        ReorderValidation.requireExactScope(orderedIds, scopeIds, "milestones in campaign " + campaignId);
+
+        Map<UUID, Milestone> byId = new HashMap<>();
+        for (Milestone milestone : scope) {
+            byId.put(milestone.getId(), milestone);
+        }
+
+        List<ReorderItemView> items = new ArrayList<>(orderedIds.size());
+        for (int i = 0; i < orderedIds.size(); i++) {
+            Milestone milestone = byId.get(orderedIds.get(i));
+            if (milestone.isArchived()) {
+                throw new InvalidReorderException("Cannot reorder archived milestone: " + milestone.getId());
+            }
+            milestone.setSortOrder(i);
+            milestoneRepository.save(milestone);
+            rewardAuditHelper.scheduleMilestoneUpdated(milestone.getId());
+            items.add(new ReorderItemView(milestone.getId(), i));
+        }
+        return new ReorderResultView(campaignId, items.size(), items);
     }
 
     private static void assertMutable(Milestone m) {

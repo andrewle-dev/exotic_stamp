@@ -7,9 +7,10 @@ import metro.ExoticStamp.modules.collection.domain.event.StampCollectedEvent;
 import metro.ExoticStamp.modules.reward.application.port.RewardStampCollectedDedupPort;
 import metro.ExoticStamp.modules.reward.application.service.RewardEvaluationService;
 import metro.ExoticStamp.modules.reward.config.RewardProperties;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.UUID;
 
@@ -24,7 +25,7 @@ public class StampCollectedEventListener {
     private final RewardProperties rewardProperties;
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onStampCollected(StampCollectedEvent event) {
         UUID eventId = event.getEventId();
         try {
@@ -45,6 +46,8 @@ public class StampCollectedEventListener {
         } catch (Exception e) {
             log.error("[Reward] StampCollectedEvent handling failed eventId={} userId={}: {}",
                     eventId, event.getUserId(), e.getMessage(), e);
+            // Stamp already committed; no outbox redelivery. Ops: alert on this counter and re-eval manually.
+            meterRegistry.counter("reward.stamp_collected.orphan", "reason", "listener_exhausted").increment();
         }
     }
 

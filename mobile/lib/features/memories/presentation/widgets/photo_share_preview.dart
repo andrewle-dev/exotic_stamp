@@ -32,7 +32,7 @@ class PhotoSharePreview extends StatelessWidget {
     return AspectRatio(
       aspectRatio: 1,
       child: ClipRRect(
-        borderRadius: AppRadius.xlAll,
+        borderRadius: AppRadius.xxlAll,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -42,16 +42,16 @@ class PhotoSharePreview extends StatelessWidget {
             ),
             if (showCollectionDate && stampContext?.collectedAt != null)
               Positioned(
-                left: AppSpacing.md,
-                bottom: AppSpacing.md,
+                left: AppSpacing.lg,
+                bottom: AppSpacing.lg,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.xs,
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.55),
-                    borderRadius: AppRadius.mdAll,
+                    borderRadius: AppRadius.lgAll,
                   ),
                   child: Text(
                     formatShareDate(stampContext!.collectedAt),
@@ -63,8 +63,8 @@ class PhotoSharePreview extends StatelessWidget {
               ),
             if (stampContext != null)
               Positioned(
-                right: AppSpacing.md,
-                top: AppSpacing.md,
+                right: AppSpacing.lg,
+                top: AppSpacing.lg,
                 child: _StampSticker(
                   stationName:
                       showStationName ? stampContext.stationName : null,
@@ -91,10 +91,10 @@ class _StampSticker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 112,
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.backgroundWhite,
-        borderRadius: AppRadius.lgAll,
+        borderRadius: AppRadius.xlAll,
         border: Border.all(color: AppColors.primaryBlue, width: 2),
         boxShadow: [
           BoxShadow(
@@ -108,7 +108,7 @@ class _StampSticker extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ClipRRect(
-            borderRadius: AppRadius.mdAll,
+            borderRadius: AppRadius.lgAll,
             child: SizedBox(
               width: 72,
               height: 72,
@@ -127,7 +127,7 @@ class _StampSticker extends StatelessWidget {
             ),
           ),
           if (stationName != null) ...[
-            const SizedBox(height: AppSpacing.xs),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               stationName!.toUpperCase(),
               textAlign: TextAlign.center,
@@ -139,7 +139,7 @@ class _StampSticker extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: AppSpacing.xxs),
+          const SizedBox(height: AppSpacing.xs),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

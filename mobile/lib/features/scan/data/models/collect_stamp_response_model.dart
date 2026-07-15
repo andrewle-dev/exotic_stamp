@@ -5,11 +5,14 @@ class CollectStampResponseModel {
     required this.stamp,
     this.progress,
     required this.isNew,
+    this.nextRewardHint,
+    this.sponsorAd,
   });
 
   factory CollectStampResponseModel.fromJson(Map<String, dynamic> json) {
     final stampJson = json['stamp'] as Map<String, dynamic>? ?? {};
     final progressJson = json['progress'] as Map<String, dynamic>?;
+    final sponsorJson = json['sponsorAd'] as Map<String, dynamic>?;
 
     return CollectStampResponseModel(
       stamp: CollectedStampModel.fromJson(stampJson),
@@ -17,18 +20,26 @@ class CollectStampResponseModel {
           ? null
           : CollectStampProgressModel.fromJson(progressJson),
       isNew: json['isNew'] as bool? ?? json['new'] as bool? ?? true,
+      nextRewardHint: json['nextRewardHint'] as String?,
+      sponsorAd: sponsorJson == null
+          ? null
+          : CollectSponsorAdModel.fromJson(sponsorJson),
     );
   }
 
   final CollectedStampModel stamp;
   final CollectStampProgressModel? progress;
   final bool isNew;
+  final String? nextRewardHint;
+  final CollectSponsorAdModel? sponsorAd;
 
   CollectStampResult toEntity() {
     return CollectStampResult(
       stamp: stamp.toEntity(),
       progress: progress?.toEntity(),
       isNew: isNew,
+      nextRewardHint: nextRewardHint,
+      sponsorAd: sponsorAd?.toEntity(),
     );
   }
 }
@@ -110,6 +121,30 @@ class CollectStampProgressModel {
       collected: collected,
       total: total,
       percentage: percentage,
+    );
+  }
+}
+
+class CollectSponsorAdModel {
+  CollectSponsorAdModel({
+    required this.title,
+    this.subtitle,
+  });
+
+  factory CollectSponsorAdModel.fromJson(Map<String, dynamic> json) {
+    return CollectSponsorAdModel(
+      title: json['title'] as String? ?? '',
+      subtitle: json['subtitle'] as String?,
+    );
+  }
+
+  final String title;
+  final String? subtitle;
+
+  CollectSponsorAd toEntity() {
+    return CollectSponsorAd(
+      title: title,
+      subtitle: subtitle,
     );
   }
 }

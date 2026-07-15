@@ -95,15 +95,9 @@ export function VoucherDetailDrawer({
           </div>
 
           <dl className="grid gap-4 sm:grid-cols-2">
-            <DetailRow label="ID">
-              <span className="font-mono text-xs">{voucher.id}</span>
-            </DetailRow>
             <DetailRow label="Milestone">
               <span className={milestoneLabel?.unknown ? 'text-amber-700' : undefined}>
                 {milestoneLabel?.label}
-              </span>
-              <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
-                {voucher.milestoneId}
               </span>
             </DetailRow>
             <div className="sm:col-span-2">
@@ -120,19 +114,8 @@ export function VoucherDetailDrawer({
             <DetailRow label="Status">
               <StatusBadge status={voucher.status} />
             </DetailRow>
-            <DetailRow label="Assigned user ID">
-              {voucher.assignedUserId ? (
-                <span className="font-mono text-xs">{voucher.assignedUserId}</span>
-              ) : (
-                '—'
-              )}
-            </DetailRow>
-            <DetailRow label="Assigned user reward ID">
-              {voucher.assignedUserRewardId ? (
-                <span className="font-mono text-xs">{voucher.assignedUserRewardId}</span>
-              ) : (
-                '—'
-              )}
+            <DetailRow label="Assignment">
+              {voucher.assignedUserId ? 'Assigned' : 'Unassigned'}
             </DetailRow>
             <DetailRow label="Assigned at">{formatDateTime(voucher.assignedAt)}</DetailRow>
             <DetailRow label="Expires at">{formatDateTime(voucher.expiresAt)}</DetailRow>

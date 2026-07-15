@@ -9,9 +9,12 @@ import {
   removeCampaignStation,
   updateCampaign,
 } from '../../lib/api/campaigns.api'
+import { analyticsKeys } from '../../lib/query/keys/analytics'
 import { campaignKeys } from '../../lib/query/keys/campaigns'
+import { invalidateKeys } from '../../lib/query/invalidate'
 import type {
   AssignCampaignStationRequest,
+  CampaignResponse,
   CampaignsListParams,
   CreateCampaignRequest,
   UpdateCampaignRequest,
@@ -32,12 +35,23 @@ export function useCampaign(id: string | undefined) {
   })
 }
 
+function cacheCampaignDetail(
+  queryClient: ReturnType<typeof useQueryClient>,
+  campaign: CampaignResponse,
+) {
+  queryClient.setQueryData(campaignKeys.detail(campaign.id), campaign)
+}
+
 export function useCreateCampaign() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: CreateCampaignRequest) => createCampaign(body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.lists() })
+    onSuccess: async (campaign) => {
+      cacheCampaignDetail(queryClient, campaign)
+      await invalidateKeys(queryClient, [
+        campaignKeys.lists(),
+        analyticsKeys.collectionStats(),
+      ])
     },
   })
 }
@@ -47,9 +61,12 @@ export function useUpdateCampaign() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateCampaignRequest }) =>
       updateCampaign(id, body),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.lists() })
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.detail(variables.id) })
+    onSuccess: async (campaign) => {
+      cacheCampaignDetail(queryClient, campaign)
+      await invalidateKeys(queryClient, [
+        campaignKeys.lists(),
+        analyticsKeys.collectionStats(),
+      ])
     },
   })
 }
@@ -58,8 +75,13 @@ export function useDeleteCampaign() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteCampaign(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.lists() })
+    onSuccess: async (_data, id) => {
+      queryClient.removeQueries({ queryKey: campaignKeys.detail(id) })
+      queryClient.removeQueries({ queryKey: campaignKeys.stations(id) })
+      await invalidateKeys(queryClient, [
+        campaignKeys.lists(),
+        analyticsKeys.collectionStats(),
+      ])
     },
   })
 }
@@ -82,9 +104,14 @@ export function useAssignCampaignStation() {
       campaignId: string
       body: AssignCampaignStationRequest
     }) => assignCampaignStation(campaignId, body),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.stations(variables.campaignId) })
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.detail(variables.campaignId) })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [
+        campaignKeys.stations(variables.campaignId),
+        campaignKeys.detail(variables.campaignId),
+        campaignKeys.lists(),
+        analyticsKeys.collectionStats(),
+        analyticsKeys.stationStats(),
+      ])
     },
   })
 }
@@ -99,9 +126,14 @@ export function useRemoveCampaignStation() {
       campaignId: string
       stationId: string
     }) => removeCampaignStation(campaignId, stationId),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.stations(variables.campaignId) })
-      void queryClient.invalidateQueries({ queryKey: campaignKeys.detail(variables.campaignId) })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [
+        campaignKeys.stations(variables.campaignId),
+        campaignKeys.detail(variables.campaignId),
+        campaignKeys.lists(),
+        analyticsKeys.collectionStats(),
+        analyticsKeys.stationStats(),
+      ])
     },
   })
 }

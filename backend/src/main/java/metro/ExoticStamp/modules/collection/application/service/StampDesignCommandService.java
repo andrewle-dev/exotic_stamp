@@ -1,7 +1,12 @@
 package metro.ExoticStamp.modules.collection.application.service;
 
 import lombok.RequiredArgsConstructor;
+import metro.ExoticStamp.common.reorder.InvalidReorderException;
+import metro.ExoticStamp.common.reorder.ReorderItemView;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
+import metro.ExoticStamp.common.reorder.ReorderValidation;
 import metro.ExoticStamp.modules.collection.application.command.CreateStampDesignCommand;
+import metro.ExoticStamp.modules.collection.application.command.ReorderStampDesignsCommand;
 import metro.ExoticStamp.modules.collection.application.command.UpdateStampDesignCommand;
 import metro.ExoticStamp.modules.collection.application.mapper.CampaignAppMapper;
 import metro.ExoticStamp.modules.collection.application.support.CollectionEnumParser;
@@ -15,13 +20,18 @@ import metro.ExoticStamp.modules.collection.domain.model.StampDesignStatus;
 import metro.ExoticStamp.modules.collection.domain.model.StampRarity;
 import metro.ExoticStamp.modules.collection.domain.repository.CampaignRepository;
 import metro.ExoticStamp.modules.collection.domain.repository.StampDesignRepository;
-import metro.ExoticStamp.modules.collection.domain.service.StampDesignDomainService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +39,7 @@ public class StampDesignCommandService {
 
     private final StampDesignRepository stampDesignRepository;
     private final CampaignRepository campaignRepository;
-    private final StampDesignDomainService stampDesignDomainService;
+    private final CampaignStationCommandService campaignStationCommandService;
     private final CampaignAppMapper campaignAppMapper;
     private final CampaignAuditHelper campaignAuditHelper;
     private final Clock clock;
@@ -38,7 +48,8 @@ public class StampDesignCommandService {
     public StampDesignView create(CreateStampDesignCommand cmd) {
         campaignRepository.findByIdNotDeleted(cmd.campaignId())
                 .orElseThrow(() -> new CampaignNotFoundException(cmd.campaignId()));
-        stampDesignDomainService.assertStationInCampaign(cmd.campaignId(), cmd.stationId());
+        // Selecting campaign + station on create implies catalog membership.
+        campaignStationCommandService.ensureAssigned(cmd.campaignId(), cmd.stationId());
 
         StampDesignStatus status = CollectionEnumParser.parseStampDesignStatus(cmd.status());
         if (status == null) {
@@ -81,7 +92,7 @@ public class StampDesignCommandService {
 
         campaignRepository.findByIdNotDeleted(campaignId)
                 .orElseThrow(() -> new CampaignNotFoundException(campaignId));
-        stampDesignDomainService.assertStationInCampaign(campaignId, stationId);
+        campaignStationCommandService.ensureAssigned(campaignId, stationId);
 
         StampDesignStatus previousStatus = entity.getStatus();
         StampDesignStatus newStatus = cmd.status() != null
@@ -128,6 +139,43 @@ public class StampDesignCommandService {
                 .orElseThrow(() -> new InvalidRequestException("Stamp design not found: " + id));
         entity.setDeletedAt(LocalDateTime.now(clock));
         stampDesignRepository.save(entity);
+    }
+
+    /**
+     * Dense-renumbers all non-deleted stamp designs in a campaign to {@code 0..n-1}.
+     * Scope is campaign-wide (catalog order across stations).
+     */
+    @Transactional
+    public ReorderResultView reorder(ReorderStampDesignsCommand command) {
+        UUID campaignId = command.campaignId();
+        if (campaignId == null) {
+            throw new InvalidReorderException("campaignId is required");
+        }
+        List<UUID> orderedIds = ReorderValidation.requireOrderedIds(command.orderedIds());
+
+        campaignRepository.findByIdNotDeleted(campaignId)
+                .orElseThrow(() -> new CampaignNotFoundException(campaignId));
+
+        List<StampDesign> scope = stampDesignRepository.findByCampaignIdOrderBySortOrderAsc(campaignId).stream()
+                .filter(sd -> !sd.isDeleted())
+                .toList();
+        Set<UUID> scopeIds = scope.stream().map(StampDesign::getId).collect(Collectors.toSet());
+        ReorderValidation.requireExactScope(orderedIds, scopeIds, "stamp designs in campaign " + campaignId);
+
+        Map<UUID, StampDesign> byId = new HashMap<>();
+        for (StampDesign design : scope) {
+            byId.put(design.getId(), design);
+        }
+
+        List<ReorderItemView> items = new ArrayList<>(orderedIds.size());
+        for (int i = 0; i < orderedIds.size(); i++) {
+            StampDesign design = byId.get(orderedIds.get(i));
+            design.setSortOrder(i);
+            stampDesignRepository.save(design);
+            campaignAuditHelper.scheduleStampDesignUpdated(design);
+            items.add(new ReorderItemView(design.getId(), i));
+        }
+        return new ReorderResultView(campaignId, items.size(), items);
     }
 
     private void assertNoDuplicateActive(UUID campaignId, UUID stationId, UUID excludeId, StampDesignStatus status) {

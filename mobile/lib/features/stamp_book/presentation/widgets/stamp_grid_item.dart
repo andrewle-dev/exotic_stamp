@@ -89,20 +89,26 @@ class StampGridItem extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            item.stationName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.caption.copyWith(
-              fontWeight: FontWeight.w700,
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: _labelHeight,
+            child: Text(
+              item.stationName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.caption.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  /// Caption line height × 2 (12 × 1.3 × 2).
+  static const double _labelHeight = 31.2;
 }
 
 class _StampImage extends StatelessWidget {

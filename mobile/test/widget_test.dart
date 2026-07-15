@@ -56,8 +56,8 @@ void main() {
     await tester.pumpWidget(const MetroStampApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Exotic Stamp'), findsOneWidget);
-    expect(find.textContaining('Chạm NFC'), findsOneWidget);
-    expect(find.text('Bắt đầu'), findsOneWidget);
+    expect(find.text('Bỏ qua'), findsOneWidget);
+    expect(find.text('Tiếp theo'), findsOneWidget);
+    expect(find.text('Ga Bến Thành'), findsOneWidget);
   });
 }

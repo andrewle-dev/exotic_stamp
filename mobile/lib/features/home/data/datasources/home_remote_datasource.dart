@@ -61,7 +61,19 @@ class HomeRemoteDataSource {
           message: 'Không thể tải tiến độ sưu tập.',
         );
       }
-      return CollectionProgressModel.fromJson(map);
+      try {
+        return CollectionProgressModel.fromJson(map);
+      } on FormatException catch (error) {
+        assert(() {
+          // ignore: avoid_print
+          print('Home progress parse error: ${error.message}');
+          return true;
+        }());
+        throw const Failure(
+          code: FailureCode.unknown,
+          message: 'Dữ liệu tiến độ sưu tập không hợp lệ.',
+        );
+      }
     } on DioException catch (error) {
       throw _toFailure(error);
     }
@@ -104,6 +116,21 @@ class HomeRemoteDataSource {
         return null;
       }
       return ActiveBannerModel.fromCampaignJson(first);
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
+  Future<List<PartnerBannerModel>> getPromotionalBanners() async {
+    try {
+      final response = await _apiClient.get<dynamic>(
+        '/partners/promotional-banners',
+        options: Options(extra: {AuthInterceptor.skipAuthKey: true}),
+      );
+      return ApiResponseParser.asMapList(response.data)
+          .map(PartnerBannerModel.fromJson)
+          .where((banner) => banner.bannerImageUrl.trim().isNotEmpty)
+          .toList();
     } on DioException catch (error) {
       throw _toFailure(error);
     }

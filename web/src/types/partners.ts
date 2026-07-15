@@ -4,6 +4,7 @@ export interface PartnerResponse {
   id: string
   name: string
   logoUrl?: string
+  bannerImageUrl?: string
   contactEmail?: string
   contractStartDate?: string
   contractEndDate?: string
@@ -13,6 +14,7 @@ export interface PartnerResponse {
 export interface CreatePartnerRequest {
   name: string
   logoUrl?: string
+  bannerImageUrl?: string
   contactEmail?: string
   contractStartDate?: string
   contractEndDate?: string
@@ -21,6 +23,7 @@ export interface CreatePartnerRequest {
 export interface UpdatePartnerRequest {
   name?: string
   logoUrl?: string
+  bannerImageUrl?: string
   contactEmail?: string
   contractStartDate?: string
   contractEndDate?: string

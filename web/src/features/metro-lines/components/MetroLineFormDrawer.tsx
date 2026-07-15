@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Palette, FileText, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField, Input } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
 import type { LineResponse } from '../../../types/metro-lines'
 import {
   defaultMetroLineFormValues,
@@ -18,14 +20,15 @@ interface MetroLineFormDrawerProps {
   onSuccess?: () => void
 }
 
-function toPayload(values: MetroLineFormValues) {
+function toPayload(values: MetroLineFormValues, existingSortOrder?: number) {
   return {
     code: values.code.trim(),
     name: values.name.trim(),
     displayName: values.displayName?.trim() || undefined,
     description: values.description?.trim() || undefined,
     colorHex: values.colorHex?.trim() || undefined,
-    sortOrder: values.sortOrder,
+    // Ordering is managed via Metro Lines reorder drawer — preserve on edit, default on create.
+    sortOrder: existingSortOrder ?? 0,
     status: values.status,
   }
 }
@@ -58,7 +61,6 @@ export function MetroLineFormDrawer({ open, line, onClose, onSuccess }: MetroLin
         displayName: line.displayName ?? '',
         description: line.description ?? '',
         colorHex: line.colorHex ?? '',
-        sortOrder: line.sortOrder ?? 0,
         status: line.status,
       })
     } else {
@@ -67,7 +69,7 @@ export function MetroLineFormDrawer({ open, line, onClose, onSuccess }: MetroLin
   }, [open, line, reset])
 
   const onSubmit = handleSubmit(async (values) => {
-    const payload = toPayload(values)
+    const payload = toPayload(values, isEdit ? line?.sortOrder : undefined)
     if (isEdit && line) {
       await updateMutation.mutateAsync({ id: line.id, body: payload })
     } else {
@@ -90,53 +92,66 @@ export function MetroLineFormDrawer({ open, line, onClose, onSuccess }: MetroLin
       onClose={onClose}
     >
       <form id="metro-line-form" className="space-y-4" onSubmit={onSubmit} noValidate>
-        <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
-          <Input id="code" disabled={isSubmitting} {...register('code')} />
-        </FormField>
+        <DrawerSectionCard
+          icon={FileText}
+          title="Details"
+          description="Identifiers and display labels for this line."
+        >
+          <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
+            <Input id="code" disabled={isSubmitting} {...register('code')} />
+          </FormField>
 
-        <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
-          <Input id="name" disabled={isSubmitting} {...register('name')} />
-        </FormField>
+          <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
+            <Input id="name" disabled={isSubmitting} {...register('name')} />
+          </FormField>
 
-        <FormField label="Display name" htmlFor="displayName" error={errors.displayName?.message}>
-          <Input id="displayName" disabled={isSubmitting} {...register('displayName')} />
-        </FormField>
+          <FormField label="Display name" htmlFor="displayName" error={errors.displayName?.message}>
+            <Input id="displayName" disabled={isSubmitting} {...register('displayName')} />
+          </FormField>
 
-        <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-          <textarea
-            id="description"
-            rows={3}
-            disabled={isSubmitting}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            {...register('description')}
-          />
-        </FormField>
+          <FormField label="Description" htmlFor="description" error={errors.description?.message}>
+            <Textarea
+              id="description"
+              rows={3}
+              disabled={isSubmitting}
+              {...register('description')}
+            />
+          </FormField>
+        </DrawerSectionCard>
 
-        <FormField label="Color (hex)" htmlFor="colorHex" hint="#RRGGBB" error={errors.colorHex?.message}>
-          <Input id="colorHex" placeholder="#01599D" disabled={isSubmitting} {...register('colorHex')} />
-        </FormField>
-
-        <FormField label="Sort order" htmlFor="sortOrder" error={errors.sortOrder?.message}>
-          <Input
-            id="sortOrder"
-            type="number"
-            disabled={isSubmitting}
-            {...register('sortOrder', { valueAsNumber: true })}
-          />
-        </FormField>
-
-        <FormField label="Status" htmlFor="status" error={errors.status?.message}>
-          <select
-            id="status"
-            disabled={isSubmitting}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            {...register('status')}
+        <DrawerSectionCard
+          icon={Palette}
+          title="Appearance"
+          description="Brand color used in maps and station lists."
+        >
+          <FormField
+            label="Color (hex)"
+            htmlFor="colorHex"
+            hint="#RRGGBB"
+            error={errors.colorHex?.message}
           >
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </FormField>
+            <Input
+              id="colorHex"
+              placeholder="#01599D"
+              disabled={isSubmitting}
+              {...register('colorHex')}
+            />
+          </FormField>
+        </DrawerSectionCard>
+
+        <DrawerSectionCard
+          icon={Send}
+          title="Publishing"
+          description="Visibility status. List order is managed via Reorder Metro Lines."
+        >
+          <FormField label="Status" htmlFor="status" error={errors.status?.message}>
+            <Select id="status" disabled={isSubmitting} {...register('status')}>
+              <option value="DRAFT">Draft</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </Select>
+          </FormField>
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

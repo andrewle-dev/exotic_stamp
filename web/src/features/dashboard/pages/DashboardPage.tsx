@@ -8,6 +8,7 @@ import {
   Ticket,
 } from 'lucide-react'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { isForbiddenError } from '../../../lib/api/errors'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
@@ -69,12 +70,16 @@ export function DashboardPage() {
       {
         id: 'campaign',
         header: 'Campaign',
+        ...COL_WIDTH.entity,
+        defaultWidth: 240,
         cell: (row) => resolveCampaignLabel(row.campaignId, campaignsList),
       },
       {
         id: 'stamps',
         header: 'Stamps collected',
         align: 'right',
+        ...COL_WIDTH.number,
+        defaultWidth: 140,
         cell: (row) => formatAnalyticsNumber(row.stampCount),
       },
     ],
@@ -86,17 +91,22 @@ export function DashboardPage() {
       {
         id: 'station',
         header: 'Station',
+        ...COL_WIDTH.entity,
+        defaultWidth: 200,
         cell: (row: (typeof topStations)[number]) => row.stationName,
       },
       {
         id: 'line',
         header: 'Line',
+        ...COL_WIDTH.entity,
+        defaultWidth: 140,
         cell: (row: (typeof topStations)[number]) => row.lineName ?? '—',
       },
       {
         id: 'collectors',
         header: 'Collectors',
         align: 'right' as const,
+        ...COL_WIDTH.number,
         cell: (row: (typeof topStations)[number]) => formatAnalyticsNumber(row.collectorCount),
       },
     ],
@@ -204,6 +214,7 @@ export function DashboardPage() {
               />
             )}
             <DataTable
+              tableId="dashboard-campaign-stamps"
               columns={campaignColumns}
               data={campaignStampRows}
               getRowId={(row) => row.campaignId}
@@ -221,6 +232,7 @@ export function DashboardPage() {
         >
           {topStations.length > 0 ? (
             <DataTable
+              tableId="dashboard-top-stations"
               columns={stationColumns}
               data={topStations}
               getRowId={(row) => row.stationId}

@@ -1,8 +1,12 @@
 package metro.ExoticStamp.modules.metro.presentation.mapper;
 
+import metro.ExoticStamp.common.reorder.ReorderResponse;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
 import metro.ExoticStamp.common.response.PageResponse;
 import metro.ExoticStamp.modules.metro.application.command.CreateLineCommand;
 import metro.ExoticStamp.modules.metro.application.command.CreateStationCommand;
+import metro.ExoticStamp.modules.metro.application.command.ReorderLinesCommand;
+import metro.ExoticStamp.modules.metro.application.command.ReorderStationsCommand;
 import metro.ExoticStamp.modules.metro.application.command.ScanResolveCommand;
 import metro.ExoticStamp.modules.metro.application.command.UpdateLineCommand;
 import metro.ExoticStamp.modules.metro.application.command.UpdateScanKeysCommand;
@@ -21,6 +25,8 @@ import metro.ExoticStamp.modules.metro.presentation.dto.ScanKeyStatusApi;
 import metro.ExoticStamp.modules.metro.presentation.dto.ScanTypeApi;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.CreateLineRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.CreateStationRequest;
+import metro.ExoticStamp.modules.metro.presentation.dto.request.ReorderLinesRequest;
+import metro.ExoticStamp.modules.metro.presentation.dto.request.ReorderStationsRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.ScanResolveRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.UpdateLineRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.UpdateScanKeysRequest;
@@ -64,6 +70,19 @@ public class MetroPresentationMapper {
                 .colorHex(request.getColorHex())
                 .sortOrder(request.getSortOrder())
                 .status(enumName(request.getStatus()))
+                .build();
+    }
+
+    public ReorderLinesCommand toReorderLinesCommand(ReorderLinesRequest request) {
+        return ReorderLinesCommand.builder()
+                .orderedIds(request.getOrderedIds())
+                .build();
+    }
+
+    public ReorderStationsCommand toReorderStationsCommand(ReorderStationsRequest request) {
+        return ReorderStationsCommand.builder()
+                .lineId(request.getLineId())
+                .orderedIds(request.getOrderedIds())
                 .build();
     }
 
@@ -264,6 +283,10 @@ public class MetroPresentationMapper {
 
     public PublicAssetUploadResponse toResponse(PublicAssetUploadView view) {
         return new PublicAssetUploadResponse(view.getUrl());
+    }
+
+    public ReorderResponse toResponse(ReorderResultView view) {
+        return ReorderResponse.from(view);
     }
 
     private static String enumName(Enum<?> value) {

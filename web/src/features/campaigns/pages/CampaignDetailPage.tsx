@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, Check, Copy, MapPinPlus, Pencil, Trash2 } from 'lucide-react'
-import { Breadcrumbs } from '../../../components/navigation/Breadcrumbs'
+import { DetailPageHeader } from '../../../components/navigation/DetailPageHeader'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
@@ -135,7 +135,7 @@ export function CampaignDetailPage() {
           message="This campaign may have been removed or you may not have access."
           action={
             <Button variant="secondary" onClick={() => navigate(ROUTES.campaigns)}>
-              Back to campaigns
+              Back to Campaigns
             </Button>
           }
         />
@@ -150,41 +150,35 @@ export function CampaignDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs
-        items={[
-          { label: 'Campaigns', to: ROUTES.campaigns },
-          { label: campaign.name },
-        ]}
-      />
-
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold text-foreground">{campaign.name}</h2>
+      <DetailPageHeader
+        backLabel="Back to Campaigns"
+        backTo={ROUTES.campaigns}
+        title={campaign.name}
+        subtitle={`${campaign.code} · ${formatDateRange(campaign.startAt, campaign.endAt)}`}
+        badges={
+          <>
             <StatusBadge status={campaign.campaignType ?? 'STANDARD'} />
             <StatusBadge status={campaign.status} />
             {scheduleState ? <StatusBadge status={scheduleState} /> : null}
-          </div>
-          <p className="font-mono text-sm text-muted-foreground">
-            {campaign.code} · {formatDateRange(campaign.startAt, campaign.endAt)}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
-            <Pencil className="h-4 w-4" />
-            Edit campaign
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setAddStationOpen(true)}>
-            <MapPinPlus className="h-4 w-4" />
-            Add station
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-            Archive campaign
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4" />
+              Edit campaign
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setAddStationOpen(true)}>
+              <MapPinPlus className="h-4 w-4" />
+              Add station
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+              Archive campaign
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -192,7 +186,6 @@ export function CampaignDetailPage() {
             <CardTitle>Campaign Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <DetailRow label="ID" value={<span className="font-mono text-xs">{campaign.id}</span>} />
             <DetailRow label="Code" value={campaign.code} />
             <DetailRow label="Name" value={campaign.name} />
             <DetailRow label="Display name" value={campaign.displayName ?? '—'} />

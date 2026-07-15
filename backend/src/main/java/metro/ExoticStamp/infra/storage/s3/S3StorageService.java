@@ -16,6 +16,6 @@ public class S3StorageService implements StorageService {
 
     @Override
     public void delete(String fileUrl) {
-        throw new UnsupportedOperationException("S3 storage not configured yet");
+        throw new UnsupportedOperationException("S3- storage not configured yet");
     }
 }

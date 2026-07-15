@@ -153,4 +153,28 @@ void main() {
       expect(cubit.state.overview?.partialErrors, isNotEmpty);
     },
   );
+
+  blocTest<RewardsCubit, RewardsState>(
+    'emits rewardPending when a reward is pending fulfillment',
+    build: () {
+      when(() => repository.getRewardsOverview()).thenAnswer(
+        (_) async => const RewardsOverview(
+          rewards: [
+            UserReward(
+              id: 'reward-1',
+              campaignId: 'campaign-1',
+              milestoneId: 'milestone-1',
+              rewardTitle: 'Pending Voucher',
+              status: UserRewardStatus.pending,
+            ),
+          ],
+        ),
+      );
+      return cubit;
+    },
+    act: (cubit) => cubit.load(),
+    verify: (_) {
+      expect(cubit.state.status, RewardsStatus.rewardPending);
+    },
+  );
 }

@@ -1,5 +1,6 @@
 package metro.ExoticStamp.modules.metro.infrastructure.persistence;
 
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import metro.ExoticStamp.modules.metro.domain.model.MetroStatus;
 import metro.ExoticStamp.modules.metro.domain.model.Station;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class StationRepositoryAdapter implements StationRepository {
 
     private final JpaStationRepository jpaStationRepository;
+    private final EntityManager entityManager;
 
     @Override
     public Optional<Station> findById(UUID id) {
@@ -37,6 +39,11 @@ public class StationRepositoryAdapter implements StationRepository {
     @Override
     public Station save(Station station) {
         return jpaStationRepository.save(station);
+    }
+
+    @Override
+    public void flush() {
+        entityManager.flush();
     }
 
     @Override

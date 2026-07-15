@@ -1,27 +1,44 @@
 import { useMemo, useState } from 'react'
-import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowUpDown, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
-import { Input } from '../../../components/ui/FormField'
 import { isForbiddenError } from '../../../lib/api/errors'
-import type { MilestoneResponse, MilestoneRewardType, MilestoneStatus } from '../../../types/milestones'
+import type { MilestoneResponse } from '../../../types/milestones'
 import { useCampaigns } from '../../campaigns/hooks'
 import { resolveCampaignLabel } from '../../stamp-designs/utils/resolve-labels'
 import { useDeleteMilestone, useMilestones } from '../hooks'
 import { MilestoneFormDrawer } from '../components/MilestoneFormDrawer'
 import { MilestoneDetailDrawer } from '../components/MilestoneDetailDrawer'
-
-type StatusFilter = MilestoneStatus | 'ALL'
-type RewardTypeFilter = MilestoneRewardType | 'ALL'
+import { MilestonesReorderDrawer } from '../components/MilestonesReorderDrawer'
+import {
+  EMPTY_MILESTONE_FILTERS,
+  MILESTONE_REWARD_TYPE_LABELS,
+  type MilestoneFilters,
+  type MilestoneRewardTypeFilter,
+  type MilestoneStatusFilter,
+} from '../filter-schema'
 
 function filterMilestonesPage(
   milestones: MilestoneResponse[],
   search: string,
-  rewardTypeFilter: RewardTypeFilter,
+  rewardTypeFilter: MilestoneRewardTypeFilter,
 ): MilestoneResponse[] {
   const needle = search.trim().toLowerCase()
 
@@ -42,17 +59,36 @@ function filterMilestonesPage(
 }
 
 export function MilestonesPage() {
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [campaignFilter, setCampaignFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [rewardTypeFilter, setRewardTypeFilter] = useState<RewardTypeFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<MilestoneFilters>({ emptyFilters: EMPTY_MILESTONE_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [reorderOpen, setReorderOpen] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState<MilestoneResponse | null>(null)
   const [detailMilestone, setDetailMilestone] = useState<MilestoneResponse | null>(null)
   const [deletingMilestone, setDeletingMilestone] = useState<MilestoneResponse | null>(null)
+
+  const {
+    campaignId: campaignFilter,
+    status: statusFilter,
+    rewardType: rewardTypeFilter,
+  } = appliedFilters
 
   const listParams = useMemo(
     () => ({
@@ -69,27 +105,72 @@ export function MilestonesPage() {
   const deleteMutation = useDeleteMilestone()
 
   const campaigns = useMemo(() => campaignsPage?.content ?? [], [campaignsPage?.content])
+  const selectedCampaign = useMemo(
+    () => campaigns.find((c) => c.id === campaignFilter),
+    [campaigns, campaignFilter],
+  )
 
   const filteredContent = useMemo(
     () => filterMilestonesPage(data?.content ?? [], search, rewardTypeFilter),
     [data?.content, search, rewardTypeFilter],
   )
 
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    campaignFilter
+      ? buildLabeledFilterTag({
+          id: 'campaign',
+          label: 'Campaign',
+          value: (() => {
+            const campaign = campaigns.find((c) => c.id === campaignFilter)
+            return campaign ? campaign.displayName || campaign.name : campaignFilter
+          })(),
+          accent: 'campaign',
+          onRemove: () => removeFilter('campaignId', ''),
+        })
+      : null,
+    statusFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'status',
+          label: 'Status',
+          value: statusFilter,
+          accent: 'status',
+          onRemove: () => removeFilter('status', 'ALL'),
+        })
+      : null,
+    rewardTypeFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'reward',
+          label: 'Reward type',
+          value: MILESTONE_REWARD_TYPE_LABELS[rewardTypeFilter],
+          accent: 'reward',
+          onRemove: () => removeFilter('rewardType', 'ALL'),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${filteredContent.length} filtered milestone${filteredContent.length === 1 ? '' : 's'}`
+    : `Showing ${filteredContent.length} milestone${filteredContent.length === 1 ? '' : 's'}`
+
   const columns: DataTableColumn<MilestoneResponse>[] = useMemo(
     () => [
       {
         id: 'code',
         header: 'Code',
+        ...COL_WIDTH.code,
         cell: (row) => <span className="font-mono text-xs">{row.code}</span>,
       },
-      { id: 'name', header: 'Name', cell: (row) => row.name },
+      { id: 'name', header: 'Name', ...COL_WIDTH.name, cell: (row) => row.name },
       {
         id: 'campaign',
         header: 'Campaign',
+        ...COL_WIDTH.entity,
         cell: (row) => {
           const { label, unknown } = resolveCampaignLabel(row.campaignId, campaigns)
           return (
-            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'} title={row.campaignId}>
+            <span className={unknown ? 'text-amber-700 text-xs' : 'text-sm'}>
               {label}
             </span>
           )
@@ -99,25 +180,30 @@ export function MilestonesPage() {
         id: 'requiredStampCount',
         header: 'Required stamps',
         align: 'right',
+        defaultWidth: 130,
+        minWidth: 100,
         cell: (row) => `${row.requiredStampCount} stamps`,
       },
       {
         id: 'rewardType',
         header: 'Reward type',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.rewardType} />,
       },
-      { id: 'rewardTitle', header: 'Reward title', cell: (row) => row.rewardTitle },
+      {
+        id: 'rewardTitle',
+        header: 'Reward title',
+        ...COL_WIDTH.title,
+        cell: (row) => row.rewardTitle,
+      },
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) =>
           row.status ? <StatusBadge status={row.status} /> : <span className="text-muted-foreground">—</span>,
-      },
-      {
-        id: 'sortOrder',
-        header: 'Sort order',
-        align: 'right',
-        cell: (row) => row.sortOrder ?? '—',
       },
     ],
     [campaigns],
@@ -136,53 +222,54 @@ export function MilestonesPage() {
             Define stamp collection milestones and linked reward types.
           </p>
         </div>
-        <Button
-          size="md"
-          onClick={() => {
-            setEditingMilestone(null)
-            setDrawerOpen(true)
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Create milestone
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="md"
+            disabled={!campaignFilter}
+            title={
+              campaignFilter ? undefined : 'Select a campaign filter to reorder milestones'
+            }
+            onClick={() => setReorderOpen(true)}
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            Reorder
+          </Button>
+          <Button
+            size="md"
+            onClick={() => {
+              setEditingMilestone(null)
+              setDrawerOpen(true)
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Create milestone
+          </Button>
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Search and reward type filter apply to the current page only. Campaign and status filters
-        use the server list endpoint.
-      </p>
-
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:flex-wrap lg:items-end">
-        <div className="min-w-[200px] flex-1 space-y-1">
-          <label htmlFor="milestone-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="milestone-search"
-            placeholder="Search by code, name, or reward…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="milestone-campaign-filter" className="text-xs font-medium text-muted-foreground">
-            Campaign
-          </label>
-          <select
+      <ListFilterToolbar
+        searchId="milestone-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by code, name, or reward…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([
+          Boolean(campaignFilter),
+          statusFilter !== 'ALL',
+          rewardTypeFilter !== 'ALL',
+        ])}
+        filterSubtitle="Narrow the list with campaign and reward filters."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="milestone-campaign-filter" label="Campaign" accent="campaign">
+          <FilterSelect
             id="milestone-campaign-filter"
-            value={campaignFilter}
-            onChange={(e) => {
-              setCampaignFilter(e.target.value)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-48"
+            value={draftFilters.campaignId}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({ ...prev, campaignId: e.target.value }))
+            }
           >
             <option value="">All campaigns</option>
             {campaigns.map((c) => (
@@ -190,61 +277,52 @@ export function MilestonesPage() {
                 {c.displayName || c.name} ({c.code})
               </option>
             ))}
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label htmlFor="milestone-status-filter" className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
-          <select
+        <FilterGroup id="milestone-status-filter" label="Status" accent="status">
+          <FilterSelect
             id="milestone-status-filter"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as StatusFilter)
-              setPage(0)
-            }}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-36"
+            value={draftFilters.status}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                status: e.target.value as MilestoneStatusFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="DRAFT">Draft</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
             <option value="ARCHIVED">Archived</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
 
-        <div className="space-y-1">
-          <label
-            htmlFor="milestone-reward-type-filter"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            Reward type
-          </label>
-          <select
+        <FilterGroup id="milestone-reward-type-filter" label="Reward type" accent="reward">
+          <FilterSelect
             id="milestone-reward-type-filter"
-            value={rewardTypeFilter}
-            onChange={(e) => setRewardTypeFilter(e.target.value as RewardTypeFilter)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+            value={draftFilters.rewardType}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                rewardType: e.target.value as MilestoneRewardTypeFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="VOUCHER">Voucher</option>
             <option value="DIGITAL_STICKER">Digital sticker</option>
             <option value="BONUS_STAMP">Bonus stamp</option>
-          </select>
-        </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
 
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSearch(searchInput.trim())
-          }}
-        >
-          Apply
-        </Button>
-      </div>
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="milestones"
         columns={columns}
         data={filteredContent}
         getRowId={(row) => row.id}
@@ -252,6 +330,7 @@ export function MilestonesPage() {
         error={error}
         onRetry={() => void refetch()}
         caption="Milestones"
+        actionsWidth={128}
         emptyTitle="No milestones found"
         emptyDescription="Create a milestone or adjust filters on this page."
         rowActions={(row) => (
@@ -294,10 +373,7 @@ export function MilestonesPage() {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 
@@ -310,6 +386,19 @@ export function MilestonesPage() {
           setEditingMilestone(null)
         }}
       />
+
+      {campaignFilter ? (
+        <MilestonesReorderDrawer
+          open={reorderOpen}
+          campaignId={campaignFilter}
+          campaignLabel={
+            selectedCampaign
+              ? `${selectedCampaign.code} · ${selectedCampaign.name}`
+              : undefined
+          }
+          onClose={() => setReorderOpen(false)}
+        />
+      ) : null}
 
       <MilestoneDetailDrawer
         open={Boolean(detailMilestone)}

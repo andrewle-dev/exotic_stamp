@@ -31,7 +31,6 @@ export const stationFormSchema = z.object({
   displayName: z.string().max(100).optional(),
   description: z.string().max(500).optional(),
   address: z.string().max(255).optional(),
-  sortOrder: z.number().int().min(0),
   latitude: optionalNumericField(-90, 90),
   longitude: optionalNumericField(-180, 180),
   zoneRadiusMeters: optionalNumericField(20, 1000, true),
@@ -49,7 +48,6 @@ export const defaultStationFormValues: StationFormValues = {
   displayName: '',
   description: '',
   address: '',
-  sortOrder: 0,
   latitude: '',
   longitude: '',
   zoneRadiusMeters: '',
@@ -67,6 +65,17 @@ export const scanKeysFormSchema = z.object({
 })
 
 export type ScanKeysFormValues = z.infer<typeof scanKeysFormSchema>
+
+export const createStationScanKeySchema = z.object({
+  scanType: z.enum(['NFC', 'QR_STATIC', 'QR_DYNAMIC_PLACEHOLDER']),
+  label: z.string().max(100, 'Label must be at most 100 characters').optional(),
+  placementNote: z
+    .string()
+    .max(255, 'Placement note must be at most 255 characters')
+    .optional(),
+})
+
+export type CreateStationScanKeyFormValues = z.infer<typeof createStationScanKeySchema>
 
 export function parseOptionalNumber(value: string | undefined): number | undefined {
   if (value === undefined || value.trim() === '') {

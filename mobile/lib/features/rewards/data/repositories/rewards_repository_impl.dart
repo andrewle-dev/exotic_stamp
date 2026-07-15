@@ -124,6 +124,14 @@ class RewardsRepositoryImpl implements RewardsRepository {
     return model.toEntity();
   }
 
+  @override
+  Future<VoucherDetail> redeemVoucher({required String id}) async {
+    throw const Failure(
+      code: FailureCode.redeemNotSupported,
+      message: 'Đổi quà trực tuyến chưa được hỗ trợ trên backend.',
+    );
+  }
+
   NextMilestoneHint? _resolveNextMilestone({
     required List<MilestoneModel> milestones,
     required int collected,

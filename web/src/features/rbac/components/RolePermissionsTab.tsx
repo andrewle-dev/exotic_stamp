@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField, Input } from '../../../components/ui/FormField'
 import { ApiErrorAlert } from '../../../components/feedback/ApiErrorAlert'
@@ -48,11 +49,15 @@ export function RolePermissionsTab() {
       {
         id: 'permission',
         header: 'Permission',
+        ...COL_WIDTH.name,
+        defaultWidth: 220,
         cell: (row) => row.permission ?? '—',
       },
       {
         id: 'description',
         header: 'Description',
+        ...COL_WIDTH.description,
+        defaultWidth: 320,
         cell: (row) => row.description?.trim() || '—',
       },
     ],
@@ -177,6 +182,7 @@ export function RolePermissionsTab() {
           </div>
 
           <DataTable
+            tableId="rbac-role-permissions"
             columns={columns}
             data={rolePermissions}
             getRowId={(row) => row.id}
@@ -184,6 +190,7 @@ export function RolePermissionsTab() {
             error={error}
             onRetry={() => void refetch()}
             caption={`Permissions for ${selectedRole?.role ?? 'role'}`}
+            actionsWidth={72}
             emptyTitle="No permissions assigned"
             emptyDescription="Assign a permission using the form above."
             rowActions={(row) => (

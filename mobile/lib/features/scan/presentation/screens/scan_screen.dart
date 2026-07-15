@@ -7,12 +7,16 @@ import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/config/scan_capabilities.dart';
 import '../../../../core/nfc/nfc_availability.dart';
 import '../../../../core/nfc/nfc_reader.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
 import '../cubit/scan_flow_cubit.dart';
 import '../cubit/scan_flow_state.dart';
+import '../widgets/nfc_pulse_circle.dart';
 import '../widgets/scan_action_buttons.dart';
+import '../widgets/scan_flow_listener.dart';
+import '../widgets/scan_pro_tip_card.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -22,15 +26,22 @@ class ScanScreen extends StatefulWidget {
 }
 
 class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
-  final MobileScannerController _qrController = MobileScannerController(
-    formats: const [BarcodeFormat.qrCode],
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
+  // QR scanner retained for future re-enable via ScanCapabilities.enableQrFlow.
+  MobileScannerController? _qrController;
 
   bool _handlingQr = false;
   bool _nfcSessionActive = false;
   ScanFlowCubit? _flowCubit;
   NfcReader? _nfcReader;
+
+  bool get _qrEnabled => ScanCapabilities.enableQrFlow;
+
+  MobileScannerController get _requireQrController {
+    return _qrController ??= MobileScannerController(
+      formats: const [BarcodeFormat.qrCode],
+      detectionSpeed: DetectionSpeed.noDuplicates,
+    );
+  }
 
   @override
   void initState() {
@@ -62,7 +73,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopNfcSession();
-    _qrController.dispose();
+    _qrController?.dispose();
     super.dispose();
   }
 
@@ -76,7 +87,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
       _stopNfcSession();
-      _qrController.stop();
+      _qrController?.stop();
     }
   }
 
@@ -113,7 +124,6 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
     final state = cubit.state;
     if (!_isOnScanRootRoute() ||
         state.phase != ScanFlowPhase.waitingForNfc ||
-        state.qrFallbackAvailable ||
         _nfcSessionActive) {
       return;
     }
@@ -139,7 +149,6 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
       );
     } catch (_) {
       _nfcSessionActive = false;
-      cubit.enableQrFallback();
     }
   }
 
@@ -157,7 +166,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
       return;
     }
 
-    await _qrController.stop();
+    await _qrController?.stop();
     if (!mounted) {
       return;
     }
@@ -166,7 +175,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _handleQrDetect(BarcodeCapture capture) async {
-    if (_handlingQr) {
+    if (!_qrEnabled || _handlingQr) {
       return;
     }
 
@@ -186,133 +195,174 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
     }
 
     _handlingQr = true;
-    await _qrController.stop();
+    await _qrController?.stop();
     await cubit.onQrPayloadRead(raw);
     _handlingQr = false;
   }
 
-  void _onFlowStateChanged(BuildContext context, ScanFlowState state) {
-    if (state.phase != ScanFlowPhase.waitingForNfc) {
-      _stopNfcSession();
-    }
-
-    if (state.awaitingCollectConfirmation && state.resolvedStation != null) {
-      context.push(RouteNames.scanLocationVerification);
-      return;
-    }
-
-    if (state.phase == ScanFlowPhase.success) {
-      context.push(RouteNames.scanSuccess);
-      return;
-    }
-
-    if (_isTerminalPhase(state.phase) &&
-        state.phase != ScanFlowPhase.success &&
-        !state.awaitingCollectConfirmation) {
-      context.push(RouteNames.scanError);
-    }
+  void _cancelScan() {
+    _stopNfcSession();
+    _qrController?.stop();
+    _flowCubit?.resetFlow();
+    context.go(RouteNames.scanTapToCollect);
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<ScanFlowCubit, ScanFlowState>(
-      listenWhen: (previous, current) =>
-          previous.phase != current.phase ||
-          previous.awaitingCollectConfirmation !=
-              current.awaitingCollectConfirmation,
-      listener: _onFlowStateChanged,
-      child: Scaffold(
-        backgroundColor: AppColors.backgroundWhite,
-        appBar: AppBar(
+    return ScanFlowListener(
+      child: BlocListener<ScanFlowCubit, ScanFlowState>(
+        listenWhen: (previous, current) =>
+            previous.phase != current.phase &&
+            current.phase == ScanFlowPhase.waitingForNfc,
+        listener: (_, __) => _syncNfcSession(),
+        child: Scaffold(
           backgroundColor: AppColors.backgroundWhite,
-          foregroundColor: AppColors.textPrimary,
-          title: const Text('Chạm NFC'),
-          centerTitle: true,
-        ),
-        body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
-          builder: (context, state) {
-            if (state.phase == ScanFlowPhase.checkingNfcAvailability ||
-                state.phase == ScanFlowPhase.readingNfc ||
-                state.phase == ScanFlowPhase.checkingLocation ||
-                state.phase == ScanFlowPhase.resolvingStation ||
-                state.phase == ScanFlowPhase.collecting) {
-              return const AppLoadingView(
-                message: 'Đang xử lý mã quét...',
-              );
-            }
+          appBar: AppBar(
+            backgroundColor: AppColors.backgroundWhite,
+            foregroundColor: AppColors.textPrimary,
+            title: const Text('Quét NFC'),
+            centerTitle: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: _cancelScan,
+            ),
+          ),
+          body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
+            builder: (context, state) {
+              if (state.phase == ScanFlowPhase.checkingNfcAvailability ||
+                  state.phase == ScanFlowPhase.readingNfc ||
+                  state.phase == ScanFlowPhase.checkingLocation ||
+                  state.phase == ScanFlowPhase.resolvingStation ||
+                  state.phase == ScanFlowPhase.collecting ||
+                  state.phase == ScanFlowPhase.checkingCollectStatus) {
+                return const AppLoadingView(message: 'Đang xử lý...');
+              }
 
-            if (state.phase == ScanFlowPhase.qrFallbackReady) {
-              return _QrFallbackView(
-                controller: _qrController,
-                onDetect: _handleQrDetect,
-                onUseNfc: state.nfcAvailability == NfcAvailabilityStatus.enabled
-                    ? _resumeNfcFromQrFallback
+              // QR fallback view: only when ScanCapabilities.enableQrFlow.
+              if (_qrEnabled &&
+                  state.phase == ScanFlowPhase.qrFallbackReady) {
+                return _QrFallbackView(
+                  controller: _requireQrController,
+                  onDetect: _handleQrDetect,
+                  onCancel: _cancelScan,
+                  onUseNfc:
+                      state.nfcAvailability == NfcAvailabilityStatus.enabled
+                          ? _resumeNfcFromQrFallback
+                          : null,
+                );
+              }
+
+              return _NfcScanView(
+                state: state,
+                nfcSessionActive: _nfcSessionActive,
+                onCancel: _cancelScan,
+                onUseQr: _qrEnabled && state.qrFallbackAvailable
+                    ? () {
+                        _stopNfcSession();
+                        _flowCubit?.enableQrFallback();
+                        _requireQrController.start();
+                      }
                     : null,
               );
-            }
-
-            return _NfcWaitingView(
-              nfcAvailability: state.nfcAvailability,
-              onStartNfc: _syncNfcSession,
-              onUseQr: state.qrFallbackAvailable
-                  ? () {
-                      _stopNfcSession();
-                      _flowCubit?.enableQrFallback();
-                      _qrController.start();
-                    }
-                  : null,
-            );
-          },
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-class _NfcWaitingView extends StatelessWidget {
-  const _NfcWaitingView({
-    required this.nfcAvailability,
-    required this.onStartNfc,
+class _NfcScanView extends StatelessWidget {
+  const _NfcScanView({
+    required this.state,
+    required this.nfcSessionActive,
+    required this.onCancel,
     this.onUseQr,
   });
 
-  final NfcAvailabilityStatus? nfcAvailability;
-  final VoidCallback onStartNfc;
+  final ScanFlowState state;
+  final bool nfcSessionActive;
+  final VoidCallback onCancel;
   final VoidCallback? onUseQr;
+
+  String get _statusTitle {
+    return switch (state.nfcAvailability) {
+      NfcAvailabilityStatus.disabled => 'NFC đang tắt',
+      NfcAvailabilityStatus.unavailable => 'NFC không hỗ trợ',
+      NfcAvailabilityStatus.iosTestBuildDisabled => 'NFC tạm tắt (iOS test)',
+      _ => nfcSessionActive ? 'Đang quét...' : 'Sẵn sàng quét',
+    };
+  }
+
+  String get _statusSubtitle {
+    // NFC-only copy when QR flow is temporarily disabled.
+    if (!ScanCapabilities.enableQrFlow) {
+      return switch (state.nfcAvailability) {
+        NfcAvailabilityStatus.disabled =>
+          'Bật NFC trong Cài đặt để thu stamp tại ga.',
+        NfcAvailabilityStatus.unavailable =>
+          'Thiết bị không hỗ trợ NFC. Không thể thu stamp trên thiết bị này.',
+        NfcAvailabilityStatus.iosTestBuildDisabled =>
+          'NFC tạm tắt trên bản test iOS. Thử lại trên thiết bị hỗ trợ NFC.',
+        _ =>
+          'Chạm điện thoại vào tag NFC tại ga và giữ yên vài giây.',
+      };
+    }
+
+    return switch (state.nfcAvailability) {
+      NfcAvailabilityStatus.disabled =>
+        'Bật NFC trong Cài đặt hoặc dùng QR fallback.',
+      NfcAvailabilityStatus.unavailable =>
+        'Thiết bị không hỗ trợ NFC. Dùng QR fallback nếu cần.',
+      NfcAvailabilityStatus.iosTestBuildDisabled =>
+        'NFC tạm tắt trên bản test iOS. Dùng QR fallback nếu cần.',
+      _ =>
+        'Chạm điện thoại vào tag NFC tại ga và giữ yên vài giây.',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = switch (nfcAvailability) {
-      NfcAvailabilityStatus.iosTestBuildDisabled =>
-        'NFC tạm tắt trên bản test iOS. Bạn có thể dùng QR fallback.',
-      NfcAvailabilityStatus.disabled =>
-        'Hãy bật NFC trong Cài đặt để tiếp tục.',
-      NfcAvailabilityStatus.unavailable =>
-        'Thiết bị không hỗ trợ NFC. Dùng QR fallback nếu cần.',
-      _ =>
-        'Đưa mặt lưng điện thoại lại gần tag NFC tại ga và giữ yên vài giây.',
-    };
+    final isScanning =
+        state.nfcAvailability == NfcAvailabilityStatus.enabled &&
+            nfcSessionActive;
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.xxl),
       child: Column(
         children: [
-          ScanHeroCard(
-            title: 'Chạm NFC để thu stamp',
-            subtitle: subtitle,
-            icon: Icons.nfc_rounded,
-          ),
-          const Spacer(),
-          if (nfcAvailability == NfcAvailabilityStatus.enabled)
-            ScanPrimaryButton(
-              label: 'Bắt đầu quét NFC',
-              onPressed: onStartNfc,
+          Text(
+            _statusTitle,
+            style: AppTextStyles.displayMedium.copyWith(
+              color: AppColors.primaryBlue,
             ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            _statusSubtitle,
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xxxl),
+          NfcPulseCircle(isScanning: isScanning),
+          const SizedBox(height: AppSpacing.xxxl),
+          const ScanProTipCard(),
+          const SizedBox(height: AppSpacing.xxxl),
+          ScanOutlineButton(label: 'Hủy quét', onPressed: onCancel),
           if (onUseQr != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            ScanOutlineButton(
-              label: 'Dùng QR fallback',
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
               onPressed: onUseQr,
+              child: Text(
+                'Dùng QR fallback',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
           ],
         ],
@@ -321,51 +371,62 @@ class _NfcWaitingView extends StatelessWidget {
   }
 }
 
+/// Retained for possible future re-enable via [ScanCapabilities.enableQrFlow].
 class _QrFallbackView extends StatelessWidget {
   const _QrFallbackView({
     required this.controller,
     required this.onDetect,
+    required this.onCancel,
     this.onUseNfc,
   });
 
   final MobileScannerController controller;
   final void Function(BarcodeCapture capture) onDetect;
+  final VoidCallback onCancel;
   final VoidCallback? onUseNfc;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'QR fallback',
-            style: AppTextStyles.titleMedium.copyWith(
+            style: AppTextStyles.sectionTitle.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Chỉ dùng khi NFC không khả dụng.',
-            style: AppTextStyles.bodyMedium,
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Chỉ dùng khi NFC không khả dụng hoặc bạn chọn fallback.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xl),
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),
-              child: MobileScanner(
-                controller: controller,
-                onDetect: onDetect,
+              child: ColoredBox(
+                color: AppColors.surface,
+                child: MobileScanner(
+                  controller: controller,
+                  onDetect: onDetect,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          if (onUseNfc != null)
-            ScanOutlineButton(
+          const SizedBox(height: AppSpacing.xl),
+          ScanOutlineButton(label: 'Hủy quét', onPressed: onCancel),
+          if (onUseNfc != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            ScanPrimaryButton(
               label: 'Quay lại NFC',
               onPressed: onUseNfc,
             ),
+          ],
         ],
       ),
     );

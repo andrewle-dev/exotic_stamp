@@ -53,6 +53,15 @@ void main() {
         campaignName: 'Metro 2026',
       ),
     );
+    when(() => remoteDataSource.getPromotionalBanners()).thenAnswer(
+      (_) async => [
+        PartnerBannerModel(
+          partnerId: 'p1',
+          partnerName: 'Highland Coffee',
+          bannerImageUrl: 'https://cdn.example/banner.png',
+        ),
+      ],
+    );
     when(
       () => remoteDataSource.getMilestones(campaignId: 'camp-1'),
     ).thenAnswer(
@@ -73,7 +82,11 @@ void main() {
     expect(summary.recentStamps, hasLength(1));
     expect(summary.nextReward?.rewardTitle, 'Coffee Voucher');
     expect(summary.nextReward?.stampsRemaining, 3);
+    expect(summary.milestones, hasLength(1));
+    expect(summary.milestones.first.achieved, isFalse);
     expect(summary.activeBanner?.campaignName, 'Metro 2026');
+    expect(summary.promotionalBanners, hasLength(1));
+    expect(summary.promotionalBanners.first.partnerName, 'Highland Coffee');
   });
 
   test('keeps successful sections when other home APIs partially fail',
@@ -110,6 +123,12 @@ void main() {
         message: 'Campaign unavailable',
       ),
     );
+    when(() => remoteDataSource.getPromotionalBanners()).thenThrow(
+      const Failure(
+        code: FailureCode.networkError,
+        message: 'Partner banners unavailable',
+      ),
+    );
 
     final summary = await repository.getHomeSummary();
 
@@ -117,8 +136,10 @@ void main() {
     expect(summary.progress?.collected, 1);
     expect(summary.recentStamps, isEmpty);
     expect(summary.activeBanner, isNull);
+    expect(summary.promotionalBanners, isEmpty);
     expect(summary.nextReward, isNull);
-    expect(summary.partialErrors, hasLength(2));
+    expect(summary.partialErrors, hasLength(3));
     expect(summary.partialErrors, contains('Recent stamps unavailable'));
+    expect(summary.partialErrors, contains('Partner banners unavailable'));
   });
 }

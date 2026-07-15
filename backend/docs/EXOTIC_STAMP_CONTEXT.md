@@ -1,4 +1,4 @@
-﻿# EXOTIC_STAMP_CONTEXT
+# EXOTIC_STAMP_CONTEXT
 
 > Tài liệu ngữ cảnh tổng hợp cho dự án Exotic Stamp (Metro Stamp).
 ---
@@ -63,26 +63,30 @@
 - `auth`
 - `user`
 - `rbac`
+- `metro` (lines/stations, scan resolve, station scan keys, upload)
+- `collection` (campaigns, designs, collect runtime)
+- `reward` (milestones, vouchers, async evaluation)
+- `community` (referral, share, notifications)
 - các thành phần `infra` (mail queue, cache nền tảng)
 
 ### 4.2 Đã có schema DB (Flyway) nhưng module business chưa hoàn thiện code
 
-- `metro`
-- `collection`
-- `reward`
-- `monetization`
-- `community`
+- `monetization` (`V5__monetization.sql` only; empty Java package)
+
+Alignment details: `docs/ARCHITECTURE_ALIGNMENT_PLAN.md`.
 
 ---
 
 ## 5. Database migration map
 
-- `V1__create_mail_jobs_table.sql`: hàng đợi gửi mail bất đồng bộ + retry.
+- `V1__core_identity_rbac.sql`: users + RBAC.
 - `V2__metro.sql`: `lines`, `stations` (NFC/QR hot-path indexes).
 - `V3__collection.sql`: `campaigns`, `campaign_stations`, `stamp_designs`, `user_stamps`.
 - `V4__reward.sql`: `partners`, `milestones`, `rewards`, `voucher_pool`, `user_rewards`.
 - `V5__monetization.sql`: `advertisements`, `ad_impressions`, `affiliate_banners`, `affiliate_banner_clicks`.
 - `V6__community.sql`: `referral_codes`, `referrals`, `share_events`, `notifications`.
+- `V7__mail_jobs.sql`: hàng đợi gửi mail bất đồng bộ + retry.
+- `V8`–`V18`: auth seed/token version, collection compliance, integrity, metro constraints, campaigns, collection runtime, rewards, community MVP, `station_scan_keys`.
 
 ---
 
@@ -92,13 +96,15 @@
 - Dependency direction (không vi phạm):
   - `presentation -> application -> domain <- infrastructure`
 - Quy tắc:
-  - `domain` không import `presentation` hoặc `infrastructure`.
-  - `application` không dùng trực tiếp `JpaRepository`.
+  - `domain` không import `presentation`, `infrastructure`, hoặc `application`.
+  - `application` không dùng trực tiếp `JpaRepository` hoặc `modules/*/infrastructure`.
+  - JPA `@Entity` trên `domain/model` được phép; tách persistence entity là optional.
   - `infrastructure` là cánh nối kỹ thuật (JPA, Redis, JWT, Mail, queue, external integration).
+  - Cross-module qua ports / events.
 - CQS/CQRS-lite:
   - Write: `{Module}CommandService`
   - Read: `{Module}QueryService` (`readOnly=true` khi phù hợp)
-
+- ArchUnit: `ArchitectureBoundaryTest` must stay in sync with these rules.
 ---
 
 ## 7.1 Package Structure
@@ -142,60 +148,17 @@ src/main/java/metro/ExoticStamp/
 
 ## 7.2 Overview Package Structure
 
-```
-src/main/java/fbnetwork/metricsX/
-├── MetricsXApplication.java         @SpringBootApplication @EnableAsync
-├── config/
-│   ├── AppConfig.java
-│   ├── AsyncConfig.java              @EnableAsync — required for @Async
-│   ├── CacheConfig.java              One RedisTemplate<String, Object> bean
-│   ├── CacheProperties.java          @ConfigurationProperties(prefix="cache")
-│   ├── DatabaseConfig.java
-│   ├── JacksonConfig.java
-│   ├── OpenApiConfig.java            Swagger — tags: Auth, User, Sale, Customer, Service, Booking, Realtime, App
-│   ├── SecurityConfig.java           @EnableWebSecurity @EnableMethodSecurity STATELESS
-│   └── WebConfig.java                CORS configuration
-├── common/
-│   ├── annotations/
-│   ├── constants/
-│   ├── entity/
-│   │   └── BaseEntity.java           @MappedSuperclass — id(UUID), createdAt, updatedAt
-│   ├── enums/
-│   ├── exceptions/
-│   │   ├── ApiException.java
-│   │   ├── ErrorCode.java
-│   │   └── GlobalExceptionHandler.java  @RestControllerAdvice
-│   ├── kernel/                        (should be renamed to model/ — contains shared types)
-│   │   ├── PageQuery.java             domain-neutral pagination input
-│   │   └── PageResult.java            domain-neutral pagination output with map() method
-│   ├── logging/
-│   ├── response/
-│   │   ├── ApiResponse.java           generic wrapper: success, message, data, timestamp
-│   │   ├── ErrorResponse.java         record: code, message, status, path, timestamp + static of()
-│   │   └── PageResponse.java
-│   ├── security/
-│   └── utils/
-│       └── Utils.java
-├── infrastructure/                    Root-level shared infrastructure
-│   ├── cache/
-│   │   └── BaseCacheRepository.java   abstract class BaseCacheRepository<T> — shared Redis pattern
-│   ├── mail/
-│   │   ├── MailProperties.java        @Value from application.yml
-│   │   ├── MailService.java           @Service — sendVerifyEmail, sendOtpEmail, private send()
-│   │   └── template/
-│   │       ├── VerifyEmailTemplate.java   static build() — HTML with button link + escapeHtml()
-│   │       └── OtpEmailTemplate.java      static build() — HTML with digit display + dark mode
-│   └── redis/
-│       └── VerifyTokenRepository.java  verify token + cooldown in Redis
-└── modules/
-    ├── auth/
-    ├── user/
-    ├── rbac/
-    ├── metro/
-    ├── collection/
-    ├── monetization/
-    └── reward/
-```
+> Removed obsolete copy-paste from another codebase (`fbnetwork/metricsX`).  
+> Canonical tree is §7.1 (`metro.ExoticStamp`). Shared infra lives under `infra/`, not a root `infrastructure/` package.
+
+Grandfathered vs canonical layouts:
+
+| Concern | Canonical (new modules) | Grandfathered |
+|---------|-------------------------|---------------|
+| Application services | `application/service/` | auth/user/rbac/metro may use `application/` root |
+| Controllers | `presentation/controller/` | older modules may use `presentation/` root |
+| Domain models | `domain/model` with `@Entity` | same |
+| Monetization | schema only until product prioritizes | empty `modules/monetization/` |
 
 ---
 

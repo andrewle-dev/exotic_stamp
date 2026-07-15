@@ -8,6 +8,8 @@ import metro.ExoticStamp.modules.auth.infrastructure.security.UserDetailsService
 import metro.ExoticStamp.modules.metro.MetroWebMvcTestSecurityConfig;
 import metro.ExoticStamp.modules.metro.application.StationCommandService;
 import metro.ExoticStamp.modules.metro.application.StationQueryService;
+import metro.ExoticStamp.common.reorder.ReorderItemView;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
 import metro.ExoticStamp.modules.metro.application.view.StationDetailView;
 import metro.ExoticStamp.modules.metro.presentation.mapper.MetroPresentationMapper;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
@@ -20,11 +22,13 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -60,11 +64,11 @@ class AdminMetroStationControllerTest {
     }
 
     @Test
-    void createStation_unauthenticated_returns403() throws Exception {
+    void createStation_unauthenticated_returns401() throws Exception {
         mockMvc.perform(post("/api/v1/admin/metro/stations").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lineId\":\"" + LINE_ID + "\",\"code\":\"S1\",\"name\":\"Station\",\"sortOrder\":1}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -74,5 +78,20 @@ class AdminMetroStationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lineId\":\"" + LINE_ID + "\",\"code\":\"S1\",\"name\":\"Station\",\"sortOrder\":1}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_ADMIN", "METRO_STATION_MANAGE"})
+    void reorderStations_ok() throws Exception {
+        when(stationCommandService.reorderStations(any())).thenReturn(
+                new ReorderResultView(LINE_ID, 1, List.of(new ReorderItemView(STATION_ID, 0))));
+
+        mockMvc.perform(patch("/api/v1/admin/metro/stations/reorder").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lineId\":\"" + LINE_ID + "\",\"orderedIds\":[\"" + STATION_ID + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scopeId").value(LINE_ID.toString()))
+                .andExpect(jsonPath("$.data.updatedCount").value(1))
+                .andExpect(jsonPath("$.data.items[0].sortOrder").value(0));
     }
 }

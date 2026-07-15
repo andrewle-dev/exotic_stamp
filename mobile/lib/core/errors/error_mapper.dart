@@ -31,9 +31,14 @@ class ErrorMapper {
     'CAMPAIGN_NOT_ACTIVE': FailureCode.campaignInactive,
     'CAMPAIGN_ARCHIVED': FailureCode.campaignInactive,
     'CAMPAIGN_INACTIVE': FailureCode.campaignInactive,
+    'DEFAULT_CAMPAIGN_AMBIGUOUS': FailureCode.defaultCampaignAmbiguous,
+    'DEFAULT_CAMPAIGN_NOT_FOUND': FailureCode.campaignInactive,
     'REDEEM_NOT_SUPPORTED': FailureCode.redeemNotSupported,
     'NETWORK_ERROR': FailureCode.networkError,
   };
+
+  static const defaultCampaignAmbiguousMessage =
+      'Không xác định được chiến dịch mặc định cho sổ sưu tập. Vui lòng chọn tuyến.';
 
   Failure fromDioException(DioException exception) {
     if (_isNetworkFailure(exception)) {
@@ -64,9 +69,20 @@ class ErrorMapper {
   }) {
     final backendCode = json['code'] as String?;
     final message = (json['message'] as String?)?.trim();
-    final resolvedCode = backendCode != null
+    var resolvedCode = backendCode != null
         ? backendCodeMap[backendCode] ?? FailureCode.unknown
         : FailureCode.unknown;
+
+    if (resolvedCode == FailureCode.defaultCampaignAmbiguous ||
+        _isAmbiguousDefaultCampaignMessage(message)) {
+      resolvedCode = FailureCode.defaultCampaignAmbiguous;
+      return Failure(
+        code: resolvedCode,
+        message: defaultCampaignAmbiguousMessage,
+        statusCode: statusCode ?? json['status'] as int?,
+        backendCode: backendCode ?? 'DEFAULT_CAMPAIGN_AMBIGUOUS',
+      );
+    }
 
     return Failure(
       code: resolvedCode,
@@ -74,6 +90,15 @@ class ErrorMapper {
       statusCode: statusCode ?? json['status'] as int?,
       backendCode: backendCode,
     );
+  }
+
+  bool _isAmbiguousDefaultCampaignMessage(String? message) {
+    if (message == null || message.isEmpty) {
+      return false;
+    }
+    final normalized = message.toLowerCase();
+    return normalized.contains('multiple active default campaigns') ||
+        normalized.contains('provide lineid to disambiguate');
   }
 
   bool _isNetworkFailure(DioException exception) {
@@ -95,12 +120,14 @@ class ErrorMapper {
         'Thông tin chưa hợp lệ. Vui lòng kiểm tra lại.',
       FailureCode.unauthorized => 'Bạn cần đăng nhập để tiếp tục.',
       FailureCode.stampDuplicate => 'Bạn đã thu thập stamp tại ga này.',
-      FailureCode.nfcInvalid => 'Thẻ NFC hoặc mã quét không hợp lệ.',
-      FailureCode.qrExpired => 'Mã QR đã hết hạn hoặc không còn hiệu lực.',
+      FailureCode.nfcInvalid => 'Thẻ NFC không hợp lệ.',
+      // Neutral copy: SCAN_KEY_INACTIVE / QR_EXPIRED can apply beyond QR UI.
+      FailureCode.qrExpired => 'Mã quét đã hết hạn hoặc không còn hiệu lực.',
       FailureCode.gpsOutsideRange =>
         'Bạn cần ở trong phạm vi ga để thu thập stamp.',
       FailureCode.stationInactive => 'Ga này hiện không hoạt động.',
       FailureCode.campaignInactive => 'Chiến dịch hiện không khả dụng.',
+      FailureCode.defaultCampaignAmbiguous => defaultCampaignAmbiguousMessage,
       FailureCode.redeemNotSupported =>
         'Đổi voucher trong app chưa được hỗ trợ.',
       FailureCode.networkError =>

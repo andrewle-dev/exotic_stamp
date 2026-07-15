@@ -5,8 +5,8 @@ import 'package:metro_stamp_app/features/stamp_book/domain/entities/stamp_item.d
 import 'package:metro_stamp_app/features/stamp_book/presentation/cubit/stamp_book_cubit.dart';
 import 'package:metro_stamp_app/features/stamp_book/presentation/cubit/stamp_book_state.dart';
 import 'package:metro_stamp_app/features/stamp_book/presentation/screens/stamp_book_screen.dart';
-import 'package:metro_stamp_app/features/stamp_book/presentation/widgets/stamp_grid_item.dart';
 import 'package:metro_stamp_app/features/stations/domain/entities/line.dart';
+import 'package:metro_stamp_app/shared/widgets/stamp_tile.dart';
 import 'package:mocktail/mocktail.dart';
 
 class MockStampBookCubit extends Mock implements StampBookCubit {}
@@ -16,7 +16,14 @@ void main() {
 
   const loadedState = StampBookState(
     status: StampBookStatus.loaded,
-    lines: [Line(id: 'line-1', name: 'Line 1', status: 'ACTIVE')],
+    lines: [
+      Line(
+        id: 'line-1',
+        name: 'Line 1',
+        displayName: 'Line 1',
+        status: 'ACTIVE',
+      ),
+    ],
     selectedLineId: 'line-1',
     stampBook: StampBook(
       lineId: 'line-1',
@@ -63,10 +70,11 @@ void main() {
     );
     await tester.pump();
 
+    expect(find.text('Stamp Book'), findsOneWidget);
     expect(find.text('Ben Thanh'), findsOneWidget);
     expect(find.text('Suoi Tien'), findsOneWidget);
-    expect(find.byType(StampGridItem), findsNWidgets(2));
+    expect(find.byType(StampTile), findsNWidgets(2));
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.lock_outline_rounded), findsWidgets);
+    expect(find.byIcon(Icons.lock_rounded), findsWidgets);
   });
 }

@@ -10,42 +10,64 @@ class ProfileMenuSection extends StatelessWidget {
     super.key,
     required this.onSettingsTap,
     required this.onLogoutTap,
+    this.onApiDebugTap,
+    this.onAdminNfcWriterTap,
+    this.showAdminTools = false,
   });
 
   final VoidCallback onSettingsTap;
   final VoidCallback onLogoutTap;
+  final VoidCallback? onApiDebugTap;
+  final VoidCallback? onAdminNfcWriterTap;
+  final bool showAdminTools;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.backgroundWhite,
-        borderRadius: AppRadius.lgAll,
+        borderRadius: AppRadius.xlAll,
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: [
           _MenuTile(
             icon: Icons.person_outline_rounded,
-            title: 'Thông tin cá nhân',
+            title: 'Personal Information',
             onTap: onSettingsTap,
           ),
           const Divider(height: 1, color: AppColors.border),
           _MenuTile(
             icon: Icons.shield_outlined,
-            title: 'Quyền riêng tư & bảo mật',
+            title: 'Privacy & Security',
             onTap: onSettingsTap,
           ),
+          if (onApiDebugTap != null) ...[
+            const Divider(height: 1, color: AppColors.border),
+            _MenuTile(
+              icon: Icons.bug_report_outlined,
+              title: 'API Debug',
+              onTap: onApiDebugTap!,
+            ),
+          ],
+          if (showAdminTools && onAdminNfcWriterTap != null) ...[
+            const Divider(height: 1, color: AppColors.border),
+            _MenuTile(
+              icon: Icons.nfc_rounded,
+              title: 'NFC Tag Writer',
+              onTap: onAdminNfcWriterTap!,
+            ),
+          ],
           const Divider(height: 1, color: AppColors.border),
           _MenuTile(
             icon: Icons.help_outline_rounded,
-            title: 'Trung tâm hỗ trợ',
+            title: 'Help Center',
             onTap: () {},
           ),
           const Divider(height: 1, color: AppColors.border),
           _MenuTile(
             icon: Icons.logout_rounded,
-            title: 'Đăng xuất',
+            title: 'Log Out',
             titleColor: AppColors.accentRed,
             iconColor: AppColors.accentRed,
             onTap: onLogoutTap,
@@ -76,15 +98,15 @@ class _MenuTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xxs,
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xs,
       ),
       leading: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: AppRadius.mdAll,
+          borderRadius: AppRadius.lgAll,
         ),
         child: Icon(icon, color: iconColor, size: 22),
       ),

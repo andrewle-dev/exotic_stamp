@@ -9,7 +9,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (isInitializing) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-background">
+      <div className="flex h-full min-h-0 items-center justify-center bg-background">
         <LoadingState message="Loading admin console…" />
       </div>
     )

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Check, Copy, KeyRound, MapPin, Pencil, QrCode, Trash2 } from 'lucide-react'
-import { Breadcrumbs } from '../../../components/navigation/Breadcrumbs'
+import { DetailPageHeader } from '../../../components/navigation/DetailPageHeader'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
@@ -19,10 +19,12 @@ import { useMetroLinesList } from '../../metro-lines/hooks'
 import {
   useDeleteStation,
   useStationDetail,
+  useStationScanKeys,
   useStationStats,
 } from '../hooks'
 import { StationFormDrawer } from '../components/StationFormDrawer'
 import { ScanKeyDrawer } from '../components/ScanKeyDrawer'
+import { StationScanKeysPanel } from '../components/StationScanKeysPanel'
 import { RotateQrDialog } from '../components/RotateQrDialog'
 import { LineBadge } from '../components/StationTableCell'
 
@@ -77,6 +79,7 @@ export function StationDetailPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const { data: station, isLoading, error } = useStationDetail(id)
+  const { data: productionScanKeys } = useStationScanKeys(id)
   const { data: stats } = useStationStats()
   const { data: linesPage } = useMetroLinesList({ page: 0, size: 100 })
   const deleteMutation = useDeleteStation()
@@ -101,7 +104,7 @@ export function StationDetailPage() {
           message="This station may have been removed or you may not have access."
           action={
             <Button variant="secondary" onClick={() => navigate(ROUTES.stations)}>
-              Back to stations
+              Back to Stations
             </Button>
           }
         />
@@ -115,16 +118,49 @@ export function StationDetailPage() {
   }
 
   const gpsStatus = gpsReadinessStatus(station)
-  const scanStatus = scanKeyReadinessStatus(station)
+  const scanStatus = scanKeyReadinessStatus(station, productionScanKeys)
   const readinessOk = gpsStatus === 'GPS_OK' && scanStatus === 'CONFIGURED'
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs
-        items={[
-          { label: 'Stations', to: ROUTES.stations },
-          { label: station.name },
-        ]}
+      <DetailPageHeader
+        backLabel="Back to Stations"
+        backTo={ROUTES.stations}
+        title={station.name}
+        subtitle={
+          <>
+            {station.code}
+            {station.address ? ` · ${station.address}` : ''}
+          </>
+        }
+        badges={
+          <>
+            <LineBadge lineCode={station.lineCode} />
+            <StatusBadge status={station.status} />
+            <StatusBadge status={gpsStatus} />
+            <StatusBadge status={readinessOk ? 'READY' : 'NOT_READY'} />
+          </>
+        }
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4" />
+              Edit station
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setScanKeyOpen(true)}>
+              <KeyRound className="h-4 w-4" />
+              Legacy station keys
+            </Button>
+            <Button variant="danger" size="sm" onClick={() => setRotateOpen(true)}>
+              <QrCode className="h-4 w-4" />
+              Rotate QR
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+              Soft delete
+            </Button>
+          </>
+        }
       />
 
       {successMessage ? (
@@ -133,55 +169,18 @@ export function StationDetailPage() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold text-foreground">{station.name}</h2>
-            <LineBadge lineCode={station.lineCode} />
-            <StatusBadge status={station.status} />
-            <StatusBadge status={gpsStatus} />
-            <StatusBadge status={readinessOk ? 'READY' : 'NOT_READY'} />
-          </div>
-          <p className="font-mono text-sm text-muted-foreground">
-            {station.code}
-            {station.address ? ` · ${station.address}` : ''}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
-            <Pencil className="h-4 w-4" />
-            Edit station
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setScanKeyOpen(true)}>
-            <KeyRound className="h-4 w-4" />
-            Manage scan keys
-          </Button>
-          <Button variant="danger" size="sm" onClick={() => setRotateOpen(true)}>
-            <QrCode className="h-4 w-4" />
-            Rotate QR
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-            Soft delete
-          </Button>
-        </div>
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Station Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <DetailRow label="ID" value={<span className="font-mono text-xs">{station.id}</span>} />
             <DetailRow label="Code" value={station.code} />
             <DetailRow label="Name" value={station.name} />
             <DetailRow label="Display name" value={station.displayName ?? '—'} />
             <DetailRow label="Line" value={`${station.lineCode ?? ''} ${station.lineName ?? ''}`.trim() || '—'} />
             <DetailRow label="Address" value={station.address ?? '—'} />
             <DetailRow label="Description" value={station.description ?? '—'} />
-            <DetailRow label="Sort order" value={station.sortOrder ?? '—'} />
             <DetailRow label="Status" value={<StatusBadge status={station.status} />} />
           </CardContent>
         </Card>
@@ -214,20 +213,20 @@ export function StationDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Public Assets</CardTitle>
+            <CardTitle>Discovery media</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Station image
+                Station cover image
               </p>
-              <AssetPreview label="Station image" url={station.imageUrl} />
+              <AssetPreview label="Station cover image" url={station.imageUrl} />
             </div>
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Stamp preview
+                Station card preview
               </p>
-              <AssetPreview label="Stamp preview" url={station.stampPreviewUrl} />
+              <AssetPreview label="Station card preview" url={station.stampPreviewUrl} />
             </div>
           </CardContent>
         </Card>
@@ -243,6 +242,8 @@ export function StationDetailPage() {
             <DetailRow label="Last scan key update" value={formatDateTime(station.lastScanKeyUpdatedAt)} />
           </CardContent>
         </Card>
+
+        <StationScanKeysPanel stationId={station.id} />
 
         {collectorCount !== undefined ? (
           <Card className="lg:col-span-2">

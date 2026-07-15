@@ -4,6 +4,7 @@ import metro.ExoticStamp.common.model.PageResult;
 import metro.ExoticStamp.common.response.PageResponse;
 import metro.ExoticStamp.modules.collection.application.command.CreateCampaignCommand;
 import metro.ExoticStamp.modules.collection.application.command.CreateStampDesignCommand;
+import metro.ExoticStamp.modules.collection.application.command.ReorderStampDesignsCommand;
 import metro.ExoticStamp.modules.collection.application.command.UpdateCampaignCommand;
 import metro.ExoticStamp.modules.collection.application.command.UpdateStampDesignCommand;
 import metro.ExoticStamp.modules.collection.application.view.ActiveCampaignStationView;
@@ -14,6 +15,7 @@ import metro.ExoticStamp.modules.collection.application.view.StampDesignView;
 import metro.ExoticStamp.modules.collection.application.view.StampPreviewView;
 import metro.ExoticStamp.modules.collection.presentation.dto.request.CreateCampaignRequest;
 import metro.ExoticStamp.modules.collection.presentation.dto.request.CreateStampDesignRequest;
+import metro.ExoticStamp.modules.collection.presentation.dto.request.ReorderStampDesignsRequest;
 import metro.ExoticStamp.modules.collection.presentation.dto.request.UpdateCampaignRequest;
 import metro.ExoticStamp.modules.collection.presentation.dto.request.UpdateStampDesignRequest;
 import metro.ExoticStamp.modules.collection.presentation.dto.response.ActiveCampaignListResponse;
@@ -90,6 +92,10 @@ public class CampaignPresentationMapper {
                 request.getStatus() != null ? request.getStatus().name() : null,
                 request.getSortOrder()
         );
+    }
+
+    public ReorderStampDesignsCommand toReorderStampDesignsCommand(ReorderStampDesignsRequest request) {
+        return new ReorderStampDesignsCommand(request.getCampaignId(), request.getOrderedIds());
     }
 
     public CampaignResponse toResponse(CampaignView view) {

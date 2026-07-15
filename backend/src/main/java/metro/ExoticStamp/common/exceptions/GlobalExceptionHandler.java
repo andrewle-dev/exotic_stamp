@@ -14,6 +14,7 @@ import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
 import metro.ExoticStamp.common.exceptions.storage.FileTooLargeException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidImageTypeException;
+import metro.ExoticStamp.common.exceptions.storage.StorageWriteFailedException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignArchivedException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignCodeDuplicateException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignNotActiveException;
@@ -39,10 +40,13 @@ import metro.ExoticStamp.modules.metro.domain.exception.DuplicateNfcTagException
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateQrTokenException;
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateStationCodeException;
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateStationSequenceException;
+import metro.ExoticStamp.common.reorder.InvalidReorderException;
 import metro.ExoticStamp.modules.metro.domain.exception.InvalidScanPayloadException;
 import metro.ExoticStamp.modules.metro.domain.exception.InvalidStationStatusException;
 import metro.ExoticStamp.modules.metro.domain.exception.LineInactiveException;
 import metro.ExoticStamp.modules.metro.domain.exception.LineNotFoundException;
+import metro.ExoticStamp.common.reorder.ReorderConflictException;
+import metro.ExoticStamp.modules.metro.domain.exception.ScanKeyAlreadyActiveException;
 import metro.ExoticStamp.modules.metro.domain.exception.ScanKeyInactiveException;
 import metro.ExoticStamp.modules.metro.domain.exception.ScanKeyNotFoundException;
 import metro.ExoticStamp.modules.metro.domain.exception.StationInactiveException;
@@ -106,6 +110,19 @@ public class GlobalExceptionHandler {
 
     private static final Pattern PG_DUP_KEY_PATTERN =
             Pattern.compile("Key \\((?<field>[^)]+)\\)=\\((?<value>[^)]+)\\) already exists\\.");
+
+    /** Postgres FK: Key (milestone_id)=(...) is not present in table "milestones". */
+    private static final Pattern PG_FK_DETAIL_PATTERN = Pattern.compile(
+            "Key \\((?<field>[^)]+)\\)=\\((?<value>[^)]+)\\) is not present in table \"(?<table>[^\"]+)\"");
+
+    private static final Pattern PG_FK_CONSTRAINT_PATTERN = Pattern.compile(
+            "violates foreign key constraint \"(?<constraint>[^\"]+)\"");
+
+    private static final Pattern PG_CHECK_CONSTRAINT_PATTERN = Pattern.compile(
+            "violates check constraint \"(?<constraint>[^\"]+)\"");
+
+    private static final Pattern PG_NOT_NULL_PATTERN = Pattern.compile(
+            "null value in column \"(?<column>[^\"]+)\"(?: of relation \"(?<table>[^\"]+)\")? violates not-null constraint");
 
     @ExceptionHandler({UserNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(UserNotFoundException ex, HttpServletRequest req) {
@@ -209,6 +226,12 @@ public class GlobalExceptionHandler {
         return build(422, "SCAN_KEY_INACTIVE", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(ScanKeyAlreadyActiveException.class)
+    public ResponseEntity<ErrorResponse> handleScanKeyAlreadyActive(ScanKeyAlreadyActiveException ex, HttpServletRequest req) {
+        log.warn("[422] {}", ex.getMessage());
+        return build(422, "SCAN_KEY_ALREADY_ACTIVE", ex.getMessage(), req);
+    }
+
     @ExceptionHandler(InvalidStationStatusException.class)
     public ResponseEntity<ErrorResponse> handleInvalidStationStatus(InvalidStationStatusException ex, HttpServletRequest req) {
         log.warn("[422] {}", ex.getMessage());
@@ -239,6 +262,18 @@ public class GlobalExceptionHandler {
         return build(409, "STATION_SEQUENCE_DUPLICATE", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(InvalidReorderException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidReorder(InvalidReorderException ex, HttpServletRequest req) {
+        log.warn("[400] {}", ex.getMessage());
+        return build(400, "INVALID_REORDER", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(ReorderConflictException.class)
+    public ResponseEntity<ErrorResponse> handleReorderConflict(ReorderConflictException ex, HttpServletRequest req) {
+        log.warn("[409] {}", ex.getMessage());
+        return build(409, "REORDER_CONFLICT", ex.getMessage(), req);
+    }
+
     @ExceptionHandler(InvalidImageTypeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidImageType(InvalidImageTypeException ex, HttpServletRequest req) {
         log.warn("[400] {}", ex.getMessage());
@@ -257,6 +292,13 @@ public class GlobalExceptionHandler {
         return build(400, "INVALID_FILE", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(StorageWriteFailedException.class)
+    public ResponseEntity<ErrorResponse> handleStorageWriteFailed(
+            StorageWriteFailedException ex, HttpServletRequest req) {
+        log.error("[500] STORAGE_WRITE_FAILED at {} {}: {}", req.getMethod(), req.getRequestURI(), ex.getMessage(), ex);
+        return build(500, "STORAGE_WRITE_FAILED", "Failed to store file", req);
+    }
+
     @ExceptionHandler(UserFieldAlreadyTakenException.class)
     public ResponseEntity<ErrorResponse> handleEmailTaken(UserFieldAlreadyTakenException ex, HttpServletRequest req) {
         log.warn("[409] {}", ex.getMessage());
@@ -270,9 +312,11 @@ public class GlobalExceptionHandler {
     ) {
         Throwable root = unwrap(ex);
         String rootMsg = root.getMessage() == null ? "" : root.getMessage();
+        // Hibernate often nests the Postgres detail one level deeper than getMostSpecificCause.
+        String fullMsg = collectMessages(ex);
 
         // Postgres duplicate key (unique constraint) -> return 409 with a clear field message
-        Matcher m = PG_DUP_KEY_PATTERN.matcher(rootMsg);
+        Matcher m = PG_DUP_KEY_PATTERN.matcher(fullMsg);
         if (m.find()) {
             String field = m.group("field");
             String value = m.group("value");
@@ -290,16 +334,81 @@ public class GlobalExceptionHandler {
                 msg = "Username already taken";
             } else {
                 code = "DUPLICATE_FIELD";
-                msg = "A value for this field is already in use";
+                msg = "A value for this field is already in use (" + field + ")";
             }
 
             log.warn("[409] DataIntegrity duplicate {}={}", field, value);
             return build(409, code, msg, req);
         }
 
+        Matcher fkDetail = PG_FK_DETAIL_PATTERN.matcher(fullMsg);
+        if (fkDetail.find()) {
+            String field = fkDetail.group("field");
+            String value = fkDetail.group("value");
+            String table = fkDetail.group("table");
+            String msg = "Referenced " + field + " does not exist: " + value
+                    + " (table " + table + ")";
+            log.warn("[409] DataIntegrity FK {}={} missing in {}", field, value, table);
+            return build(409, "FOREIGN_KEY_VIOLATION", msg, req);
+        }
+
+        Matcher fkConstraint = PG_FK_CONSTRAINT_PATTERN.matcher(fullMsg);
+        if (fkConstraint.find()) {
+            String constraint = fkConstraint.group("constraint");
+            String msg = switch (constraint) {
+                case "fk_rewards_milestone_id" ->
+                        "milestoneId does not reference an existing milestone";
+                case "fk_rewards_partner_id" ->
+                        "partnerId does not reference an existing partner";
+                default -> "Referenced entity does not exist (constraint " + constraint + ")";
+            };
+            log.warn("[409] DataIntegrity FK constraint={}", constraint);
+            return build(409, "FOREIGN_KEY_VIOLATION", msg, req);
+        }
+
+        Matcher check = PG_CHECK_CONSTRAINT_PATTERN.matcher(fullMsg);
+        if (check.find()) {
+            String constraint = check.group("constraint");
+            String msg = switch (constraint) {
+                case "chk_rewards_reward_type" ->
+                        "rewardType must be one of: VOUCHER, DIGITAL_STICKER, BONUS_STAMP";
+                default -> "Value failed validation constraint: " + constraint;
+            };
+            log.warn("[409] DataIntegrity CHECK constraint={}", constraint);
+            return build(409, "CHECK_CONSTRAINT_VIOLATION", msg, req);
+        }
+
+        Matcher notNull = PG_NOT_NULL_PATTERN.matcher(fullMsg);
+        if (notNull.find()) {
+            String column = notNull.group("column");
+            String table = notNull.group("table");
+            String msg = table == null
+                    ? "Required column is missing: " + column
+                    : "Required column is missing: " + table + "." + column;
+            log.warn("[409] DataIntegrity NOT NULL {}.{}", table, column);
+            return build(409, "NOT_NULL_VIOLATION", msg, req);
+        }
+
         // Fallback: still a conflict, but don't leak internal constraint details
         log.warn("[409] DataIntegrityViolation at {} {}: {}", req.getMethod(), req.getRequestURI(), rootMsg);
         return build(409, "DATA_INTEGRITY_VIOLATION", "Duplicate or conflicting data", req);
+    }
+
+    private static String collectMessages(Throwable ex) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = ex;
+        int depth = 0;
+        while (cur != null && depth < 8) {
+            if (cur.getMessage() != null) {
+                if (!sb.isEmpty()) {
+                    sb.append('\n');
+                }
+                sb.append(cur.getMessage());
+            }
+            cur = cur.getCause();
+            depth++;
+        }
+        return sb.toString();
     }
 
     @ExceptionHandler(RoleAlreadyAssignedException.class)

@@ -71,8 +71,8 @@ void main() {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
 
-    expect(find.text('Xem Sổ stamp'), findsOneWidget);
-    await tester.tap(find.text('Xem Sổ stamp'));
+    expect(find.text('Xem Stamp Book'), findsOneWidget);
+    await tester.tap(find.text('Xem Stamp Book'));
     await tester.pumpAndSettle();
 
     verify(() => scanFlowCubit.resetFlow()).called(1);
@@ -89,7 +89,7 @@ void main() {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Xem Sổ stamp'));
+    await tester.tap(find.text('Xem Stamp Book'));
     await tester.pumpAndSettle();
 
     final uri = router.routerDelegate.currentConfiguration.uri;

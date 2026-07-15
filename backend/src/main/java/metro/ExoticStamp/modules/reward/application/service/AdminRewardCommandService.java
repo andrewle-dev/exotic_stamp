@@ -11,8 +11,10 @@ import metro.ExoticStamp.modules.reward.application.mapper.RewardAppMapper;
 import metro.ExoticStamp.modules.reward.application.view.MilestoneView;
 import metro.ExoticStamp.modules.reward.application.view.PartnerView;
 import metro.ExoticStamp.modules.reward.application.view.RewardView;
+import metro.ExoticStamp.modules.reward.domain.exception.InvalidMilestoneStateException;
 import metro.ExoticStamp.modules.reward.domain.exception.MilestoneAlreadyActiveException;
 import metro.ExoticStamp.modules.reward.domain.exception.MilestoneAlreadyInactiveException;
+import metro.ExoticStamp.modules.reward.domain.exception.MilestoneArchivedException;
 import metro.ExoticStamp.modules.reward.domain.exception.MilestoneNotFoundException;
 import metro.ExoticStamp.modules.reward.domain.exception.PartnerAlreadyActiveException;
 import metro.ExoticStamp.modules.reward.domain.exception.PartnerAlreadyInactiveException;
@@ -21,6 +23,7 @@ import metro.ExoticStamp.modules.reward.domain.exception.RewardAlreadyActiveExce
 import metro.ExoticStamp.modules.reward.domain.exception.RewardAlreadyInactiveException;
 import metro.ExoticStamp.modules.reward.domain.exception.RewardNotFoundException;
 import metro.ExoticStamp.modules.reward.domain.exception.VoucherCodeExhaustedException;
+import metro.ExoticStamp.modules.reward.domain.model.Milestone;
 import metro.ExoticStamp.modules.reward.domain.model.Partner;
 import metro.ExoticStamp.modules.reward.domain.model.Reward;
 import metro.ExoticStamp.modules.reward.domain.model.RewardType;
@@ -54,6 +57,7 @@ public class AdminRewardCommandService {
         Partner p = Partner.builder()
                 .name(cmd.name())
                 .logoUrl(cmd.logoUrl())
+                .bannerImageUrl(cmd.bannerImageUrl())
                 .contactEmail(cmd.contactEmail())
                 .contractStartDate(cmd.contractStartDate())
                 .contractEndDate(cmd.contractEndDate())
@@ -71,6 +75,9 @@ public class AdminRewardCommandService {
         }
         if (cmd.logoUrl() != null) {
             p.setLogoUrl(cmd.logoUrl());
+        }
+        if (cmd.bannerImageUrl() != null) {
+            p.setBannerImageUrl(cmd.bannerImageUrl());
         }
         if (cmd.contactEmail() != null) {
             p.setContactEmail(cmd.contactEmail());
@@ -132,16 +139,40 @@ public class AdminRewardCommandService {
 
     @Transactional
     public RewardView createReward(CreateRewardCommand cmd) {
-        if (!milestoneRepository.existsById(cmd.milestoneId())) {
-            throw new MilestoneNotFoundException("Milestone not found: " + cmd.milestoneId());
+        // Soft-deleted milestones still exist by PK; reject them before insert.
+        Milestone milestone = milestoneRepository.findByIdNotDeleted(cmd.milestoneId())
+                .orElseThrow(() -> new MilestoneNotFoundException(
+                        "Milestone not found: " + cmd.milestoneId()
+                                + ". Create a milestone first via POST /api/v1/admin/rewards/milestones"));
+        if (milestone.isArchived()) {
+            throw new MilestoneArchivedException(cmd.milestoneId());
         }
         if (cmd.partnerId() != null && !partnerRepository.existsById(cmd.partnerId())) {
-            throw new PartnerNotFoundException("Partner not found: " + cmd.partnerId());
+            throw new PartnerNotFoundException(
+                    "Partner not found: " + cmd.partnerId()
+                            + ". Create a partner first via POST /api/v1/admin/rewards/partners");
+        }
+        RewardType rewardType;
+        try {
+            rewardType = RewardType.valueOf(cmd.rewardType());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new InvalidMilestoneStateException(
+                    "Invalid rewardType: " + cmd.rewardType()
+                            + ". Allowed for legacy rewards table: VOUCHER, DIGITAL_STICKER, BONUS_STAMP");
+        }
+        if (rewardType != RewardType.VOUCHER
+                && rewardType != RewardType.DIGITAL_STICKER
+                && rewardType != RewardType.BONUS_STAMP) {
+            throw new InvalidMilestoneStateException(
+                    "rewardType " + rewardType
+                            + " is not supported on POST /api/v1/admin/rewards. "
+                            + "Use VOUCHER, DIGITAL_STICKER, or BONUS_STAMP "
+                            + "(or create a Stage-5 milestone via /api/v1/admin/rewards/milestones)");
         }
         Reward r = Reward.builder()
                 .milestoneId(cmd.milestoneId())
                 .partnerId(cmd.partnerId())
-                .rewardType(RewardType.valueOf(cmd.rewardType()))
+                .rewardType(rewardType)
                 .name(cmd.name())
                 .description(cmd.description())
                 .valueAmount(cmd.valueAmount())

@@ -8,19 +8,19 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-@Schema(description = "Collection progress for a line")
+@Schema(description = "Collection progress for the active default campaign")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProgressResponse {
-    @Schema(description = "Metro line id")
+    @Schema(description = "Effective metro line id (campaign line when set, else request lineId)")
     private UUID lineId;
-    @Schema(description = "Distinct stations collected for the campaign")
+    @Schema(description = "Distinct stations collected by the user in the default campaign")
     private long collected;
-    @Schema(description = "Active stations on the line")
+    @Schema(description = "ACTIVE stamp designs eligible in the same default campaign")
     private long total;
-    @Schema(description = "Rounded percentage 0–100")
+    @Schema(description = "Rounded percentage 0–100 (capped when collected exceeds total)")
     private int percentage;
 }
 

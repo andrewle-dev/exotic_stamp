@@ -25,6 +25,9 @@ public interface StampDesignRepository {
 
     List<StampDesign> findActiveByCampaignIdAndStationIdIn(UUID campaignId, Collection<UUID> stationIds);
 
+    /** Count of ACTIVE, non-deleted stamp designs for a campaign (Home / stamp-book total). */
+    long countActiveByCampaignId(UUID campaignId);
+
     StampDesign save(StampDesign stampDesign);
 
     List<StampDesign> findByCampaignIdOrderBySortOrderAsc(UUID campaignId);

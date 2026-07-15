@@ -77,4 +77,35 @@ void main() {
       ),
     ],
   );
+
+  blocTest<StationDetailCubit, StationDetailState>(
+    'emits inactive when station is not active',
+    build: () {
+      when(() => repository.getStationDetail('inactive')).thenAnswer(
+        (_) async => const StationDetail(
+          id: 'inactive',
+          lineId: 'line-1',
+          name: 'Closed Station',
+          status: 'INACTIVE',
+        ),
+      );
+      return StationDetailCubit(
+        getStationDetailUseCase: GetStationDetailUseCase(repository),
+        stationId: 'inactive',
+      );
+    },
+    act: (cubit) => cubit.load(),
+    expect: () => [
+      isA<StationDetailState>().having(
+        (s) => s.status,
+        'status',
+        StationDetailStatus.loading,
+      ),
+      isA<StationDetailState>().having(
+        (s) => s.status,
+        'status',
+        StationDetailStatus.inactive,
+      ),
+    ],
+  );
 }

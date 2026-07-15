@@ -22,6 +22,9 @@ public interface UserStampCachePort {
 
     void evictUserProgress(UUID userId, UUID lineId);
 
+    /** Evict every progress cache entry for the user (all line key variants). */
+    void evictUserProgressAll(UUID userId);
+
     Optional<PageResponse<UserStampView>> getUserHistory(UUID userId, int page, int size);
 
     void putUserHistory(UUID userId, int page, int size, PageResponse<UserStampView> value);

@@ -18,7 +18,8 @@ public class RuntimeCollectStampRequest {
     private String scanType;
 
     @NotBlank
-    @Schema(description = "Raw NFC or QR payload (not stored server-side)")
+    @Schema(description = "Raw NFC/QR key (e.g. nfc_test_home_001) or metrostamp URI "
+            + "(e.g. metrostamp://scan?k=nfc_test_home_001). Not stored server-side.")
     private String payload;
 
     @NotNull

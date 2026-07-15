@@ -5,4 +5,8 @@ public class ScanKeyInactiveException extends RuntimeException {
     public ScanKeyInactiveException() {
         super("Scan key is inactive");
     }
+
+    public ScanKeyInactiveException(String message) {
+        super(message);
+    }
 }

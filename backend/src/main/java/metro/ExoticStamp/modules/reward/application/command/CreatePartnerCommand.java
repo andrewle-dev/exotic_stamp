@@ -5,6 +5,7 @@ import java.time.LocalDate;
 public record CreatePartnerCommand(
         String name,
         String logoUrl,
+        String bannerImageUrl,
         String contactEmail,
         LocalDate contractStartDate,
         LocalDate contractEndDate

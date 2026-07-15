@@ -11,9 +11,11 @@ import metro.ExoticStamp.modules.metro.application.LineCommandService;
 import metro.ExoticStamp.modules.metro.application.LineQueryService;
 import metro.ExoticStamp.modules.metro.presentation.dto.MetroStatusApi;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.CreateLineRequest;
+import metro.ExoticStamp.modules.metro.presentation.dto.request.ReorderLinesRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.request.UpdateLineRequest;
 import metro.ExoticStamp.modules.metro.presentation.dto.response.LineDetailResponse;
 import metro.ExoticStamp.modules.metro.presentation.dto.response.LineResponse;
+import metro.ExoticStamp.common.reorder.ReorderResponse;
 import metro.ExoticStamp.modules.metro.presentation.mapper.MetroPresentationMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -82,6 +84,17 @@ public class AdminMetroLineController {
         return ResponseEntity.ok(ApiResponse.ok(
                 presentationMapper.toResponse(lineCommandService.updateLine(
                         presentationMapper.toUpdateLineCommand(id, request)))));
+    }
+
+    @PatchMapping("/reorder")
+    @PreAuthorize("hasRole('ADMIN') and hasAuthority('METRO_LINE_MANAGE')")
+    @Operation(summary = "Reorder metro lines",
+            description = "Dense-renumbers all lines to 0..n-1. orderedIds must be a permutation of every existing line id.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<ApiResponse<ReorderResponse>> reorder(@Valid @RequestBody ReorderLinesRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                presentationMapper.toResponse(lineCommandService.reorderLines(
+                        presentationMapper.toReorderLinesCommand(request)))));
     }
 
     @DeleteMapping("/{id}")

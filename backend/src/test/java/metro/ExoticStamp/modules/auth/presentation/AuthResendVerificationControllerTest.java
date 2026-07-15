@@ -22,9 +22,9 @@ import metro.ExoticStamp.modules.auth.presentation.dto.request.ResendVerificatio
 import metro.ExoticStamp.modules.auth.presentation.mapper.AuthPresentationMapper;
 import metro.ExoticStamp.modules.auth.domain.repository.AccessTokenRepository;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
+import metro.ExoticStamp.modules.user.application.port.UserAccountPort;
 import metro.ExoticStamp.modules.user.domain.model.User;
 import metro.ExoticStamp.modules.user.domain.model.UserStatus;
-import metro.ExoticStamp.modules.user.domain.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,7 +72,7 @@ class AuthResendVerificationControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean private UserRepository userRepository;
+    @MockBean private UserAccountPort userAccountPort;
     @MockBean private AccessTokenRepository accessTokenRepository;
     @MockBean private RoleQueryService roleQueryService;
     @MockBean private AccessTokenPort accessTokenPort;
@@ -101,19 +101,19 @@ class AuthResendVerificationControllerTest {
 
     @Test
     void resendVerificationOtp_publicResponses_areIndistinguishableAcrossStates() throws Exception {
-        when(userRepository.findByEmail("missing@test.com")).thenReturn(Optional.empty());
+        when(userAccountPort.findByEmail("missing@test.com")).thenReturn(Optional.empty());
         MvcResult unknown = performResend("missing@test.com");
         verify(mailService, never()).sendVerifyAccountOtp(anyString(), anyString(), anyString());
 
         clearInvocations(otpStore, mailService);
         User verified = user("verified@test.com", "verified", UserStatus.ACTIVE);
-        when(userRepository.findByEmail("verified@test.com")).thenReturn(Optional.of(verified));
+        when(userAccountPort.findByEmail("verified@test.com")).thenReturn(Optional.of(verified));
         MvcResult verifiedResult = performResend("verified@test.com");
         verify(mailService, never()).sendVerifyAccountOtp(anyString(), anyString(), anyString());
 
         clearInvocations(otpStore, mailService);
         User eligible = user("eligible@test.com", "eligible", UserStatus.PENDING_VERIFIED);
-        when(userRepository.findByEmail("eligible@test.com")).thenReturn(Optional.of(eligible));
+        when(userAccountPort.findByEmail("eligible@test.com")).thenReturn(Optional.of(eligible));
         MvcResult eligibleResult = performResend("eligible@test.com");
         verify(otpStore).delete("eligible@test.com", metro.ExoticStamp.modules.auth.domain.model.OtpType.EMAIL_VERIFY);
         verify(mailService).sendVerifyAccountOtp(eq("eligible@test.com"), eq("eligible"), anyString());

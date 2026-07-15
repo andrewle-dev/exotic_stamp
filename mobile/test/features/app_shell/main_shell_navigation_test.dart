@@ -88,11 +88,11 @@ void main() {
     await tester.pump();
     expect(router.state.matchedLocation, RouteNames.stations);
 
-    await tester.tap(find.text('Rewards'));
+    await tester.tap(find.text('Profile'));
     await tester.pump();
-    expect(router.state.matchedLocation, RouteNames.rewards);
+    expect(router.state.matchedLocation, RouteNames.profile);
 
-    await tester.tap(find.text('Book'));
+    await tester.tap(find.text('Stamp'));
     await tester.pump();
     expect(router.state.matchedLocation, RouteNames.stampBook);
   });
@@ -130,14 +130,14 @@ void main() {
     expect(find.byType(BottomAppBar), findsOneWidget);
   });
 
-  testWidgets('center scan action opens scan route',
+  testWidgets('center scan action opens tap-to-collect route',
       (WidgetTester tester) async {
     await pumpShell(tester);
 
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byKey(const Key('shell_scan_fab')));
     await tester.pump();
 
-    expect(router.state.matchedLocation, RouteNames.scan);
+    expect(router.state.matchedLocation, RouteNames.scanTapToCollect);
   });
 
   testWidgets('home and stations shell routes resolve correctly',

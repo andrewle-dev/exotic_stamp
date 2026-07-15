@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -9,13 +8,13 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
-import '../../../../core/utils/media_url_resolver.dart';
 import '../../../../shared/widgets/app_error_view.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
 import '../../domain/entities/stamp_detail.dart';
 import '../../domain/usecases/get_stamp_detail_usecase.dart';
 import '../cubit/stamp_detail_cubit.dart';
 import '../cubit/stamp_detail_state.dart';
+import '../widgets/stamp_detail_sections.dart';
 
 class StampDetailScreen extends StatelessWidget {
   const StampDetailScreen({
@@ -34,7 +33,7 @@ class StampDetailScreen extends StatelessWidget {
     if (cubit != null) {
       return BlocProvider<StampDetailCubit>.value(
         value: cubit!,
-        child: _StampDetailView(stationId: stationId),
+        child: const _StampDetailView(),
       );
     }
 
@@ -48,15 +47,13 @@ class StampDetailScreen extends StatelessWidget {
         stationId: stationId,
         lineId: resolvedLineId,
       )..load(),
-      child: _StampDetailView(stationId: stationId),
+      child: const _StampDetailView(),
     );
   }
 }
 
 class _StampDetailView extends StatelessWidget {
-  const _StampDetailView({required this.stationId});
-
-  final String stationId;
+  const _StampDetailView();
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +62,8 @@ class _StampDetailView extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.backgroundWhite,
         foregroundColor: AppColors.textPrimary,
-        title: const Text('Chi tiết stamp'),
+        elevation: 0,
+        title: const Text('Chi tiết Stamp'),
       ),
       body: BlocBuilder<StampDetailCubit, StampDetailState>(
         builder: (context, state) {
@@ -73,7 +71,8 @@ class _StampDetailView extends StatelessWidget {
             case StampDetailStatus.initial:
             case StampDetailStatus.loading:
               return const AppLoadingView(
-                  message: 'Đang tải chi tiết stamp...');
+                message: 'Đang tải chi tiết stamp...',
+              );
             case StampDetailStatus.failure:
               return AppErrorView(
                 message:
@@ -98,122 +97,88 @@ class _StampDetailBody extends StatelessWidget {
 
   final StampDetail detail;
 
-  static String _formatDateTime(DateTime value) {
-    final local = value.toLocal();
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final year = local.year.toString();
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$day/$month/$year $hour:$minute';
+  @override
+  Widget build(BuildContext context) {
+    final stampImageUrl = resolveStampDetailMedia(detail.stampDesignUrl);
+    final description = detail.stampDesignDescription?.trim() ?? '';
+    final hasCollectedMeta =
+        detail.collected && (detail.collectedAt != null || detail.nfcVerified);
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xxl,
+              AppSpacing.md,
+              AppSpacing.xxl,
+              AppSpacing.xl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                StampDetailHeroCard(
+                  detail: detail,
+                  stampImageUrl: stampImageUrl,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                StampDetailHeader(detail: detail),
+                const SizedBox(height: AppSpacing.xl),
+                if (detail.collected && hasCollectedMeta)
+                  StampCollectedMetaCard(detail: detail)
+                else if (!detail.collected)
+                  const StampUnlockHintCard(),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  StampAboutSection(description: description),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                StampInfoSection(detail: detail),
+                if (detail.stationStory != null &&
+                    detail.stationStory!.trim().isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  StampDetailStorySection(story: detail.stationStory!.trim()),
+                ],
+                if (detail.collectionProgress != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  StampCollectionProgressCard(
+                    progress: detail.collectionProgress!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        _StampDetailActions(detail: detail),
+      ],
+    );
   }
+}
+
+class _StampDetailActions extends StatelessWidget {
+  const _StampDetailActions({required this.detail});
+
+  final StampDetail detail;
 
   @override
   Widget build(BuildContext context) {
-    final mediaResolver = MediaUrlResolver();
-    final imageUrl = mediaResolver.resolve(detail.stampDesignUrl);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.xxl,
+        AppSpacing.lg,
+        AppSpacing.xxl,
+        AppSpacing.lg + MediaQuery.paddingOf(context).bottom,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.backgroundWhite,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: detail.collected
-                      ? AppColors.primaryBlue
-                      : AppColors.border,
-                  width: 2,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (imageUrl != null)
-                      CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                      )
-                    else
-                      const ColoredBox(
-                        color: AppColors.surface,
-                        child: Icon(Icons.image_not_supported_outlined),
-                      ),
-                    if (!detail.collected)
-                      Container(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        child: const Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.lock_outline_rounded,
-                                size: 48,
-                                color: AppColors.accentRed,
-                              ),
-                              SizedBox(height: AppSpacing.sm),
-                              Text('Stamp chưa thu'),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            detail.stationName,
-            style: AppTextStyles.titleLarge.copyWith(
-              color: AppColors.primaryBlue,
-            ),
-          ),
-          if (detail.lineName != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(detail.lineName!, style: AppTextStyles.bodyLarge),
-          ],
-          if (detail.campaignName != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(detail.campaignName!, style: AppTextStyles.bodyMedium),
-          ],
-          const SizedBox(height: AppSpacing.lg),
           if (detail.collected) ...[
-            if (detail.collectedAt != null)
-              _InfoRow(
-                label: 'Thời gian thu',
-                value: _formatDateTime(detail.collectedAt!),
-              ),
-            if (detail.collectMethod != null)
-              _InfoRow(
-                label: 'Phương thức quét',
-                value: detail.collectMethod!,
-              ),
-            if (detail.availability == StampDetailAvailability.limited)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: Text(
-                  'Một số thông tin chi tiết chưa có từ máy chủ.',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-          ] else
-            Text(
-              'Thu stamp tại ga này bằng NFC để mở khóa.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          const SizedBox(height: AppSpacing.xl),
-          if (detail.collected)
             ElevatedButton(
               onPressed: () {
                 context.push(
@@ -232,56 +197,36 @@ class _StampDetailBody extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue,
                 foregroundColor: AppColors.backgroundWhite,
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-              child: const Text('Chia sẻ Stamp'),
+              child: Text(
+                'Chia sẻ Stamp',
+                style: AppTextStyles.buttonLabel.copyWith(
+                  color: AppColors.backgroundWhite,
+                ),
+              ),
             ),
-          if (detail.collected) const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
+          ],
           OutlinedButton(
             onPressed: () =>
                 context.push(RouteNames.stationDetail(detail.stationId)),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primaryBlue,
-              side: const BorderSide(color: AppColors.primaryBlue),
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            ),
-            child: const Text('Xem nhà ga'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
+              side: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
-          ),
-          Expanded(
             child: Text(
-              value,
-              style: AppTextStyles.bodyLarge,
+              'Xem nhà ga',
+              style: AppTextStyles.buttonLabel.copyWith(
+                color: AppColors.primaryBlue,
+              ),
             ),
           ),
         ],

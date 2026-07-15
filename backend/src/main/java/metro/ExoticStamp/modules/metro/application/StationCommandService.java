@@ -6,6 +6,7 @@ import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
 import metro.ExoticStamp.infra.storage.FileValidator;
 import metro.ExoticStamp.infra.storage.StorageService;
 import metro.ExoticStamp.modules.metro.application.command.CreateStationCommand;
+import metro.ExoticStamp.modules.metro.application.command.ReorderStationsCommand;
 import metro.ExoticStamp.modules.metro.application.command.RotateStationQrCommand;
 import metro.ExoticStamp.modules.metro.application.command.UpdateScanKeysCommand;
 import metro.ExoticStamp.modules.metro.application.command.UpdateStationCommand;
@@ -13,7 +14,10 @@ import metro.ExoticStamp.modules.metro.application.mapper.MetroAppMapper;
 import metro.ExoticStamp.modules.metro.application.port.StationCachePort;
 import metro.ExoticStamp.modules.metro.application.support.MetroAuditHelper;
 import metro.ExoticStamp.modules.metro.application.support.MetroEnumParser;
+import metro.ExoticStamp.common.reorder.ReorderValidation;
 import metro.ExoticStamp.modules.metro.application.support.ScanKeyRedactor;
+import metro.ExoticStamp.common.reorder.ReorderItemView;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
 import metro.ExoticStamp.modules.metro.application.view.StationDetailView;
 import metro.ExoticStamp.modules.metro.application.view.StationImageUploadView;
 import metro.ExoticStamp.modules.metro.domain.event.StationActivatedEvent;
@@ -23,6 +27,7 @@ import metro.ExoticStamp.modules.metro.domain.exception.DuplicateNfcTagException
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateQrTokenException;
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateStationCodeException;
 import metro.ExoticStamp.modules.metro.domain.exception.DuplicateStationSequenceException;
+import metro.ExoticStamp.common.reorder.InvalidReorderException;
 import metro.ExoticStamp.modules.metro.domain.exception.InvalidStationStatusException;
 import metro.ExoticStamp.modules.metro.domain.exception.LineNotFoundException;
 import metro.ExoticStamp.modules.metro.domain.exception.StationInactiveException;
@@ -42,8 +47,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +69,9 @@ public class StationCommandService {
     private final FileValidator fileValidator;
     private final ApplicationEventPublisher eventPublisher;
     private final MetroAuditHelper metroAuditHelper;
+
+    /** Temporary sort orders above any realistic dense index; clears UNIQUE(line_id, sort_order) collisions. */
+    private static final int REORDER_TEMP_BASE = 1_000_000;
 
     @Transactional
     public StationDetailView createStation(CreateStationCommand command) {
@@ -256,6 +270,59 @@ public class StationCommandService {
         RbacTransactionCallbacks.afterCommit(
                 () -> eventPublisher.publishEvent(new StationDeactivatedEvent(station.getId())));
         metroAuditHelper.scheduleStationDisabled(stationId.toString());
+    }
+
+    /**
+     * Dense-renumbers all stations on a line to {@code 0..n-1}.
+     * Uses a two-phase update so {@code UNIQUE(line_id, sort_order)} is never violated mid-transaction.
+     */
+    @Transactional
+    public ReorderResultView reorderStations(ReorderStationsCommand command) {
+        UUID lineId = command.getLineId();
+        if (lineId == null) {
+            throw new InvalidReorderException("lineId is required");
+        }
+        if (lineRepository.findById(lineId).isEmpty()) {
+            throw new LineNotFoundException(lineId);
+        }
+
+        List<UUID> orderedIds = ReorderValidation.requireOrderedIds(command.getOrderedIds());
+        List<Station> scopeStations = stationRepository.findAllByLineId(lineId);
+        Set<UUID> scopeIds = scopeStations.stream().map(Station::getId).collect(Collectors.toSet());
+        ReorderValidation.requireExactScope(orderedIds, scopeIds, "stations on line " + lineId);
+
+        Map<UUID, Station> byId = new HashMap<>();
+        for (Station station : scopeStations) {
+            byId.put(station.getId(), station);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<Station> ordered = new ArrayList<>(orderedIds.size());
+        for (UUID id : orderedIds) {
+            ordered.add(byId.get(id));
+        }
+
+        // Phase 1: move to temporary unique offsets (still >= 0 for CHECK constraint).
+        for (int i = 0; i < ordered.size(); i++) {
+            Station station = ordered.get(i);
+            station.setSortOrder(REORDER_TEMP_BASE + i);
+            station.setUpdatedAt(now);
+            stationRepository.save(station);
+        }
+        stationRepository.flush();
+
+        // Phase 2: dense final order.
+        List<ReorderItemView> items = new ArrayList<>(ordered.size());
+        for (int i = 0; i < ordered.size(); i++) {
+            Station station = ordered.get(i);
+            station.setSortOrder(i);
+            station.setUpdatedAt(now);
+            stationRepository.save(station);
+            evictAllStationCaches(station);
+            metroAuditHelper.scheduleStationUpdated(station.getId().toString());
+            items.add(new ReorderItemView(station.getId(), i));
+        }
+        return new ReorderResultView(lineId, items.size(), items);
     }
 
     @Transactional

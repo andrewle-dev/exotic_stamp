@@ -17,6 +17,7 @@ enum ScanFlowPhase {
   resolvingStation,
   collecting,
   checkingCollectStatus,
+  preStampAd,
   success,
   duplicate,
   invalidTag,

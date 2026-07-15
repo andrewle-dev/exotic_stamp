@@ -33,12 +33,12 @@ import metro.ExoticStamp.modules.auth.domain.model.OtpType;
 import metro.ExoticStamp.modules.auth.domain.repository.AccessTokenRepository;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
 import metro.ExoticStamp.modules.rbac.application.support.RbacTransactionCallbacks;
+import metro.ExoticStamp.modules.user.application.port.UserAccountPort;
 import metro.ExoticStamp.modules.user.domain.event.EmailVerifiedEvent;
 import metro.ExoticStamp.modules.user.domain.event.UserCreatedEvent;
 import metro.ExoticStamp.modules.user.domain.exception.UserNotFoundException;
 import metro.ExoticStamp.modules.user.domain.model.User;
 import metro.ExoticStamp.modules.user.domain.model.UserStatus;
-import metro.ExoticStamp.modules.user.domain.repository.UserRepository;
 import metro.ExoticStamp.modules.user.domain.exception.UserFieldAlreadyTakenException;
 
 import lombok.RequiredArgsConstructor;
@@ -74,7 +74,7 @@ public class AuthCommandService {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private final UserRepository userRepository;
+    private final UserAccountPort userAccountPort;
     private final AccessTokenRepository accessTokenRepository;
     private final RoleQueryService roleQueryService;
     private final AccessTokenPort accessTokenPort;
@@ -90,8 +90,8 @@ public class AuthCommandService {
 
     @Transactional
     public AuthView login(LoginCommand cmd) {
-        User user = userRepository.findByEmail(cmd.getIdentifier())
-                .or(() -> userRepository.findByUsername(cmd.getIdentifier()))
+        User user = userAccountPort.findByEmail(cmd.getIdentifier())
+                .or(() -> userAccountPort.findByUsername(cmd.getIdentifier()))
                 .orElseThrow(InvalidCredentialsException::new);
 
         if (user.getStatus() == UserStatus.PENDING_VERIFIED) {
@@ -147,13 +147,13 @@ public class AuthCommandService {
 
     @Transactional
     public void register(RegisterCommand cmd) {
-        if (userRepository.existsByEmail(cmd.getEmail())) {
+        if (userAccountPort.existsByEmail(cmd.getEmail())) {
             throw new UserFieldAlreadyTakenException("email", cmd.getEmail());
         }
-        if (userRepository.existsByUsername(cmd.getUsername())) {
+        if (userAccountPort.existsByUsername(cmd.getUsername())) {
             throw new UserFieldAlreadyTakenException("username", cmd.getUsername());
         }
-        if (userRepository.existsByPhoneNumber(cmd.getPhoneNumber())) {
+        if (userAccountPort.existsByPhoneNumber(cmd.getPhoneNumber())) {
             throw new UserFieldAlreadyTakenException("phone", cmd.getPhoneNumber());
         }
 
@@ -167,7 +167,7 @@ public class AuthCommandService {
                 .status(UserStatus.PENDING_VERIFIED)
                 .build();
 
-        User saved = userRepository.save(user);
+        User saved = userAccountPort.save(user);
 
         String otp = generateOtp();
         otpStore.delete(saved.getEmail(), OtpType.EMAIL_VERIFY);
@@ -192,7 +192,7 @@ public class AuthCommandService {
             throw new OtpInvalidException();
         }
 
-        User user = userRepository.findByEmail(cmd.getEmail())
+        User user = userAccountPort.findByEmail(cmd.getEmail())
                 .orElseThrow(() -> new UserNotFoundException("email", cmd.getEmail()));
 
         if (user.getStatus() == UserStatus.ACTIVE) {
@@ -202,7 +202,7 @@ public class AuthCommandService {
 
         user.setStatus(UserStatus.ACTIVE);
         user.setVerifiedAt(LocalDateTime.now());
-        userRepository.save(user);
+        userAccountPort.save(user);
 
         otpStore.delete(cmd.getEmail(), OtpType.EMAIL_VERIFY);
 
@@ -229,7 +229,7 @@ public class AuthCommandService {
             );
         }
 
-        userRepository.findByEmail(cmd.getEmail()).ifPresent(user -> {
+        userAccountPort.findByEmail(cmd.getEmail()).ifPresent(user -> {
             if (user.getStatus() != UserStatus.PENDING_VERIFIED) {
                 return;
             }
@@ -266,7 +266,7 @@ public class AuthCommandService {
             return;
         }
 
-        Optional<User> userOpt = userRepository.findByEmail(cmd.getEmail());
+        Optional<User> userOpt = userAccountPort.findByEmail(cmd.getEmail());
         if (userOpt.isEmpty()) {
             return;
         }
@@ -294,7 +294,7 @@ public class AuthCommandService {
             );
         }
 
-        userRepository.findByEmail(cmd.getEmail()).ifPresent(user -> {
+        userAccountPort.findByEmail(cmd.getEmail()).ifPresent(user -> {
             otpStore.delete(cmd.getEmail(), OtpType.FORGOT_PASSWORD);
 
             String otp = generateOtp();
@@ -328,12 +328,12 @@ public class AuthCommandService {
             throw new OtpInvalidException();
         }
 
-        User user = userRepository.findByEmail(cmd.getEmail())
+        User user = userAccountPort.findByEmail(cmd.getEmail())
                 .orElseThrow(() -> new UserNotFoundException("email", cmd.getEmail()));
 
         user.setPassword(passwordEncoder.encode(cmd.getNewPassword()));
         user.setPasswordUpdateAt(LocalDateTime.now());
-        userRepository.save(user);
+        userAccountPort.save(user);
 
         accessTokenRepository.revokeAllByUserId(user.getId(), AccessToken.REASON_PASSWORD_RESET);
         refreshTokenStore.revokeAllForUser(user.getId());
@@ -366,7 +366,7 @@ public class AuthCommandService {
             throw new InvalidTokenException("Refresh token is not valid");
         }
 
-        User user = userRepository.findById(userId)
+        User user = userAccountPort.findById(userId)
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
 
         List<String> roles = roleQueryService.getRoleNamesByUserId(userId);
@@ -476,11 +476,11 @@ public class AuthCommandService {
     }
 
     private void bumpTokenVersionAndSyncRedis(UUID userId) {
-        int updated = userRepository.incrementTokenVersionById(userId);
+        int updated = userAccountPort.incrementTokenVersionById(userId);
         if (updated == 0) {
             return;
         }
-        userRepository.findTokenVersionById(userId)
+        userAccountPort.findTokenVersionById(userId)
                 .ifPresent(v -> accessTokenRevocation.setCachedTokenVersion(userId, v));
     }
 

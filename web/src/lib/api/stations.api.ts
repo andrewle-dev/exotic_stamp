@@ -10,6 +10,7 @@ import type {
   UpdateScanKeysRequest,
   UpdateStationRequest,
 } from '../../types/stations'
+import type { ReorderResponse, ReorderStationsRequest } from '../../types/reorder'
 
 const BASE = '/api/v1/admin/metro/stations'
 
@@ -57,6 +58,11 @@ export async function updateStation(
 
 export async function deleteStation(id: string): Promise<void> {
   await apiClient.delete(`${BASE}/${id}`)
+}
+
+export async function reorderStations(body: ReorderStationsRequest): Promise<ReorderResponse> {
+  const { data } = await apiClient.patch<ApiResponse<ReorderResponse>>(`${BASE}/reorder`, body)
+  return unwrapApiResponse(data)
 }
 
 export async function updateStationScanKeys(

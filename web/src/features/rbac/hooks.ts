@@ -14,9 +14,11 @@ import {
   updateRole,
 } from '../../lib/api/rbac.api'
 import { rbacKeys } from '../../lib/query/keys/rbac'
+import { invalidateKeys } from '../../lib/query/invalidate'
 import type {
   CreatePermissionRequest,
   CreateRoleRequest,
+  RoleResponse,
   UpdateRoleRequest,
 } from '../../types/rbac'
 
@@ -50,12 +52,17 @@ export function useRolePermissions(roleId: string | undefined) {
   })
 }
 
+function cacheRoleDetail(queryClient: ReturnType<typeof useQueryClient>, role: RoleResponse) {
+  queryClient.setQueryData(rbacKeys.role(role.id), role)
+}
+
 export function useCreateRole() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: CreateRoleRequest) => createRole(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.roles() })
+    onSuccess: async (role) => {
+      cacheRoleDetail(queryClient, role)
+      await invalidateKeys(queryClient, [rbacKeys.roles()])
     },
   })
 }
@@ -65,9 +72,9 @@ export function useUpdateRole() {
   return useMutation({
     mutationFn: ({ roleId, body }: { roleId: string; body: UpdateRoleRequest }) =>
       updateRole(roleId, body),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.roles() })
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.role(variables.roleId) })
+    onSuccess: async (role) => {
+      cacheRoleDetail(queryClient, role)
+      await invalidateKeys(queryClient, [rbacKeys.roles()])
     },
   })
 }
@@ -76,8 +83,8 @@ export function useCreatePermission() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (payload: CreatePermissionRequest) => createPermission(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.permissions() })
+    onSuccess: async () => {
+      await invalidateKeys(queryClient, [rbacKeys.permissions()])
     },
   })
 }
@@ -87,9 +94,12 @@ export function useAssignPermissionToRole() {
   return useMutation({
     mutationFn: ({ roleId, permissionCode }: { roleId: string; permissionCode: string }) =>
       assignPermissionToRole(roleId, permissionCode),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.rolePermissions(variables.roleId) })
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.roles() })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [
+        rbacKeys.rolePermissions(variables.roleId),
+        rbacKeys.role(variables.roleId),
+        rbacKeys.roles(),
+      ])
     },
   })
 }
@@ -99,9 +109,12 @@ export function useRevokePermissionFromRole() {
   return useMutation({
     mutationFn: ({ roleId, permissionId }: { roleId: string; permissionId: string }) =>
       revokePermissionFromRole(roleId, permissionId),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.rolePermissions(variables.roleId) })
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.roles() })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [
+        rbacKeys.rolePermissions(variables.roleId),
+        rbacKeys.role(variables.roleId),
+        rbacKeys.roles(),
+      ])
     },
   })
 }
@@ -119,8 +132,8 @@ export function useAssignRoleToUser() {
   return useMutation({
     mutationFn: ({ userId, roleName }: { userId: string; roleName: string }) =>
       assignRoleToUser(userId, roleName),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.userRoles(variables.userId) })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [rbacKeys.userRoles(variables.userId), rbacKeys.roles()])
     },
   })
 }
@@ -130,8 +143,8 @@ export function useRevokeRoleFromUser() {
   return useMutation({
     mutationFn: ({ userId, roleName }: { userId: string; roleName: string }) =>
       revokeRoleFromUser(userId, roleName),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: rbacKeys.userRoles(variables.userId) })
+    onSuccess: async (_data, variables) => {
+      await invalidateKeys(queryClient, [rbacKeys.userRoles(variables.userId), rbacKeys.roles()])
     },
   })
 }

@@ -65,9 +65,14 @@ class RewardsCubit extends Cubit<RewardsState> {
     required RewardsOverview overview,
     required bool isRefreshing,
   }) {
-    final status = overview.hasUserRewards
-        ? RewardsStatus.loaded
-        : RewardsStatus.noRewardsYet;
+    final RewardsStatus status;
+    if (overview.hasPendingRewards) {
+      status = RewardsStatus.rewardPending;
+    } else if (overview.hasUserRewards || overview.availableVouchers.isNotEmpty) {
+      status = RewardsStatus.loaded;
+    } else {
+      status = RewardsStatus.noRewardsYet;
+    }
 
     return RewardsState(
       status: status,

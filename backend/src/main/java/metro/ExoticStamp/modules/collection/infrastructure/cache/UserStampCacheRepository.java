@@ -99,6 +99,11 @@ public class UserStampCacheRepository extends BaseCacheRepository<Object> implem
     }
 
     @Override
+    public void evictUserProgressAll(UUID userId) {
+        deleteKeysMatching("user-progress:" + userId + ":*");
+    }
+
+    @Override
     public Optional<PageResponse<UserStampView>> getUserHistory(UUID userId, int page, int size) {
         return getPage(userHistoryKey(userId, page, size));
     }
@@ -141,7 +146,8 @@ public class UserStampCacheRepository extends BaseCacheRepository<Object> implem
     @Override
     public void evictAllForUserCollection(UUID userId, UUID lineId, UUID campaignId) {
         evictUserStampsForLine(userId, lineId);
-        evictUserProgress(userId, lineId);
+        // Progress may be cached under campaign.lineId or any requested lineId — clear all.
+        evictUserProgressAll(userId);
         evictStampBook(userId, lineId, campaignId);
         evictUserHistoryAll(userId);
     }

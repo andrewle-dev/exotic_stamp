@@ -5,12 +5,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import metro.ExoticStamp.common.reorder.ReorderResponse;
 import metro.ExoticStamp.common.response.ApiResponse;
 import metro.ExoticStamp.common.response.PageResponse;
 import metro.ExoticStamp.modules.reward.application.service.MilestoneCommandService;
 import metro.ExoticStamp.modules.reward.application.service.MilestoneQueryService;
 import metro.ExoticStamp.modules.reward.presentation.mapper.RewardPresentationMapper;
 import metro.ExoticStamp.modules.reward.presentation.request.CreateMilestoneRequest;
+import metro.ExoticStamp.modules.reward.presentation.request.ReorderMilestonesRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.UpdateMilestoneRequest;
 import metro.ExoticStamp.modules.reward.presentation.response.MilestoneResponse;
 import org.springframework.http.HttpStatus;
@@ -78,6 +80,17 @@ public class AdminRewardMilestoneController {
         return ResponseEntity.ok(ApiResponse.ok(
                 presentationMapper.toMilestoneResponse(
                         milestoneCommandService.update(presentationMapper.toUpdateMilestoneCommand(id, request)))));
+    }
+
+    @PatchMapping("/reorder")
+    @PreAuthorize("hasRole('ADMIN') and hasAuthority('REWARD_MILESTONE_MANAGE')")
+    @Operation(summary = "Reorder milestones in a campaign",
+            description = "Dense-renumbers all non-deleted milestones in the campaign to 0..n-1. "
+                    + "orderedIds must be a permutation of every milestone id in that campaign.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<ApiResponse<ReorderResponse>> reorder(@Valid @RequestBody ReorderMilestonesRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(ReorderResponse.from(
+                milestoneCommandService.reorder(presentationMapper.toReorderMilestonesCommand(request)))));
     }
 
     @DeleteMapping("/{id}")

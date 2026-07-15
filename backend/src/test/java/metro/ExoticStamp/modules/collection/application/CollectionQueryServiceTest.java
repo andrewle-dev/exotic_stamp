@@ -96,18 +96,75 @@ class CollectionQueryServiceTest {
     }
 
     @Test
-    void progressQuery_usesCampaignStationCount() {
+    void progressQuery_usesActiveStampDesignCount() {
         Campaign c = defaultCampaign();
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(c);
         when(cachePort.getUserProgress(USER_ID, LINE_ID)).thenReturn(Optional.empty());
         when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(3L);
-        when(campaignStationRepository.countByCampaignId(CAMPAIGN_ID)).thenReturn(8);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(8L);
 
         ProgressView res = service.getMyProgress(USER_ID, LINE_ID, null);
         assertEquals(3L, res.collected());
         assertEquals(8L, res.total());
         assertEquals(37, res.percentage());
         verify(cachePort).putUserProgress(eq(USER_ID), eq(LINE_ID), any());
+    }
+
+    @Test
+    void progressQuery_fullCollection_returnsCollectedAndTotalFourteen() {
+        Campaign c = defaultCampaign();
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(c);
+        when(cachePort.getUserProgress(USER_ID, LINE_ID)).thenReturn(Optional.empty());
+        when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(14L);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(14L);
+
+        ProgressView res = service.getMyProgress(USER_ID, LINE_ID, null);
+        assertEquals(14L, res.collected());
+        assertEquals(14L, res.total());
+        assertEquals(100, res.percentage());
+    }
+
+    @Test
+    void progressQuery_noStampsButDesignsAvailable_returnsZeroOfTotal() {
+        Campaign c = defaultCampaign();
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(c);
+        when(cachePort.getUserProgress(USER_ID, LINE_ID)).thenReturn(Optional.empty());
+        when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(0L);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(14L);
+
+        ProgressView res = service.getMyProgress(USER_ID, LINE_ID, null);
+        assertEquals(0L, res.collected());
+        assertEquals(14L, res.total());
+        assertEquals(0, res.percentage());
+    }
+
+    @Test
+    void progressQuery_inactiveDesignsExcludedFromTotal() {
+        Campaign c = defaultCampaign();
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(c);
+        when(cachePort.getUserProgress(USER_ID, LINE_ID)).thenReturn(Optional.empty());
+        when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(2L);
+        // Repository countActive only returns ACTIVE designs — stub the filtered total.
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(10L);
+
+        ProgressView res = service.getMyProgress(USER_ID, LINE_ID, null);
+        assertEquals(2L, res.collected());
+        assertEquals(10L, res.total());
+        verify(stampDesignRepository).countActiveByCampaignId(CAMPAIGN_ID);
+    }
+
+    @Test
+    void progressQuery_collectedExceedsActiveTotal_capsPercentageAt100() {
+        Campaign c = defaultCampaign();
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(c);
+        when(cachePort.getUserProgress(USER_ID, LINE_ID)).thenReturn(Optional.empty());
+        when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(5L);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(3L);
+
+        ProgressView res = service.getMyProgress(USER_ID, LINE_ID, null);
+        assertEquals(5L, res.collected());
+        assertEquals(3L, res.total());
+        assertEquals(100, res.percentage());
     }
 
     @Test
@@ -132,7 +189,7 @@ class CollectionQueryServiceTest {
                 .thenReturn(List.of(StampDesign.builder().stationId(STATION_ID).campaignId(CAMPAIGN_ID).name("S")
                         .imageUrl("https://cdn/central.png").status(StampDesignStatus.ACTIVE).rarity(StampRarity.COMMON)
                         .sortOrder(0).isLimited(false).build()));
-        when(campaignStationRepository.countByCampaignId(CAMPAIGN_ID)).thenReturn(2);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(2L);
         when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(1L);
 
         StampBookView res = service.getStampBook(USER_ID, LINE_ID);
@@ -155,7 +212,7 @@ class CollectionQueryServiceTest {
                 .thenReturn(MetroLineView.builder().id(LINE_ID).code("L1").name("Line 1").active(true).build());
         when(userStampRepository.findByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(List.of());
         when(stampDesignRepository.findActiveByCampaignIdAndStationIdIn(eq(CAMPAIGN_ID), anyList())).thenReturn(List.of());
-        when(campaignStationRepository.countByCampaignId(CAMPAIGN_ID)).thenReturn(0);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(0L);
         when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(0L);
 
         StampBookView res = service.getStampBook(USER_ID, null);
@@ -234,7 +291,7 @@ class CollectionQueryServiceTest {
                 StampDesign.builder().imageUrl("/stamp.png").status(StampDesignStatus.ACTIVE)
                         .rarity(StampRarity.COMMON).sortOrder(0).name("S").isLimited(false).build()));
         when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(1L);
-        when(campaignStationRepository.countByCampaignId(CAMPAIGN_ID)).thenReturn(5);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(5L);
 
         CollectStatusView res = service.getCollectStatus(USER_ID, key);
         assertEquals(CollectOutcomeStatus.SUCCESS, res.status());
@@ -271,7 +328,7 @@ class CollectionQueryServiceTest {
                 .thenReturn(MetroLineView.builder().id(LINE_ID).code("M1").name("Line 1").active(true).build());
         when(stampDesignRepository.findById(DESIGN_ID)).thenReturn(Optional.empty());
         when(userStampRepository.countDistinctStationsByUserIdAndCampaignId(USER_ID, CAMPAIGN_ID)).thenReturn(1L);
-        when(campaignStationRepository.countByCampaignId(CAMPAIGN_ID)).thenReturn(5);
+        when(stampDesignRepository.countActiveByCampaignId(CAMPAIGN_ID)).thenReturn(5L);
 
         CollectStatusView res = service.getCollectStatus(USER_ID, key);
         assertEquals(CollectOutcomeStatus.DUPLICATE, res.status());

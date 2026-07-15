@@ -1,8 +1,11 @@
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Calendar, FileText, Image, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
-import { FormField, Input } from '../../../components/ui/FormField'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
+import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
+import { PublicAssetUploadField } from '../../uploads/components/PublicAssetUploadField'
 import {
   fromDatetimeLocalValue,
   toDatetimeLocalValue,
@@ -61,6 +64,7 @@ export function CampaignFormDrawer({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isDirty },
   } = useForm<CampaignFormValues>({
     resolver: zodResolver(campaignFormSchema),
@@ -114,95 +118,118 @@ export function CampaignFormDrawer({
       width="lg"
     >
       <form id="campaign-form" className="space-y-4" onSubmit={onSubmit} noValidate>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
-            <Input id="code" {...register('code')} autoComplete="off" />
+        <DrawerSectionCard
+          icon={FileText}
+          title="Details"
+          description="Campaign identity and classification."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Code" htmlFor="code" required error={errors.code?.message}>
+              <Input id="code" {...register('code')} autoComplete="off" />
+            </FormField>
+            <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
+              <Input id="name" {...register('name')} />
+            </FormField>
+          </div>
+
+          <FormField label="Display name" htmlFor="displayName" error={errors.displayName?.message}>
+            <Input id="displayName" {...register('displayName')} />
           </FormField>
-          <FormField label="Name" htmlFor="name" required error={errors.name?.message}>
-            <Input id="name" {...register('name')} />
+
+          <FormField label="Description" htmlFor="description" error={errors.description?.message}>
+            <Textarea id="description" rows={3} {...register('description')} />
           </FormField>
-        </div>
 
-        <FormField label="Display name" htmlFor="displayName" error={errors.displayName?.message}>
-          <Input id="displayName" {...register('displayName')} />
-        </FormField>
-
-        <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-          <textarea
-            id="description"
-            rows={3}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            {...register('description')}
-          />
-        </FormField>
-
-        <div className="grid gap-4 sm:grid-cols-2">
           <FormField
             label="Campaign type"
             htmlFor="campaignType"
             required
             error={errors.campaignType?.message}
           >
-            <select
-              id="campaignType"
-              {...register('campaignType')}
-              className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-            >
+            <Select id="campaignType" {...register('campaignType')}>
               <option value="STANDARD">Standard</option>
               <option value="SEASONAL">Seasonal</option>
               <option value="EVENT">Event</option>
-            </select>
+            </Select>
           </FormField>
+        </DrawerSectionCard>
 
-          {isEdit ? (
+        <DrawerSectionCard
+          icon={Calendar}
+          title="Schedule"
+          description="Active window and ranking priority."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Start at" htmlFor="startAt" required error={errors.startAt?.message}>
+              <Input id="startAt" type="datetime-local" {...register('startAt')} />
+            </FormField>
+            <FormField label="End at" htmlFor="endAt" required error={errors.endAt?.message}>
+              <Input id="endAt" type="datetime-local" {...register('endAt')} />
+            </FormField>
+          </div>
+
+          <FormField label="Priority" htmlFor="priority" error={errors.priority?.message}>
+            <Input id="priority" type="number" step={1} {...register('priority')} />
+          </FormField>
+        </DrawerSectionCard>
+
+        <DrawerSectionCard
+          icon={Image}
+          title="Artwork"
+          description="Banner and thumbnail for campaign surfaces."
+        >
+          <Controller
+            name="bannerImageUrl"
+            control={control}
+            render={({ field }) => (
+              <PublicAssetUploadField
+                id="bannerImageUrl"
+                label="Banner image"
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                error={errors.bannerImageUrl?.message}
+                formDirty={isDirty}
+                previewSize="lg"
+                previewAspect="wide"
+                help="Campaign banner for promotional surfaces. Recommended: landscape (≈16:9)."
+              />
+            )}
+          />
+
+          <Controller
+            name="thumbnailImageUrl"
+            control={control}
+            render={({ field }) => (
+              <PublicAssetUploadField
+                id="thumbnailImageUrl"
+                label="Thumbnail image"
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                error={errors.thumbnailImageUrl?.message}
+                formDirty={isDirty}
+                previewSize="lg"
+                help="Campaign thumbnail for lists and cards. Recommended: square (1:1), ideally 2048×2048."
+              />
+            )}
+          />
+        </DrawerSectionCard>
+
+        {isEdit ? (
+          <DrawerSectionCard
+            icon={Send}
+            title="Publishing"
+            description="Visibility status for this campaign."
+          >
             <FormField label="Status" htmlFor="status" error={errors.status?.message}>
-              <select
-                id="status"
-                {...register('status')}
-                className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm"
-              >
+              <Select id="status" {...register('status')}>
                 <option value="DRAFT">Draft</option>
                 <option value="ACTIVE">Active</option>
                 <option value="INACTIVE">Inactive</option>
                 <option value="ARCHIVED">Archived</option>
-              </select>
+              </Select>
             </FormField>
-          ) : null}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Start at" htmlFor="startAt" required error={errors.startAt?.message}>
-            <Input id="startAt" type="datetime-local" {...register('startAt')} />
-          </FormField>
-          <FormField label="End at" htmlFor="endAt" required error={errors.endAt?.message}>
-            <Input id="endAt" type="datetime-local" {...register('endAt')} />
-          </FormField>
-        </div>
-
-        <FormField label="Priority" htmlFor="priority" error={errors.priority?.message}>
-          <Input
-            id="priority"
-            type="number"
-            step={1}
-            {...register('priority')}
-          />
-        </FormField>
-
-        <FormField
-          label="Banner image URL"
-          htmlFor="bannerImageUrl"
-          error={errors.bannerImageUrl?.message}
-        >
-          <Input id="bannerImageUrl" type="url" {...register('bannerImageUrl')} />
-        </FormField>
-
-        <FormField
-          label="Thumbnail image URL"
-          htmlFor="thumbnailImageUrl"
-          error={errors.thumbnailImageUrl?.message}
-        >
-          <Input id="thumbnailImageUrl" type="url" {...register('thumbnailImageUrl')} />
-        </FormField>
+          </DrawerSectionCard>
+        ) : null}
       </form>
     </FormDrawer>
   )

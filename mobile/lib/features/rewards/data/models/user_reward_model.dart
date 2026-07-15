@@ -36,6 +36,9 @@ class UserRewardModel {
     this.rewardType,
     this.rewardDescription,
     this.rewardImageUrl,
+    this.partnerName,
+    this.offerTitle,
+    this.isFavorite = false,
     this.issuedAt,
     this.expiresAt,
     this.redeemedAt,
@@ -54,6 +57,9 @@ class UserRewardModel {
       rewardTitle: json['rewardTitle'] as String? ?? 'Reward',
       rewardDescription: json['rewardDescription'] as String?,
       rewardImageUrl: json['rewardImageUrl'] as String?,
+      partnerName: json['partnerName'] as String?,
+      offerTitle: json['offerTitle'] as String?,
+      isFavorite: json['isFavorite'] as bool? ?? false,
       issuedAt: _parseDate(json['issuedAt']),
       expiresAt: _parseDate(json['expiresAt']),
       redeemedAt: _parseDate(json['redeemedAt']),
@@ -73,6 +79,9 @@ class UserRewardModel {
   final String rewardTitle;
   final String? rewardDescription;
   final String? rewardImageUrl;
+  final String? partnerName;
+  final String? offerTitle;
+  final bool isFavorite;
   final DateTime? issuedAt;
   final DateTime? expiresAt;
   final DateTime? redeemedAt;
@@ -90,6 +99,9 @@ class UserRewardModel {
       rewardTitle: rewardTitle,
       rewardDescription: rewardDescription,
       rewardImageUrl: rewardImageUrl,
+      partnerName: partnerName,
+      offerTitle: offerTitle,
+      isFavorite: isFavorite,
       issuedAt: issuedAt,
       expiresAt: expiresAt,
       redeemedAt: redeemedAt,

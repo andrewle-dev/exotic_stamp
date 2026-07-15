@@ -1,25 +1,36 @@
 package metro.ExoticStamp.modules.metro.application.support;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-
+/**
+ * Masks scan payloads/keys for logs and audit trails.
+ * Never logs the full raw key.
+ */
 public final class ScanKeyRedactor {
+
+    private static final int VISIBLE_PREFIX = 8;
 
     private ScanKeyRedactor() {
     }
 
+    /**
+     * Masks a raw key or full payload, e.g. {@code nfc_abcd****} or {@code metrostamp://scan?k=nfc_abcd****}.
+     */
     public static String redact(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(value.trim().getBytes(StandardCharsets.UTF_8));
-            return "sha256:" + HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            return "[REDACTED]";
+        String trimmed = value.trim();
+        int keyStart = trimmed.indexOf("k=");
+        if (keyStart >= 0 && keyStart + 2 < trimmed.length()) {
+            String prefix = trimmed.substring(0, keyStart + 2);
+            return prefix + maskKey(trimmed.substring(keyStart + 2));
         }
+        return maskKey(trimmed);
+    }
+
+    private static String maskKey(String key) {
+        if (key.length() <= VISIBLE_PREFIX) {
+            return key.charAt(0) + "****";
+        }
+        return key.substring(0, VISIBLE_PREFIX) + "****";
     }
 }

@@ -7,4 +7,5 @@ export const stationKeys = {
   details: () => [...stationKeys.all, 'detail'] as const,
   detail: (id: string) => [...stationKeys.details(), id] as const,
   stats: () => [...stationKeys.all, 'stats'] as const,
+  scanKeys: (stationId: string) => [...stationKeys.all, 'scan-keys', stationId] as const,
 }

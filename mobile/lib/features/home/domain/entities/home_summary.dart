@@ -9,6 +9,11 @@ class HomeSummary extends Equatable {
     this.recentStamps = const [],
     this.nextReward,
     this.activeBanner,
+    this.promotionalBanners = const [],
+    this.milestones = const [],
+    this.rankTitle,
+    this.rankSubtitle,
+    this.socialProof,
     this.partialErrors = const [],
   });
 
@@ -19,6 +24,11 @@ class HomeSummary extends Equatable {
   final List<RecentStamp> recentStamps;
   final NextReward? nextReward;
   final ActiveBanner? activeBanner;
+  final List<PartnerBanner> promotionalBanners;
+  final List<HomeMilestonePreview> milestones;
+  final String? rankTitle;
+  final String? rankSubtitle;
+  final HomeSocialProof? socialProof;
   final List<String> partialErrors;
 
   @override
@@ -30,8 +40,79 @@ class HomeSummary extends Equatable {
         recentStamps,
         nextReward,
         activeBanner,
+        promotionalBanners,
+        milestones,
+        rankTitle,
+        rankSubtitle,
+        socialProof,
         partialErrors,
       ];
+}
+
+class PartnerBanner extends Equatable {
+  const PartnerBanner({
+    required this.partnerId,
+    required this.partnerName,
+    this.logoUrl,
+    required this.bannerImageUrl,
+    this.contractStart,
+    this.contractEnd,
+  });
+
+  final String partnerId;
+  final String partnerName;
+  final String? logoUrl;
+  final String bannerImageUrl;
+  final String? contractStart;
+  final String? contractEnd;
+
+  @override
+  List<Object?> get props => [
+        partnerId,
+        partnerName,
+        logoUrl,
+        bannerImageUrl,
+        contractStart,
+        contractEnd,
+      ];
+}
+
+class HomeMilestonePreview extends Equatable {
+  const HomeMilestonePreview({
+    required this.id,
+    required this.requiredStampCount,
+    required this.label,
+    this.rewardTitle,
+    required this.achieved,
+  });
+
+  final String id;
+  final int requiredStampCount;
+  final String label;
+  final String? rewardTitle;
+  final bool achieved;
+
+  @override
+  List<Object?> get props => [
+        id,
+        requiredStampCount,
+        label,
+        rewardTitle,
+        achieved,
+      ];
+}
+
+class HomeSocialProof extends Equatable {
+  const HomeSocialProof({
+    required this.message,
+    this.highlightCount,
+  });
+
+  final String message;
+  final int? highlightCount;
+
+  @override
+  List<Object?> get props => [message, highlightCount];
 }
 
 class CollectionProgress extends Equatable {
@@ -103,12 +184,22 @@ class ActiveBanner extends Equatable {
     required this.campaignId,
     this.imageUrl,
     this.campaignName,
+    this.promoLabel,
+    this.subtitle,
   });
 
   final String campaignId;
   final String? imageUrl;
   final String? campaignName;
+  final String? promoLabel;
+  final String? subtitle;
 
   @override
-  List<Object?> get props => [campaignId, imageUrl, campaignName];
+  List<Object?> get props => [
+        campaignId,
+        imageUrl,
+        campaignName,
+        promoLabel,
+        subtitle,
+      ];
 }

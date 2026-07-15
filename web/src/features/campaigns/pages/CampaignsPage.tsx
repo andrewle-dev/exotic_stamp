@@ -1,23 +1,40 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  ActiveFilterTags,
+  FilterGroup,
+  FilterSelect,
+  FilterSummaryText,
+  ListFilterToolbar,
+  buildLabeledFilterTag,
+  buildSearchFilterTag,
+  collectFilterTags,
+  countAppliedAdvancedFilters,
+  useDraftAppliedFilters,
+} from '../../../components/filters'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type DataTableColumn } from '../../../components/ui/DataTable'
+import { COL_WIDTH } from '../../../components/ui/table/columnWidthPresets'
 import { Pagination } from '../../../components/ui/Pagination'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
-import { Input } from '../../../components/ui/FormField'
 import { formatDateTime } from '../../../lib/formatting/date'
 import { formatDateRange } from '../../../lib/campaigns/schedule'
 import { isForbiddenError } from '../../../lib/api/errors'
 import { ROUTES } from '../../../lib/constants/routes'
-import type { CampaignResponse, CampaignStatus, CampaignType } from '../../../types/campaigns'
+import { detailFromListState } from '../../../lib/navigation/useSafeBackNavigation'
+import type { CampaignResponse } from '../../../types/campaigns'
 import { useCampaigns, useDeleteCampaign } from '../hooks'
 import { CampaignFormDrawer } from '../components/CampaignFormDrawer'
-
-type TypeFilter = CampaignType | 'ALL'
-type StatusFilter = CampaignStatus | 'ALL'
+import {
+  CAMPAIGN_TYPE_LABELS,
+  EMPTY_CAMPAIGN_FILTERS,
+  type CampaignFilters,
+  type CampaignStatusFilter,
+  type CampaignTypeFilter,
+} from '../filter-schema'
 
 /**
  * Search, type, and status filters are applied client-side to the current API page only.
@@ -26,8 +43,8 @@ type StatusFilter = CampaignStatus | 'ALL'
 function filterCampaignsPage(
   campaigns: CampaignResponse[],
   search: string,
-  typeFilter: TypeFilter,
-  statusFilter: StatusFilter,
+  typeFilter: CampaignTypeFilter,
+  statusFilter: CampaignStatusFilter,
 ): CampaignResponse[] {
   const needle = search.trim().toLowerCase()
 
@@ -51,15 +68,30 @@ function filterCampaignsPage(
 
 export function CampaignsPage() {
   const navigate = useNavigate()
-  const [search, setSearch] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
+  const {
+    draftFilters,
+    setDraftFilters,
+    appliedFilters,
+    search,
+    searchInput,
+    setSearchInput,
+    applySearch,
+    clearSearch,
+    applyFilters,
+    resetFilters,
+    removeFilter,
+    clearAllFilters,
+    page,
+    setPage,
+    size,
+    setSize,
+  } = useDraftAppliedFilters<CampaignFilters>({ emptyFilters: EMPTY_CAMPAIGN_FILTERS })
+
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingCampaign, setEditingCampaign] = useState<CampaignResponse | null>(null)
   const [deletingCampaign, setDeletingCampaign] = useState<CampaignResponse | null>(null)
+
+  const { type: typeFilter, status: statusFilter } = appliedFilters
 
   const listParams = useMemo(() => ({ page, size }), [page, size])
   const { data, isLoading, error, refetch } = useCampaigns(listParams)
@@ -70,22 +102,53 @@ export function CampaignsPage() {
     [data?.content, search, typeFilter, statusFilter],
   )
 
+  const activeFilters = collectFilterTags([
+    buildSearchFilterTag({ search, onRemove: clearSearch }),
+    typeFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'type',
+          label: 'Type',
+          value: CAMPAIGN_TYPE_LABELS[typeFilter],
+          accent: 'type',
+          onRemove: () => removeFilter('type', 'ALL'),
+        })
+      : null,
+    statusFilter !== 'ALL'
+      ? buildLabeledFilterTag({
+          id: 'status',
+          label: 'Status',
+          value: statusFilter,
+          accent: 'status',
+          onRemove: () => removeFilter('status', 'ALL'),
+        })
+      : null,
+  ])
+
+  const hasActiveFilters = activeFilters.length > 0
+  const summaryText = hasActiveFilters
+    ? `Showing ${filteredContent.length} filtered campaign${filteredContent.length === 1 ? '' : 's'}`
+    : `Showing ${filteredContent.length} campaign${filteredContent.length === 1 ? '' : 's'}`
+
   const columns: DataTableColumn<CampaignResponse>[] = useMemo(
     () => [
       {
         id: 'code',
         header: 'Code',
+        ...COL_WIDTH.code,
         cell: (row) => <span className="font-mono text-xs">{row.code}</span>,
       },
-      { id: 'name', header: 'Name', cell: (row) => row.name },
+      { id: 'name', header: 'Name', ...COL_WIDTH.name, cell: (row) => row.name },
       {
         id: 'displayName',
         header: 'Display name',
+        ...COL_WIDTH.title,
         cell: (row) => row.displayName ?? '—',
       },
       {
         id: 'campaignType',
         header: 'Type',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => (
           <StatusBadge status={row.campaignType ?? 'STANDARD'} label={undefined} />
         ),
@@ -93,11 +156,14 @@ export function CampaignsPage() {
       {
         id: 'status',
         header: 'Status',
+        ...COL_WIDTH.badge,
+        truncate: false,
         cell: (row) => <StatusBadge status={row.status} />,
       },
       {
         id: 'dateRange',
         header: 'Date range',
+        ...COL_WIDTH.dateRange,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">
             {formatDateRange(row.startAt, row.endAt)}
@@ -108,11 +174,13 @@ export function CampaignsPage() {
         id: 'priority',
         header: 'Priority',
         align: 'right',
+        ...COL_WIDTH.metric,
         cell: (row) => row.priority ?? '—',
       },
       {
         id: 'updatedAt',
         header: 'Updated at',
+        ...COL_WIDTH.date,
         cell: (row) => (
           <span className="text-xs text-muted-foreground">{formatDateTime(row.updatedAt)}</span>
         ),
@@ -146,71 +214,63 @@ export function CampaignsPage() {
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Search and filters apply to the current page only. Pagination uses the server list endpoint.
-      </p>
-
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 lg:flex-row lg:items-end">
-        <div className="flex-1 space-y-1">
-          <label htmlFor="campaign-search" className="text-xs font-medium text-muted-foreground">
-            Search
-          </label>
-          <Input
-            id="campaign-search"
-            placeholder="Search by code or name…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setSearch(searchInput.trim())
-              }
-            }}
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="campaign-type" className="text-xs font-medium text-muted-foreground">
-            Type
-          </label>
-          <select
-            id="campaign-type"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+      <ListFilterToolbar
+        searchId="campaign-search"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onSearchSubmit={() => applySearch()}
+        searchPlaceholder="Search by code or name…"
+        activeAdvancedFilterCount={countAppliedAdvancedFilters([
+          typeFilter !== 'ALL',
+          statusFilter !== 'ALL',
+        ])}
+        filterSubtitle="Narrow the list by campaign type and status."
+        onApplyFilters={applyFilters}
+        onClearFilters={resetFilters}
+      >
+        <FilterGroup id="campaign-type-filter" label="Type" accent="type">
+          <FilterSelect
+            id="campaign-type-filter"
+            value={draftFilters.type}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                type: e.target.value as CampaignTypeFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="STANDARD">Standard</option>
             <option value="SEASONAL">Seasonal</option>
             <option value="EVENT">Event</option>
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="campaign-status" className="text-xs font-medium text-muted-foreground">
-            Status
-          </label>
-          <select
-            id="campaign-status"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="w-full rounded-md border border-border bg-input-background px-3 py-2 text-sm lg:w-40"
+          </FilterSelect>
+        </FilterGroup>
+
+        <FilterGroup id="campaign-status-filter" label="Status" accent="status">
+          <FilterSelect
+            id="campaign-status-filter"
+            value={draftFilters.status}
+            onChange={(e) =>
+              setDraftFilters((prev) => ({
+                ...prev,
+                status: e.target.value as CampaignStatusFilter,
+              }))
+            }
           >
             <option value="ALL">All</option>
             <option value="DRAFT">Draft</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
             <option value="ARCHIVED">Archived</option>
-          </select>
-        </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setSearch(searchInput.trim())
-          }}
-        >
-          Apply
-        </Button>
-      </div>
+          </FilterSelect>
+        </FilterGroup>
+      </ListFilterToolbar>
+
+      <ActiveFilterTags filters={activeFilters} onClearAll={clearAllFilters} />
+      <FilterSummaryText text={summaryText} />
 
       <DataTable
+        tableId="campaigns"
         columns={columns}
         data={filteredContent}
         getRowId={(row) => row.id}
@@ -218,6 +278,7 @@ export function CampaignsPage() {
         error={error}
         onRetry={() => void refetch()}
         caption="Campaigns"
+        actionsWidth={128}
         emptyTitle="No campaigns found"
         emptyDescription="Create a campaign or adjust filters on this page."
         rowActions={(row) => (
@@ -225,7 +286,11 @@ export function CampaignsPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(ROUTES.campaignDetail(row.id))}
+              onClick={() =>
+                navigate(ROUTES.campaignDetail(row.id), {
+                  state: detailFromListState(ROUTES.campaigns),
+                })
+              }
               aria-label="View campaign"
             >
               <Eye className="h-4 w-4" />
@@ -260,10 +325,7 @@ export function CampaignsPage() {
           totalPages={data.totalPages}
           totalElements={data.totalElements}
           onPageChange={setPage}
-          onSizeChange={(next) => {
-            setSize(next)
-            setPage(0)
-          }}
+          onSizeChange={setSize}
         />
       ) : null}
 

@@ -2,6 +2,7 @@ package metro.ExoticStamp.modules.reward.application.mapper;
 
 import metro.ExoticStamp.modules.reward.application.view.MilestoneView;
 import metro.ExoticStamp.modules.reward.application.view.PartnerView;
+import metro.ExoticStamp.modules.reward.application.view.PromotionalPartnerBannerView;
 import metro.ExoticStamp.modules.reward.application.view.RewardView;
 import metro.ExoticStamp.modules.reward.application.view.UserRewardView;
 import metro.ExoticStamp.modules.reward.application.view.UserRewardVoucherView;
@@ -24,10 +25,25 @@ public class RewardAppMapper {
                 .id(p.getId())
                 .name(p.getName())
                 .logoUrl(p.getLogoUrl())
+                .bannerImageUrl(p.getBannerImageUrl())
                 .contactEmail(p.getContactEmail())
                 .contractStartDate(p.getContractStartDate())
                 .contractEndDate(p.getContractEndDate())
                 .active(p.isActive())
+                .build();
+    }
+
+    public PromotionalPartnerBannerView toPromotionalPartnerBannerView(Partner p) {
+        if (p == null) {
+            return null;
+        }
+        return PromotionalPartnerBannerView.builder()
+                .partnerId(p.getId())
+                .partnerName(p.getName())
+                .logoUrl(p.getLogoUrl())
+                .bannerImageUrl(p.getBannerImageUrl())
+                .contractStart(p.getContractStartDate())
+                .contractEnd(p.getContractEndDate())
                 .build();
     }
 

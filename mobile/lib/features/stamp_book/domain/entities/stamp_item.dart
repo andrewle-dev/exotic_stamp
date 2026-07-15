@@ -7,6 +7,9 @@ class StampItem extends Equatable {
     required this.sequence,
     required this.collected,
     this.stampDesignUrl,
+    this.stampDesignName,
+    this.stampDesignDescription,
+    this.rarity,
     this.collectedAt,
     this.stampId,
     this.collectMethod,
@@ -17,6 +20,9 @@ class StampItem extends Equatable {
   final int sequence;
   final bool collected;
   final String? stampDesignUrl;
+  final String? stampDesignName;
+  final String? stampDesignDescription;
+  final String? rarity;
   final DateTime? collectedAt;
   final String? stampId;
   final String? collectMethod;
@@ -28,6 +34,9 @@ class StampItem extends Equatable {
         sequence,
         collected,
         stampDesignUrl,
+        stampDesignName,
+        stampDesignDescription,
+        rarity,
         collectedAt,
         stampId,
         collectMethod,

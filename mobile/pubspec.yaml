@@ -31,6 +31,7 @@ dependencies:
   pinput: ^5.0.1
   url_launcher: ^6.3.1
   uuid: ^4.5.1
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:
@@ -53,4 +54,5 @@ flutter:
     - assets/icons/
     - assets/animations/
     - assets/logo/
+    - assets/logo/ExoticStamp_logo.png
     - assets/stamps/

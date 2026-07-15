@@ -36,7 +36,7 @@ class PhotoShareEditorControls extends StatelessWidget {
                 color: AppColors.primaryBlue,
                 size: 20,
               ),
-              const SizedBox(width: AppSpacing.xs),
+              const SizedBox(width: AppSpacing.sm),
               Text(
                 'Stamp đã chọn',
                 style: AppTextStyles.titleMedium.copyWith(
@@ -45,7 +45,7 @@ class PhotoShareEditorControls extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
         ],
         Text(
           'LỜI TỰA KỶ NIỆM',
@@ -55,7 +55,7 @@ class PhotoShareEditorControls extends StatelessWidget {
             letterSpacing: 0.8,
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
+        const SizedBox(height: AppSpacing.sm),
         AppTextField(
           controller: captionController,
           hint: 'Viết lời tựa cho kỷ niệm của bạn...',
@@ -63,14 +63,14 @@ class PhotoShareEditorControls extends StatelessWidget {
           textInputAction: TextInputAction.newline,
         ),
         if (hasStampContext) ...[
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xl),
           _ToggleTile(
             title: 'Hiển thị tên nhà ga',
             subtitle: 'Tên ga sẽ xuất hiện trên Stamp sticker',
             value: showStationName,
             onChanged: onShowStationNameChanged,
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
           _ToggleTile(
             title: 'Hiển thị ngày nhận',
             subtitle: 'Đánh dấu thời gian bạn nhận được Stamp',
@@ -100,8 +100,8 @@ class _ToggleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
         color: AppColors.surface,

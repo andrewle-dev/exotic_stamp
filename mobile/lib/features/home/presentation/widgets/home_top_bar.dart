@@ -3,9 +3,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_icons.dart';
+import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
-import '../../../../app/theme/app_text_styles.dart';
+import '../../../../app/theme/app_typography.dart';
+import '../../../../shared/widgets/app_action_button.dart';
 
+/// Legacy greeting top bar — prefer [HomeHeader] / [AppScreenHeader].
+@Deprecated('Use HomeHeader with AppScreenHeader.brand')
 class HomeTopBar extends StatelessWidget {
   const HomeTopBar({super.key, required this.displayName});
 
@@ -20,7 +25,7 @@ class HomeTopBar extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             color: AppColors.primaryBlue,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: AppRadius.mdAll,
           ),
           child: const Icon(
             Icons.workspace_premium_outlined,
@@ -28,18 +33,17 @@ class HomeTopBar extends StatelessWidget {
             size: 20,
           ),
         ),
-        const SizedBox(width: AppSpacing.sm),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               RichText(
-                text: const TextSpan(
-                  style: TextStyle(
-                    fontSize: 22,
+                text: TextSpan(
+                  style: AppTextStyles.displayMedium.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
-                  children: [
+                  children: const [
                     TextSpan(
                       text: 'Exotic ',
                       style: TextStyle(color: AppColors.accentRed),
@@ -53,23 +57,17 @@ class HomeTopBar extends StatelessWidget {
               ),
               Text(
                 'Xin chào, $displayName',
-                style: AppTextStyles.bodyMedium,
+                style: AppTextStyles.body,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
         ),
-        IconButton(
+        AppActionButton(
+          icon: AppIcons.settings,
           onPressed: () => context.push(RouteNames.settings),
-          style: IconButton.styleFrom(
-            side: const BorderSide(color: AppColors.border),
-            backgroundColor: AppColors.backgroundWhite,
-          ),
-          icon: const Icon(
-            Icons.settings_outlined,
-            color: AppColors.textPrimary,
-          ),
+          tooltip: 'Settings',
         ),
       ],
     );

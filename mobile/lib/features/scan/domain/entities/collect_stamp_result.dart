@@ -51,17 +51,34 @@ class CollectedStamp extends Equatable {
       ];
 }
 
+class CollectSponsorAd extends Equatable {
+  const CollectSponsorAd({
+    required this.title,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  List<Object?> get props => [title, subtitle];
+}
+
 class CollectStampResult extends Equatable {
   const CollectStampResult({
     required this.stamp,
     this.progress,
     required this.isNew,
+    this.nextRewardHint,
+    this.sponsorAd,
   });
 
   final CollectedStamp stamp;
   final CollectStampProgress? progress;
   final bool isNew;
+  final String? nextRewardHint;
+  final CollectSponsorAd? sponsorAd;
 
   @override
-  List<Object?> get props => [stamp, progress, isNew];
+  List<Object?> get props => [stamp, progress, isNew, nextRewardHint, sponsorAd];
 }

@@ -312,8 +312,32 @@
 | `collectedCount`, `totalStations` | `GET /api/v1/collection/progress?lineId={uuid}` | **IMPLEMENTED** |
 | `recentStamps` | `GET /api/v1/collection/my-stamps?lineId={uuid}&page=0&size=5` | **IMPLEMENTED** |
 | `nextReward` | `GET /api/v1/rewards/milestones?campaignId={uuid}` + client logic | **PARTIAL** |
-| `activeBanner` | `GET /api/v1/campaigns/active` → `bannerImageUrl` | **IMPLEMENTED** |
+| `activeBanner` | `GET /api/v1/campaigns/active` → `bannerImageUrl` | **IMPLEMENTED** (campaign context / milestones) |
+| `promotionalBanners` | `GET /api/v1/partners/promotional-banners` | **IMPLEMENTED** (Home partner carousel) |
 | `socialProof` | — | **MISSING** (collector counts exist only on admin `GET /api/v1/admin/metro/stations/stats`) |
+
+#### `GET /api/v1/partners/promotional-banners`
+
+**Owner:** `PartnerPublicController` → `PartnerPromotionalQueryService`  
+**Auth:** public (`GET` permitAll)  
+**Eligibility:** `active` + non-blank `bannerImageUrl` + contract window valid for today (null dates = open)  
+**Sort:** `updatedAt` descending  
+
+**Response `data`:**
+
+```json
+[
+  {
+    "partnerId": "partner-uuid",
+    "partnerName": "Highland Coffee",
+    "logoUrl": "/uploads/public/partners/logo.png",
+    "bannerImageUrl": "/uploads/public/partners/banner.png",
+    "contractStart": "2026-05-25",
+    "contractEnd": "2027-06-25"
+  }
+]
+```
+
 
 #### `GET /api/v1/collection/progress`
 
@@ -954,7 +978,8 @@ Treat as **MISSING** for Flutter until MVP gate removed.
 | Pre-stamp sponsor/ad selection | **MISSING** | Flyway V5 tables exist; no public controller |
 | Impression tracking | **MISSING** | Proposed: `POST /api/v1/monetization/impressions` |
 | Click tracking | **MISSING** | Proposed: `POST /api/v1/monetization/clicks` |
-| Affiliate banners | **MISSING** | Schema only |
+| Affiliate banners | **MISSING** | Schema only (`affiliate_banners`) |
+| Partner Home promo banners | **IMPLEMENTED** | `GET /api/v1/partners/promotional-banners` (partner `bannerImageUrl`) |
 
 **Proposed pre-stamp ad contract**
 
@@ -1011,7 +1036,7 @@ POST /api/v1/monetization/impressions
 
 1. **Refresh token cookie** — Flutter HTTP client must persist cookies for `/api/v1/auth/refresh` (path-scoped). Pure Bearer-only clients will fail silent refresh.
 2. **Mixed response shapes** — Auth/login and `GET /users/me` return raw DTOs; collection/metro/rewards use `ApiResponse<T>`. Codegen should model both.
-3. **Home screen composition** — Plan 3–4 parallel calls (`progress`, `my-stamps`, `campaigns/active`, `rewards/milestones`) until summary API exists.
+3. **Home screen composition** — Plan parallel calls (`progress`, `my-stamps`, `campaigns/active`, `partners/promotional-banners`, `rewards/milestones`) until summary API exists.
 4. **Collect reward UX** — Milestone unlock is async; poll `GET /rewards/my` or listen to push notifications after collect — do not wait for `rewardUnlocked` in collect response.
 5. **Station list merge** — Join `metro/stations` + `collection/stamp-book` client-side for collected badges; compute distance locally.
 6. **GPS required** — Collect always requires `latitude`, `longitude`, `accuracyMeters`; handle `GPS_*` errors with user-facing copy.

@@ -34,6 +34,13 @@ public interface JpaStampDesignRepository extends JpaRepository<StampDesign, UUI
             @Param("stationIds") Collection<UUID> stationIds);
 
     @Query("""
+            SELECT COUNT(sd) FROM StampDesign sd
+            WHERE sd.campaignId = :campaignId
+              AND sd.status = 'ACTIVE' AND sd.deletedAt IS NULL
+            """)
+    long countActiveByCampaignId(@Param("campaignId") UUID campaignId);
+
+    @Query("""
             SELECT CASE WHEN COUNT(sd) > 0 THEN true ELSE false END FROM StampDesign sd
             WHERE sd.campaignId = :campaignId AND sd.stationId = :stationId
               AND sd.status = 'ACTIVE' AND sd.deletedAt IS NULL

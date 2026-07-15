@@ -1,5 +1,6 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:metro_stamp_app/core/errors/error_mapper.dart';
 import 'package:metro_stamp_app/core/errors/failure.dart';
 import 'package:metro_stamp_app/features/stamp_book/domain/entities/stamp_book.dart';
 import 'package:metro_stamp_app/features/stamp_book/domain/entities/stamp_item.dart';
@@ -7,6 +8,7 @@ import 'package:metro_stamp_app/features/stamp_book/domain/repositories/stamp_bo
 import 'package:metro_stamp_app/features/stamp_book/domain/usecases/get_stamp_book_usecase.dart';
 import 'package:metro_stamp_app/features/stamp_book/presentation/cubit/stamp_book_cubit.dart';
 import 'package:metro_stamp_app/features/stamp_book/presentation/cubit/stamp_book_state.dart';
+import 'package:metro_stamp_app/features/stamp_book/presentation/utils/stamp_book_line_filter.dart';
 import 'package:metro_stamp_app/features/stations/domain/entities/line.dart';
 import 'package:metro_stamp_app/features/stations/domain/repositories/stations_repository.dart';
 import 'package:metro_stamp_app/features/stations/domain/usecases/get_lines_usecase.dart';
@@ -82,7 +84,7 @@ void main() {
   tearDown(() => cubit.close());
 
   blocTest<StampBookCubit, StampBookState>(
-    'emits loading then loaded on success',
+    'emits loading then loaded with first active lineId',
     build: () {
       when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
       when(() => stampBookRepository.getStampBook(lineId: 'line-1'))
@@ -97,13 +99,22 @@ void main() {
         StampBookStatus.loading,
       ),
       isA<StampBookState>()
+          .having((s) => s.lines, 'lines', lines)
+          .having((s) => s.selectedLineId, 'selectedLineId', 'line-1'),
+      isA<StampBookState>()
           .having((s) => s.status, 'status', StampBookStatus.loaded)
-          .having((s) => s.stampBook?.stations.length, 'stations', 2),
+          .having((s) => s.stampBook?.stations.length, 'stations', 2)
+          .having((s) => s.selectedLineId, 'selectedLineId', 'line-1'),
     ],
+    verify: (_) {
+      verify(() => stampBookRepository.getStampBook(lineId: 'line-1'))
+          .called(1);
+      verifyNever(() => stampBookRepository.getStampBook(lineId: null));
+    },
   );
 
   blocTest<StampBookCubit, StampBookState>(
-    'emits empty when no collected stamps',
+    'emits loaded with full grid when no stamps collected yet',
     build: () {
       when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
       when(() => stampBookRepository.getStampBook(lineId: 'line-1'))
@@ -112,7 +123,37 @@ void main() {
     },
     act: (cubit) => cubit.load(),
     verify: (_) {
+      expect(cubit.state.status, StampBookStatus.loaded);
+      expect(cubit.state.stampBook?.stations, isNotEmpty);
+      expect(cubit.state.selectedLineId, 'line-1');
+    },
+  );
+
+  blocTest<StampBookCubit, StampBookState>(
+    'emits empty when stamp catalogue has no stations',
+    build: () {
+      when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
+      when(() => stampBookRepository.getStampBook(lineId: 'line-1'))
+          .thenAnswer(
+        (_) async => const StampBook(
+          lineId: 'line-1',
+          lineName: 'Line 1',
+          progress: StampBookProgress(
+            lineId: 'line-1',
+            collected: 0,
+            total: 0,
+            percentage: 0,
+          ),
+          stations: [],
+        ),
+      );
+      return cubit;
+    },
+    act: (cubit) => cubit.load(),
+    verify: (_) {
       expect(cubit.state.status, StampBookStatus.empty);
+      expect(cubit.state.stampBook?.stations, isEmpty);
+      expect(cubit.state.selectedLineId, 'line-1');
     },
   );
 
@@ -142,10 +183,82 @@ void main() {
   );
 
   blocTest<StampBookCubit, StampBookState>(
-    'refresh triggers backend fetch',
+    'ignores All Lines selection without calling API',
     build: () {
       when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
-      when(() => stampBookRepository.getStampBook(lineId: any(named: 'lineId')))
+      when(() => stampBookRepository.getStampBook(lineId: 'line-1'))
+          .thenAnswer((_) async => loadedStampBook);
+      return cubit;
+    },
+    act: (cubit) async {
+      await cubit.load();
+      await cubit.selectLine(StampBookLineFilter.allLines);
+    },
+    verify: (_) {
+      verifyNever(() => stampBookRepository.getStampBook(lineId: null));
+      expect(cubit.state.selectedLineId, 'line-1');
+    },
+  );
+
+  blocTest<StampBookCubit, StampBookState>(
+    'maps ambiguous default campaign failure to user-facing message',
+    build: () {
+      when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
+      when(() => stampBookRepository.getStampBook(lineId: 'line-1')).thenThrow(
+        const Failure(
+          code: FailureCode.unknown,
+          message:
+              'Multiple active default campaigns found (2); provide lineId to disambiguate or configure a single global default',
+          backendCode: 'DEFAULT_CAMPAIGN_AMBIGUOUS',
+        ),
+      );
+      return cubit;
+    },
+    act: (cubit) => cubit.load(),
+    verify: (_) {
+      expect(cubit.state.status, StampBookStatus.failure);
+      expect(cubit.state.lines, lines);
+      expect(cubit.state.selectedLineId, 'line-1');
+      expect(
+        cubit.state.failure?.message,
+        ErrorMapper.defaultCampaignAmbiguousMessage,
+      );
+      expect(
+        cubit.state.failure?.code,
+        FailureCode.defaultCampaignAmbiguous,
+      );
+    },
+  );
+
+  blocTest<StampBookCubit, StampBookState>(
+    'keeps lines on failure so user can switch to another line',
+    build: () {
+      when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
+      when(() => stampBookRepository.getStampBook(lineId: 'line-1')).thenThrow(
+        const Failure(
+          code: FailureCode.networkError,
+          message: 'Network down',
+        ),
+      );
+      when(() => stampBookRepository.getStampBook(lineId: 'line-2'))
+          .thenAnswer((_) async => loadedStampBook.copyWith(lineId: 'line-2'));
+      return cubit;
+    },
+    act: (cubit) async {
+      await cubit.load();
+      await cubit.selectLine('line-2');
+    },
+    verify: (_) {
+      expect(cubit.state.status, StampBookStatus.loaded);
+      expect(cubit.state.selectedLineId, 'line-2');
+    },
+  );
+
+  blocTest<StampBookCubit, StampBookState>(
+    'refresh triggers backend fetch with selected lineId',
+    build: () {
+      when(() => stationsRepository.getLines()).thenAnswer((_) async => lines);
+      when(() => stampBookRepository.getStampBook(lineId: 'line-1'))
           .thenAnswer((_) async => loadedStampBook);
       return cubit;
     },
@@ -154,14 +267,13 @@ void main() {
       await cubit.refresh();
     },
     verify: (_) {
-      verify(
-        () => stampBookRepository.getStampBook(lineId: any(named: 'lineId')),
-      ).called(2);
+      verify(() => stampBookRepository.getStampBook(lineId: 'line-1'))
+          .called(2);
     },
   );
 
   blocTest<StampBookCubit, StampBookState>(
-    'emits failure on error',
+    'emits failure on lines load error',
     build: () {
       when(() => stationsRepository.getLines()).thenThrow(
         const Failure(code: FailureCode.networkError, message: 'Network down'),

@@ -1,4 +1,4 @@
-﻿# WORKING PIPELINE - EXOTIC STAMP
+# WORKING PIPELINE - EXOTIC STAMP
 
 > Pipeline chuẩn để phát triển Exotic/Metro Stamp backend, bám sát kiến trúc hiện tại trong repo.
 
@@ -16,12 +16,15 @@
 
 ## 2. Architecture guardrails (quick reference)
 
-- Pattern: Spring-pragmatic DDD.
+- Pattern: Spring-pragmatic DDD (JPA on `domain/model` allowed).
 - Dependency direction: `presentation -> application -> domain <- infrastructure`.
+- `domain` must not import `application` / `presentation` / `infrastructure`.
 - Không import `JpaRepository` vào `application`/`domain`.
+- Cross-module: ports/events, not foreign `domain.repository`.
 - Service write dùng `@Transactional`, query dùng `readOnly=true` khi phù hợp.
 - Viết API bằng DTO, không lộ dữ liệu nhạy cảm.
 - Viết flow có ghi dữ liệu thì phải có cache invalidation rõ ràng.
+- See `docs/ARCHITECTURE_ALIGNMENT_PLAN.md` for verified boundaries.
 
 ---
 
@@ -77,17 +80,20 @@
 
 ## 6. Scan-to-stamp runtime pipeline (core nghiệp vụ)
 
-1. App gửi scan request (NFC tag hoặc QR token + GPS/device metadata).
-2. Backend resolve station theo hot-path key (`nfc_tag_id` / `qr_code_token`).
+1. App gửi scan request (NFC/QR payload + GPS/device metadata + idempotency key).
+2. Backend resolve station:
+   - hot-path legacy keys on `stations` (`nfc_tag_id` / `qr_code_token`), and/or
+   - `station_scan_keys` (hashed keys, rotation, install verification).
 3. Validate điều kiện collect:
    - station active
-   - campaign active (nếu có)
-   - chưa collect trùng
+   - campaign active (default campaign resolver)
+   - GPS policy
+   - chưa collect trùng + idempotency window
 4. Ghi `user_stamps`.
-5. Trigger milestone evaluation:
-   - nếu đạt mốc -> issue reward/voucher.
-6. Trả response stamp + tiến độ + reward mới (nếu có).
-7. Nếu có ad slot: log impression/click theo module monetization.
+5. After commit: publish `StampCollectedEvent` → reward evaluation (async):
+   - nếu đạt mốc -> issue reward/voucher (`uq_user_rewards_once`, voucher `SKIP LOCKED`).
+6. Trả response stamp + tiến độ (+ reward async; may lag if listener fails — no outbox yet).
+7. Ad impression/click: **deferred** until monetization Java module exists.
 
 ---
 
@@ -103,6 +109,8 @@
 ---
 
 ## 8. Monetization pipeline
+
+> **Aspirational** — Flyway schema exists (`V5__monetization.sql`); Java module not implemented yet.
 
 1. Chọn ad/banner hợp lệ theo thời gian + trạng thái.
 2. Trả creative cho client theo ngữ cảnh (pre-stamp/home swiper/event).
@@ -150,8 +158,8 @@
 4. Smoke test các flow chính sau deploy:
    - auth login/refresh
    - scan collect stamp
-   - reward issue
-   - ad tracking
+   - reward issue (async; check logs/metrics if stamp without reward)
+   - ad tracking (**skip until monetization Java exists**)
 5. Theo dõi logs + metrics 24h đầu sau release.
 
 ---

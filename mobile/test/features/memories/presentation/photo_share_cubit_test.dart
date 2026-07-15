@@ -7,6 +7,10 @@ import 'package:metro_stamp_app/core/errors/failure.dart';
 import 'package:metro_stamp_app/features/memories/domain/entities/photo_share_context.dart';
 import 'package:metro_stamp_app/features/memories/domain/entities/share_event.dart';
 import 'package:metro_stamp_app/features/memories/domain/repositories/memories_repository.dart';
+import 'package:metro_stamp_app/features/stamp_book/domain/entities/stamp_book.dart';
+import 'package:metro_stamp_app/features/stamp_book/domain/entities/stamp_item.dart';
+import 'package:metro_stamp_app/features/stamp_book/domain/repositories/stamp_book_repository.dart';
+import 'package:metro_stamp_app/features/stamp_book/domain/usecases/get_stamp_book_usecase.dart';
 import 'package:metro_stamp_app/features/memories/domain/usecases/record_share_event_usecase.dart';
 import 'package:metro_stamp_app/features/memories/presentation/cubit/photo_share_cubit.dart';
 import 'package:metro_stamp_app/features/memories/presentation/cubit/photo_share_state.dart';
@@ -23,11 +27,14 @@ class MockNativeShareService extends Mock implements NativeShareService {}
 
 class MockShareTempFileWriter extends Mock implements ShareTempFileWriter {}
 
+class MockStampBookRepository extends Mock implements StampBookRepository {}
+
 void main() {
   late MockMemoriesRepository repository;
   late MockPhotoPickerService photoPickerService;
   late MockNativeShareService nativeShareService;
   late MockShareTempFileWriter tempFileWriter;
+  late MockStampBookRepository stampBookRepository;
   late PhotoShareCubit cubit;
 
   const shareContext = PhotoShareContext(
@@ -54,6 +61,17 @@ void main() {
     );
   });
 
+  PhotoShareCubit buildCubit({PhotoShareContext? initialContext}) {
+    return PhotoShareCubit(
+      recordShareEventUseCase: RecordShareEventUseCase(repository),
+      getStampBookUseCase: GetStampBookUseCase(stampBookRepository),
+      photoPickerService: photoPickerService,
+      nativeShareService: nativeShareService,
+      tempFileWriter: tempFileWriter,
+      initialContext: initialContext ?? shareContext,
+    );
+  }
+
   setUp(() {
     repository = MockMemoriesRepository();
     photoPickerService = MockPhotoPickerService();
@@ -66,13 +84,24 @@ void main() {
       );
       return file;
     });
-    cubit = PhotoShareCubit(
-      recordShareEventUseCase: RecordShareEventUseCase(repository),
-      photoPickerService: photoPickerService,
-      nativeShareService: nativeShareService,
-      tempFileWriter: tempFileWriter,
-      initialContext: shareContext,
+    stampBookRepository = MockStampBookRepository();
+    when(() => stampBookRepository.getStampBook(lineId: any(named: 'lineId')))
+        .thenAnswer(
+      (_) async => const StampBook(
+        lineId: 'line-1',
+        lineName: 'Line 1',
+        stations: [
+          StampItem(
+            stationId: 'station-1',
+            stationName: 'Ben Thanh',
+            sequence: 1,
+            collected: true,
+            stampId: 'stamp-uuid',
+          ),
+        ],
+      ),
     );
+    cubit = buildCubit();
   });
 
   tearDown(() => cubit.close());
@@ -172,13 +201,7 @@ void main() {
           sharedAt: DateTime.utc(2026, 6, 24),
         ),
       );
-      return PhotoShareCubit(
-        recordShareEventUseCase: RecordShareEventUseCase(repository),
-        photoPickerService: photoPickerService,
-        nativeShareService: nativeShareService,
-        tempFileWriter: tempFileWriter,
-        initialContext: shareContext,
-      );
+      return buildCubit();
     },
     seed: () => const PhotoShareState(
       status: PhotoShareStatus.editing,
@@ -222,13 +245,7 @@ void main() {
       when(() => repository.recordShareEvent(any())).thenThrow(
         const Failure(code: FailureCode.networkError, message: 'offline'),
       );
-      return PhotoShareCubit(
-        recordShareEventUseCase: RecordShareEventUseCase(repository),
-        photoPickerService: photoPickerService,
-        nativeShareService: nativeShareService,
-        tempFileWriter: tempFileWriter,
-        initialContext: shareContext,
-      );
+      return buildCubit();
     },
     seed: () => const PhotoShareState(
       status: PhotoShareStatus.editing,
@@ -263,13 +280,7 @@ void main() {
       ).thenAnswer(
         (_) async => const NativeShareResult(NativeShareOutcome.unavailable),
       );
-      return PhotoShareCubit(
-        recordShareEventUseCase: RecordShareEventUseCase(repository),
-        photoPickerService: photoPickerService,
-        nativeShareService: nativeShareService,
-        tempFileWriter: tempFileWriter,
-        initialContext: shareContext,
-      );
+      return buildCubit();
     },
     seed: () => const PhotoShareState(
       status: PhotoShareStatus.editing,

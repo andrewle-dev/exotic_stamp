@@ -1,39 +1,56 @@
+# ExoticStamp local stack — project name groups services in Docker Desktop.
+name: exoticstamp
+
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: exotic-stamp-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: exotic_stamp
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: f123
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - exoticstamp
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d exotic_stamp"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     container_name: exotic-stamp-redis
     restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - exoticstamp
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 5s
 
-  api:
+  backend:
+    profiles: ["full"]
     build:
       context: .
-      dockerfile: infra/docker/backend.Dockerfile
-    container_name: exotic-stamp-api
+      dockerfile: backend/Dockerfile
+    container_name: exotic-stamp-backend
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,18 +58,38 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_URL: jdbc:postgresql://postgres:5432/exotic_stamp
-      DB_USERNAME: postgres
-      DB_PASSWORD: f123
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_SECRET: local-dev-jwt-secret-must-be-at-least-256-bits-long
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-must-be-at-least-256-bits-long}
+      STORAGE_PROVIDER: local
+      STORAGE_LOCAL_PATH: /app/uploads
+      STORAGE_LOCAL_URL: http://localhost:${BACKEND_PORT}/uploads
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-noreply@exoticstamp.local}
       ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-changeme-dev-only}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT}:8080"
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - exoticstamp
 
 volumes:
+  # Preserve existing ExoticStamp Postgres data (do NOT rename to a new empty volume).
   postgres_data:
+    name: exoticstamp_postgres_data
+  redis_data:
+    name: exotic-stamp-redis-data
+  uploads_data:
+    name: exotic-stamp-uploads
+
+networks:
+  exoticstamp:
+    name: exotic-stamp-network

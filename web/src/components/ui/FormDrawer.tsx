@@ -103,39 +103,39 @@ export function FormDrawer({
         aria-modal="true"
         aria-labelledby="form-drawer-title"
         className={cn(
-          'relative z-10 flex h-full w-full flex-col bg-card shadow-xl',
+          'relative z-10 flex h-full w-full flex-col border-l border-border bg-card shadow-2xl shadow-black/10',
           widthClass[width],
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div className="min-w-0">
-            <h2 id="form-drawer-title" className="text-lg font-semibold text-foreground">
+            <h2 id="form-drawer-title" className="text-lg font-semibold tracking-tight text-foreground">
               {title}
             </h2>
             {description ? (
-              <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
             ) : null}
           </div>
           <button
             type="button"
             onClick={requestClose}
             disabled={isSubmitting}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto bg-secondary/30 px-6 py-5">{children}</div>
 
         {error ? (
-          <div className="border-t border-border px-6 py-3">
+          <div className="shrink-0 border-t border-border bg-card px-6 py-3">
             <ApiErrorAlert error={error} />
           </div>
         ) : null}
 
-        <footer className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-card px-6 py-4">
           {footer ?? (
             <>
               <Button variant="secondary" size="md" onClick={requestClose} disabled={isSubmitting}>

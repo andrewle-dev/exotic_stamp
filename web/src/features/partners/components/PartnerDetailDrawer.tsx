@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { Check, Copy } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
 import { Button } from '../../../components/ui/Button'
 import { StatusBadge } from '../../../components/ui/StatusBadge'
@@ -8,7 +7,6 @@ import { SkeletonText } from '../../../components/ui/LoadingSkeleton'
 import { ErrorState } from '../../../components/ui/ErrorState'
 import { PermissionDeniedState } from '../../../components/ui/PermissionDeniedState'
 import { formatDate } from '../../../lib/formatting/date'
-import { useCopyToClipboard } from '../../../lib/utils/useCopyToClipboard'
 import { isForbiddenError, isNotFoundError } from '../../../lib/api/errors'
 import type { PartnerResponse } from '../../../types/partners'
 import { deriveContractStatus } from '../utils/contract-status'
@@ -28,35 +26,6 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="text-sm text-foreground">{children}</dd>
     </div>
-  )
-}
-
-function UrlCopyRow({ label, url }: { label: string; url?: string }) {
-  const { copied, copy } = useCopyToClipboard()
-
-  if (!url) {
-    return (
-      <DetailRow label={label}>
-        <span className="text-muted-foreground">—</span>
-      </DetailRow>
-    )
-  }
-
-  return (
-    <DetailRow label={label}>
-      <div className="flex items-start gap-2">
-        <code className="flex-1 break-all rounded bg-secondary px-2 py-1 text-xs">{url}</code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => void copy(url)}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
-      </div>
-    </DetailRow>
   )
 }
 
@@ -132,26 +101,18 @@ export function PartnerDetailDrawer({
             </DetailRow>
             <DetailRow label="Contract end">{formatDate(partner.contractEndDate)}</DetailRow>
 
-            <div className="sm:col-span-2">
-              <UrlCopyRow label="Logo URL" url={partner.logoUrl} />
-            </div>
-
-            {partner.logoUrl ? (
+            {partner.bannerImageUrl ? (
               <div className="sm:col-span-2">
-                <DetailRow label="Logo preview">
+                <DetailRow label="Banner">
                   <ImageWithFallback
-                    src={partner.logoUrl}
-                    alt={`${partner.name} logo`}
-                    className="h-24 w-24"
-                    fallbackClassName="h-24 w-24"
+                    src={partner.bannerImageUrl}
+                    alt={`${partner.name} banner`}
+                    className="aspect-video h-auto w-full max-w-md object-cover"
+                    fallbackClassName="aspect-video h-auto w-full max-w-md"
                   />
                 </DetailRow>
               </div>
             ) : null}
-
-            <DetailRow label="ID">
-              <span className="font-mono text-xs">{partner.id}</span>
-            </DetailRow>
           </dl>
         </div>
       ) : null}

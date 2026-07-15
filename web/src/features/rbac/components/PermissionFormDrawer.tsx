@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { KeyRound } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
+import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input } from '../../../components/ui/FormField'
 import {
   defaultPermissionFormValues,
@@ -62,18 +64,32 @@ export function PermissionFormDrawer({ open, onClose, onSuccess }: PermissionFor
       onClose={onClose}
     >
       <form id="permission-form" className="space-y-4" onSubmit={onSubmit} noValidate>
-        <FormField
-          label="Permission code"
-          htmlFor="permissionCode"
-          required
-          error={errors.permissionCode?.message}
+        <DrawerSectionCard
+          icon={KeyRound}
+          title="Permission details"
+          description="Codes should be stable and descriptive."
         >
-          <Input id="permissionCode" placeholder="STAMP_DESIGN_MANAGE" {...register('permissionCode')} />
-        </FormField>
+          <FormField
+            label="Permission code"
+            htmlFor="permissionCode"
+            required
+            error={errors.permissionCode?.message}
+          >
+            <Input
+              id="permissionCode"
+              placeholder="STAMP_DESIGN_MANAGE"
+              {...register('permissionCode')}
+            />
+          </FormField>
 
-        <FormField label="Description" htmlFor="description" error={errors.description?.message}>
-          <Input id="description" placeholder="Optional description" {...register('description')} />
-        </FormField>
+          <FormField label="Description" htmlFor="description" error={errors.description?.message}>
+            <Input
+              id="description"
+              placeholder="Optional description"
+              {...register('description')}
+            />
+          </FormField>
+        </DrawerSectionCard>
       </form>
     </FormDrawer>
   )

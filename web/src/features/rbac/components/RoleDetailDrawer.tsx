@@ -67,7 +67,6 @@ export function RoleDetailDrawer({ open, role, onClose, onEdit }: RoleDetailDraw
             label="System role"
             value={detail.systemRole ? <StatusBadge status="ACTIVE" label="Yes" /> : 'No'}
           />
-          <DetailRow label="ID" value={<span className="font-mono text-xs">{detail.id}</span>} />
           {detail.systemRole ? (
             <p className="text-xs text-muted-foreground">
               System roles are protected and should not be modified casually.

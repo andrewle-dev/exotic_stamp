@@ -1,4 +1,4 @@
-﻿# ARCHITECTURE - EXOTIC STAMP
+# ARCHITECTURE - EXOTIC STAMP
 
 > Tài liệu kiến trúc kỹ thuật cho backend Exotic/Metro Stamp.
 > Tập trung vào các quyết định ổn định theo thời gian, không đi sâu checklist triển khai hằng ngày.
@@ -18,18 +18,35 @@
 
 ## 2. Architecture Style
 
-- **Style**: Spring-pragmatic DDD (module-oriented).
-- **Layer rule**:
-  - `presentation -> application -> domain <- infrastructure`
-- **Service split**:
+- **Style:** Spring-pragmatic DDD (module-oriented). Formal decision: [`docs/adr/ADR-001-spring-pragmatic-ddd.md`](adr/ADR-001-spring-pragmatic-ddd.md).
+- **Service split:**
   - Write path: `{Module}CommandService`
   - Read path: `{Module}QueryService`
 
-### 2.1 Hard rules
+### 2.1 Dependency direction (qualified)
 
-- `domain` không import `presentation`/`infrastructure`.
-- `application` không phụ thuộc trực tiếp `JpaRepository`.
-- Adapters trong `infrastructure` là bridge duy nhất từ domain sang persistence/integration.
+```text
+presentation  -->  application  -->  domain
+infrastructure -->  domain
+infrastructure -->  application ports
+```
+
+Meaning:
+
+- Controllers call application services only.
+- Application orchestrates use cases and depends on domain models/repositories/ports.
+- Infrastructure **implements** domain repositories and application ports; it is not a free dependency for presentation/application.
+- Do **not** interpret the older shorthand `domain <- infrastructure` as “infrastructure sits under every layer.”
+
+### 2.2 Hard rules
+
+- `domain` must **not** depend on `application`, `presentation`, or `infrastructure`.
+- `application` must **not** depend directly on `JpaRepository` or `modules/*/infrastructure`.
+- `presentation` must **not** depend on `infrastructure` or `domain` (use application services + DTOs/views).
+- Adapters in `infrastructure` are the bridge to persistence/integration.
+- Cross-module: application ports or integration events — not another module’s `infrastructure`.
+- JPA `@Entity` on `domain/model` is **allowed**. Separate persistence entities are **optional**.
+- Boundaries enforced by `ArchitectureBoundaryTest` (ArchUnit). See also `docs/ARCHITECTURE_ALIGNMENT_PLAN.md`.
 
 ---
 
@@ -62,20 +79,32 @@ src/main/java/metro/ExoticStamp/
 
 ## 4. Current Module Status
 
-### 4.1 Implemented business code
+### 4.1 Implemented business code (source truth)
 
-- `auth`
-- `user`
-- `rbac`
-- `metro` (public + admin APIs for lines/stations, including scan resolve and media upload)
-- shared infra (`mail queue`, `cache base`, `redis support`)
+| Module | Status | API / capability coverage |
+|--------|--------|---------------------------|
+| `auth` | Implemented | register/login/refresh/verify/forgot/reset/resend, JWT + revocation |
+| `user` | Implemented | profile CRUD-style user APIs |
+| `rbac` | Implemented | roles, permissions, assignments |
+| `metro` | Implemented | public/admin lines & stations, scan resolve, station scan keys, public asset upload |
+| `collection` | Implemented | campaigns, stamp designs, collect runtime, stamp book / progress |
+| `reward` | Implemented | admin partners/milestones/vouchers, user rewards, async evaluation on `StampCollectedEvent` |
+| `community` | Implemented | referral, share events, notifications |
+| shared `infra` | Implemented | mail queue, cache base, redis support |
 
-### 4.2 Data model ready via Flyway, business code to be completed
+### 4.2 Schema only (no Java business module yet)
 
-- `collection`
-- `reward`
-- `monetization`
-- `community`
+| Module | Status |
+|--------|--------|
+| `monetization` | Flyway `V5__monetization.sql` only; empty `modules/monetization/` |
+
+### 4.3 Current collection → reward event flow
+
+1. `CollectionCommandService` persists `user_stamps` inside `@Transactional`.
+2. After commit, publishes `StampCollectedEvent` (in-process).
+3. Reward `StampCollectedEventListener` (`@Async`) evaluates milestones and issues rewards/vouchers.
+4. Dedup/lock via Redis; uniqueness via DB (`uq_user_rewards_once`, voucher `SKIP LOCKED`).
+5. No transactional outbox yet — publish/listener failure can leave stamp without reward (metrics alert).
 
 ---
 
@@ -83,17 +112,19 @@ src/main/java/metro/ExoticStamp/
 
 ## 5.1 Migration strategy
 
-- Schema managed by Flyway (`V1..V6`).
+- Schema managed by Flyway (`V1`..`V18` and later).
 - Mọi thay đổi schema qua migration mới, không chỉnh tay DB production.
 
-### 5.2 Migration map
+### 5.2 Migration map (baseline + stages)
 
-- `V1`: mail queue (`mail_jobs`)
+- `V1`: core identity + RBAC (`users`, roles/permissions)
 - `V2`: metro network (`lines`, `stations`)
 - `V3`: collection (`campaigns`, `campaign_stations`, `stamp_designs`, `user_stamps`)
 - `V4`: reward (`partners`, `milestones`, `rewards`, `voucher_pool`, `user_rewards`)
-- `V5`: monetization (`advertisements`, `ad_impressions`, `affiliate_banners`, `affiliate_banner_clicks`)
+- `V5`: monetization schema (`advertisements`, `ad_impressions`, `affiliate_banners`, `affiliate_banner_clicks`)
 - `V6`: community (`referral_codes`, `referrals`, `share_events`, `notifications`)
+- `V7`: mail queue (`mail_jobs`)
+- `V8`+: auth token version/seed, collection compliance, integrity, metro constraints, campaigns, collection runtime, rewards, community MVP, station scan keys (`V18`)
 
 ### 5.3 Key invariants
 
@@ -142,22 +173,23 @@ src/main/java/metro/ExoticStamp/
 - register/login/refresh/verify/forgot/reset/resend.
 - audit log + token lifecycle + redis integration.
 
-### 9.2 Scan-to-stamp flow (target architecture)
+### 9.2 Scan-to-stamp flow (implemented)
 
-1. Resolve station by NFC/QR key.
-2. Validate station/campaign + anti-cheat constraints.
+1. Resolve station by NFC/QR payload (legacy station columns and/or `station_scan_keys`).
+2. Validate station/campaign + GPS + anti-cheat / idempotency.
 3. Persist `user_stamps`.
-4. Evaluate milestone.
-5. Issue reward/voucher if qualified.
-6. Track monetization event if ad slot involved.
+4. After commit: publish `StampCollectedEvent` (async listeners).
+5. Reward module evaluates milestone and issues reward/voucher if qualified.
+6. Monetization tracking remains **target** until the Java module exists.
 
 ### 9.3 Reward issue flow (target architecture)
 
 - milestone match -> deduplicate by unique constraint -> voucher allocation -> user reward record -> notification.
 
-### 9.4 Monetization tracking flow (target architecture)
+### 9.4 Monetization tracking flow (target — schema only)
 
 - ad/banner selection -> impression/click ingest -> batch aggregate counters.
+- Not implemented in Java yet; see `docs/ARCHITECTURE_ALIGNMENT_PLAN.md`.
 
 ---
 
@@ -191,11 +223,16 @@ src/main/java/metro/ExoticStamp/
 
 ## 12. ADR-lite Decisions (Do Not Change Casually)
 
-- DDD pragmatic layered module structure.
-- Domain repository interface + infrastructure adapter bridge.
+Canonical ADR: [`docs/adr/ADR-001-spring-pragmatic-ddd.md`](adr/ADR-001-spring-pragmatic-ddd.md).
+
+Summary:
+
+- Spring-pragmatic layered module structure (JPA-backed domain models allowed).
+- Domain repository interface + infrastructure adapter bridge (pass-through OK).
 - UUID-based user references across modules without direct FK to user table in some domain areas.
 - Flyway-first schema governance.
 - Queue-based outbound mail delivery.
+- Collection→reward uses after-commit in-process events (no transactional outbox yet).
 
 Khi cần thay đổi các quyết định này, phải có decision note kèm lý do, impact, và migration plan.
 
@@ -206,12 +243,10 @@ Khi cần thay đổi các quyết định này, phải có decision note kèm l
 ### 13.1 Swagger ownership
 
 - Swagger/OpenAPI config is centralized at `src/main/java/metro/ExoticStamp/config/OpenApiConfig.java`.
-- Current primary tags:
-  - `Auth`
-  - `User`
-  - `RBAC`
-  - `Lines`
-  - `Stations`
+- Current primary tags include:
+  - `Auth`, `User`, `RBAC`
+  - `Lines`, `Stations` (and scan-key / upload admin APIs)
+  - Collection / Reward / Community tags as controllers are registered in OpenAPI
 
 ### 13.2 Local testing entry points
 
@@ -225,8 +260,9 @@ Khi cần thay đổi các quyết định này, phải có decision note kèm l
 3. Test secured endpoints in this order:
    - `User` APIs (`/api/v1/users/*`)
    - `RBAC` APIs (`/api/v1/roles/*`, `/api/v1/permissions/*`)
-   - `Lines` APIs (`/api/v1/lines/*`)
-   - `Stations` APIs (`/api/v1/stations/*`)
+   - `Lines` / `Stations` / scan-key APIs
+   - Collection collect / stamp-book APIs
+   - Reward / community APIs as needed
 4. For refresh flow, call `POST /api/v1/auth/refresh` after login (refresh token comes from cookie).
 
 ### 13.4 Definition boundaries

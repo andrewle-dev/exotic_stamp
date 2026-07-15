@@ -6,6 +6,8 @@ import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAccessDenied
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAuthEntryPoint;
 import metro.ExoticStamp.modules.auth.infrastructure.security.UserDetailsServiceImpl;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
+import metro.ExoticStamp.common.reorder.ReorderItemView;
+import metro.ExoticStamp.common.reorder.ReorderResultView;
 import metro.ExoticStamp.modules.reward.RewardWebMvcTestSecurityConfig;
 import metro.ExoticStamp.modules.reward.application.service.MilestoneCommandService;
 import metro.ExoticStamp.modules.reward.application.service.MilestoneQueryService;
@@ -22,12 +24,15 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AdminRewardMilestoneController.class)
@@ -79,5 +84,21 @@ class AdminRewardMilestoneControllerTest {
                                 "rewardType":"DIGITAL_STICKER","rewardTitle":"Sticker"}
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_ADMIN", "REWARD_MILESTONE_MANAGE"})
+    void reorderMilestones_ok() throws Exception {
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        when(milestoneCommandService.reorder(any())).thenReturn(
+                new ReorderResultView(campaignId, 1, List.of(new ReorderItemView(milestoneId, 0))));
+
+        mockMvc.perform(patch("/api/v1/admin/rewards/milestones/reorder").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"campaignId\":\"" + campaignId + "\",\"orderedIds\":[\"" + milestoneId + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scopeId").value(campaignId.toString()))
+                .andExpect(jsonPath("$.data.updatedCount").value(1));
     }
 }

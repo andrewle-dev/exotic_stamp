@@ -24,6 +24,9 @@ public interface MilestoneRepository {
 
     PagedSlice<Milestone> findAllNotDeletedPaged(UUID campaignId, MilestoneStatus status, int page, int size);
 
+    /** All non-deleted milestones for a campaign, ordered by sortOrder then stampsRequired. */
+    List<Milestone> findAllByCampaignIdOrderBySortOrderAsc(UUID campaignId);
+
     boolean existsById(UUID id);
 
     boolean existsByCampaignIdAndCodeAndIdNot(UUID campaignId, String code, UUID excludeId);

@@ -1,867 +1,363 @@
 # IMPLEMENTATION GUARDRAILS - EXOTIC STAMP
 
-> Dùng như reference checklist khi code từng file, để đảm bảo dependencies đúng, pattern consistent.
+> Checklist khi implement từng file.  
+> **Official style:** Spring-pragmatic DDD — [`docs/adr/ADR-001-spring-pragmatic-ddd.md`](adr/ADR-001-spring-pragmatic-ddd.md).  
+> **Stable overview:** [`docs/architecture.md`](architecture.md).
 
 ---
 
-## I. FILE STRUCTURE TEMPLATE (mỗi module)
+## I. FILE STRUCTURE TEMPLATE (per module)
 
-```
+**Default for new modules.** Grandfathered modules (auth/user/rbac/metro) may keep services/controllers at package root — do **not** mass-migrate.
+
+```text
 src/main/java/metro/ExoticStamp/modules/{moduleName}/
 ├── domain/
-│   ├── entity/
-│   │   ├── {Entity}Entity.java         (@Entity, JPA mapping)
-│   │   ├── {Enum}.java                 (state/type enum)
-│   │   └── {ValueObject}.java          (optional, immutable)
-│   ├── repository/
-│   │   └── {Entity}Repository.java     (❌ INTERFACE ONLY, no impl)
-│   ├── service/
-│   │   └── {Module}DomainService.java  (business rule validation)
-│   ├── exception/
-│   │   ├── {Entity}NotFoundException.java
-│   │   ├── {Reason}Exception.java
-│   │   └── {Validation}Exception.java
-│   └── event/
-│       └── {Event}DomainEvent.java     (optional)
-│
+│   ├── model/                 # aggregates/enums/VOs — @Entity allowed (project default)
+│   ├── repository/            # interfaces only
+│   ├── service/               # domain policies/services (no application imports)
+│   ├── exception/             # transport-agnostic domain errors
+│   └── event/                 # plain immutable events (preferred)
 ├── application/
-│   ├── command/
-│   │   ├── {Action}{Entity}Command.java         (input DTO for command)
-│   │   └── {Action}{Entity}CommandHandler.java  (optional, if using handler pattern)
-│   ├── query/
-│   │   └── {Get/Search}{Entity}Query.java       (input for query)
-│   ├── service/
-│   │   ├── {Entity}CommandService.java          (@Transactional write)
-│   │   └── {Entity}QueryService.java            (@Transactional(readOnly=true) read)
-│   ├── mapper/
-│   │   └── {Entity}AppMapper.java               (MapStruct or manual)
-│   └── port/
-│       └── {Service}Port.java                   (outbound interface)
-│
+│   ├── command/ | query/
+│   ├── service/               # CommandService / QueryService
+│   ├── support/               # policies needing config/clock/audit
+│   ├── mapper/ | view/
+│   └── port/                  # outbound ports
 ├── infrastructure/
-│   ├── repository/
-│   │   ├── Jpa{Entity}Repository.java           (extends JpaRepository)
-│   │   └── {Entity}RepositoryAdapter.java       (implements domain interface)
-│   ├── cache/
-│   │   └── {Entity}CacheRepository.java         (extends BaseCacheRepository)
-│   ├── persistence/
-│   │   └── {Service}PersistenceAdapter.java     (for external storage)
-│   ├── event/
-│   │   └── {Event}Listener.java                 (@EventListener, @Async)
-│   └── integration/
-│       └── {External}Adapter.java               (3rd party integration)
-│
+│   ├── repository/ | persistence/   # Jpa* + *RepositoryAdapter
+│   ├── cache/ | event/ | integration/
 └── presentation/
     ├── controller/
-    │   └── {Entity}Controller.java              (@RestController)
-    ├── request/
-    │   ├── {Action}{Entity}Request.java         (@Valid DTO input)
-    │   └── {Query}{Entity}Request.java
-    ├── response/
-    │   ├── {Entity}Response.java                (DTO output)
-    │   └── {Entity}ListResponse.java
-    └── exception/
-        └── {Entity}ControllerExceptionHandler.java (optional per-module)
+    ├── request/ | response/ | dto/
+    └── mapper/
 ```
+
+### Persistence model policy
+
+| Approach | When |
+|----------|------|
+| **JPA-backed domain model** (`domain/model` + `@Entity`) | **Project default** |
+| Separate `*Entity` + mapper | Optional — only when persistence shape diverges (complex integrations) |
 
 ---
 
-## II. LAYER DEPENDENCY RULES (Critical!)
+## II. LAYER DEPENDENCY RULES
 
-### ✅ CORRECT DIRECTIONS
+### Correct directions
 
-```
-presentation/controller 
-    ↓ imports
-application/service (CommandService, QueryService)
-    ↓ imports
-application/command (Command objects)
-    ↓ imports
-domain/entity
-domain/repository (interface)
-domain/service
-    ↓ imports
-domain/exception
-domain/event
-
-infrastructure/repository (adapter)
-    ↓ imports
-domain/repository (interface)
-infrastructure/persistence (JPA)
-    ↓ imports
-(NO RESTRICTION - can import anything below)
+```text
+presentation  -->  application  -->  domain
+infrastructure -->  domain
+infrastructure -->  application ports
 ```
 
-### ❌ FORBIDDEN DIRECTIONS
-
+```text
+presentation/controller
+    → application service (Command/Query)
+        → application command/view/port
+        → domain model / repository interface / domain service
+infrastructure adapter
+    → domain repository interface
+    → domain model (when JPA-backed)
 ```
+
+### Forbidden
+
+```text
+❌ domain → application
 ❌ domain → presentation
-❌ domain → infrastructure  
-❌ application → infrastructure.persistence (JpaRepository directly)
+❌ domain → infrastructure
+❌ application → JpaRepository
+❌ application → modules/*/infrastructure
 ❌ presentation → infrastructure
 ❌ presentation → domain
+❌ module A → module B infrastructure
+❌ module A application → module B domain.repository (use a port)
 ```
 
-### ✅ ALLOWED (within same layer)
+### Allowed
 
+```text
+✅ application → application.support / mapper / command / port
+✅ infrastructure.event → application service (async)
+✅ presentation → presentation DTO/mapper
+✅ application → shared metro.ExoticStamp.infra.* (prefer ports over time)
+✅ Spring annotations on application/infrastructure; pragmatic Spring on domain services
+✅ JPA annotations on domain models
 ```
-✅ application.service → application.mapper
-✅ application.service → application.command
-✅ infrastructure.repository → infrastructure.cache
-✅ infrastructure.event → application.service (async call)
-✅ presentation.controller → presentation.request
-```
+
+Enforced by `src/test/java/metro/ExoticStamp/ArchitectureBoundaryTest.java`.
 
 ---
 
-## III. ENTITY ANNOTATION CHECKLIST
+## III. DOMAIN MODEL / ENTITY GUIDANCE
 
 ```java
 @Entity
-@Table(name = "table_name", indexes = {
-    @Index(name = "idx_...", columnList = "col1, col2")
-})
-public class MyEntity extends BaseEntity {
-    
-    // ✅ DO:
-    @Column(nullable = false, unique = true)
-    private String field1;
-    
-    @Column(length = 255)
+@Table(name = "stations")
+public class Station extends BaseEntity {
+    @Column(nullable = false, length = 100)
+    private String name;
+
     @Enumerated(EnumType.STRING)
-    private MyEnum status;
-    
-    @Version  // optimistic lock
-    private Long version;
-    
-    // ✅ OK (lazy load for large fields):
-    @Lob
-    @Basic(fetch = FetchType.LAZY)
-    private String largeData;
-    
-    // ❌ DON'T:
-    @Transient  // ❌ if avoidable
-    private String computed;  // move to service instead
-    
-    // ❌ DON'T do business logic in entity:
-    public void collect() { ... }  // ❌ move to DomainService
+    @Column(nullable = false, length = 20)
+    private MetroStatus status;
+
+    // ✅ state-local behavior / invariant helpers
+    public boolean isActive() {
+        return status == MetroStatus.ACTIVE;
+    }
+
+    // ❌ multi-aggregate workflow — belongs in application CommandService
+    // public void collectStampForUser(...) { ... }
 }
 ```
+
+Rules:
+
+- State-local invariants and predicates **may** live on entities / value objects.
+- Cross-aggregate rules belong in **domain policies/services**.
+- Orchestration and `@Transactional` boundaries belong in **application services**.
+- Avoid `@Transient` computed fields when a service/view can derive them.
 
 ---
 
-## IV. REPOSITORY PATTERN (domain interface + adapter)
+## IV. REPOSITORY PATTERN
 
-### Domain Interface (NO IMPL)
+### Domain interface
 
 ```java
-// modules/metro/domain/repository/StationRepository.java
 public interface StationRepository {
     Optional<Station> findById(UUID id);
-    Optional<Station> findByNfcTagId(String nfcTag);
-    Optional<Station> findByQrCodeToken(String qrToken);
-    List<Station> findByLineId(UUID lineId);
     Station save(Station station);
-    void delete(UUID id);
 }
 ```
 
-### JPA Repository
+### JPA + thin adapter (default when domain model is the entity)
 
 ```java
-// modules/metro/infrastructure/repository/JpaStationRepository.java
-import org.springframework.data.jpa.repository.JpaRepository;
+public interface JpaStationRepository extends JpaRepository<Station, UUID> { }
 
-@Repository
-public interface JpaStationRepository extends JpaRepository<StationEntity, UUID> {
-    Optional<StationEntity> findByNfcTagId(String nfcTag);
-    Optional<StationEntity> findByQrCodeToken(String qrToken);
-    List<StationEntity> findByLineId(UUID lineId);
-}
-```
-
-### Adapter (bridges domain interface → JPA impl)
-
-```java
-// modules/metro/infrastructure/repository/StationRepositoryAdapter.java
 @Component
 @RequiredArgsConstructor
 public class StationRepositoryAdapter implements StationRepository {
-    
-    private final JpaStationRepository jpaRepository;
-    private final StationMapper mapper;  // entity ↔ domain mapping
-    
+    private final JpaStationRepository jpa;
+
     @Override
     public Optional<Station> findById(UUID id) {
-        return jpaRepository.findById(id)
-            .map(mapper::toDomain);  // convert JPA entity → domain
+        return jpa.findById(id); // pass-through OK — no mapper required
     }
-    
-    @Override
-    public Optional<Station> findByNfcTagId(String nfcTag) {
-        return jpaRepository.findByNfcTagId(nfcTag)
-            .map(mapper::toDomain);
-    }
-    
+
     @Override
     public Station save(Station station) {
-        StationEntity entity = mapper.toEntity(station);  // domain → JPA entity
-        StationEntity saved = jpaRepository.save(entity);
-        return mapper.toDomain(saved);
-    }
-    
-    @Override
-    public void delete(UUID id) {
-        jpaRepository.deleteById(id);
+        return jpa.save(station);
     }
 }
 ```
 
+Mapper entity↔domain is **not** mandatory unless a separate persistence model exists.
+
 ---
 
-## V. SERVICE PATTERN (Command & Query)
-
-### CommandService (@Transactional write)
+## V. APPLICATION SERVICES (Command / Query)
 
 ```java
-// modules/collection/application/service/CollectionCommandService.java
 @Service
 @RequiredArgsConstructor
-@Transactional  // ✅ write operations need transaction
 public class CollectionCommandService {
-    
-    private final UserStampRepository stampRepository;  // domain interface
-    private final StationRepository stationRepository;
-    private final CampaignRepository campaignRepository;
-    private final CollectionDomainService domainService;
-    private final UserStampMapper mapper;
-    private final UserStampCacheRepository cacheRepo;  // for eviction
+    private final UserStampRepository userStampRepository; // domain interface
+    private final CollectionPolicyService policyService;   // application support OK
     private final ApplicationEventPublisher eventPublisher;
-    
-    public StampCollectResponse collectStamp(CollectStampCommand cmd) {
-        // 1. Domain validation (throws exception if violated)
-        Station station = stationRepository.findById(cmd.stationId())
-            .orElseThrow(() -> new StationNotFoundException(cmd.stationId()));
-        
-        Campaign campaign = campaignRepository.findById(cmd.campaignId())
-            .orElseThrow(() -> new CampaignNotFoundException(cmd.campaignId()));
-        
-        domainService.validateStampCollection(
-            cmd.userId(), 
-            station.getId(), 
-            campaign.getId()
-        );  // throws StampAlreadyCollectedException if duplicate
-        
-        // 2. Business logic
-        UserStamp stamp = UserStamp.create(
-            cmd.userId(),
-            station,
-            campaign,
-            cmd.deviceFingerprint(),
-            cmd.gpsLat(),
-            cmd.gpsLng()
-        );
-        
-        // 3. Persist
-        UserStamp savedStamp = stampRepository.save(stamp);
-        
-        // 4. Cache eviction (important!)
-        cacheRepo.evict("user-stamps:" + cmd.userId());
-        
-        // 5. Fire event (async reward evaluation)
-        eventPublisher.publishEvent(new PostCollectStampEvent(savedStamp));
-        
-        // 6. Return response
-        return mapper.toResponse(savedStamp);
+
+    @Transactional
+    public CollectStampResultView collect(CollectStampCommand cmd) {
+        policyService.assertCollectAllowed(cmd.userId(), cmd.stationId(), cmd.campaignId());
+        UserStamp saved = userStampRepository.save(/* ... */);
+        // publish after commit via helper — application concern
+        return /* view */;
     }
 }
-```
 
-### QueryService (@Transactional(readOnly=true))
-
-```java
-// modules/collection/application/service/CollectionQueryService.java
 @Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)  // ✅ read-only for performance
-public class CollectionQueryService {
-    
-    private final UserStampRepository stampRepository;
-    private final UserStampCacheRepository cacheRepo;
-    private final UserStampMapper mapper;
-    
-    public StampBookResponse getStampBook(UUID userId, UUID lineId) {
-        // 1. Try cache first
-        String cacheKey = "stamp-book:" + userId + ":" + lineId;
-        StampBookResponse cached = cacheRepo.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-        
-        // 2. Query database if cache miss
-        List<UserStamp> stamps = stampRepository.findByUserIdAndLineId(userId, lineId);
-        
-        // 3. Build response (aggregate data)
-        StampBookResponse response = StampBookResponse.builder()
-            .userId(userId)
-            .lineId(lineId)
-            .totalStations(20)  // or query
-            .collectedCount(stamps.size())
-            .stamps(mapper.toResponseList(stamps))
-            .build();
-        
-        // 4. Cache result (TTL from config)
-        cacheRepo.set(cacheKey, response, Duration.ofMinutes(30));
-        
-        return response;
-    }
-}
+@Transactional(readOnly = true)
+public class CollectionQueryService { /* reads + cache-aside */ }
 ```
+
+Do **not** inject write CommandService into a read-only QueryService.
 
 ---
 
-## VI. MAPPER PATTERN
+## VI. DOMAIN / APPLICATION POLICY
 
-### MapStruct (recommended)
-
-```java
-// modules/metro/application/mapper/StationAppMapper.java
-@Mapper(componentModel = "spring")
-public interface StationAppMapper {
-    
-    // Domain ↔ Response DTO
-    StationResponse toResponse(Station station);
-    
-    List<StationResponse> toResponseList(List<Station> stations);
-    
-    // Request DTO → Domain
-    Station toDomain(CreateStationRequest request);
-    
-    // JPA Entity ↔ Domain (for adapter)
-    Station toDomain(StationEntity entity);
-    
-    StationEntity toEntity(Station station);
-}
-```
-
-### Manual Mapper
+- Domain service under `domain/service`: may use domain repositories only — **never** import `application`.
+- Policies needing `@ConfigurationProperties`, clocks, or audit side-effects: `application/support`.
 
 ```java
 @Component
 @RequiredArgsConstructor
-public class UserStampAppMapper {
-    
-    public UserStampResponse toResponse(UserStamp stamp) {
-        return UserStampResponse.builder()
-            .id(stamp.getId())
-            .stationId(stamp.getStation().getId())
-            .stationName(stamp.getStation().getName())
-            .collectedAt(stamp.getCollectedAt())
-            .stampDesignUrl(stamp.getStampDesign().getImageUrl())
-            .build();
-    }
-    
-    public List<UserStampResponse> toResponseList(List<UserStamp> stamps) {
-        return stamps.stream()
-            .map(this::toResponse)
-            .collect(Collectors.toList());
+public class CollectionPolicyService {
+    private final UserStampRepository userStampRepository;
+
+    public void assertCollectAllowed(UUID userId, UUID stationId, UUID campaignId) {
+        if (userStampRepository.existsByUserIdAndStationIdAndCampaignId(userId, stationId, campaignId)) {
+            throw new StampAlreadyCollectedException(stationId);
+        }
     }
 }
 ```
 
 ---
 
-## VII. DOMAIN SERVICE PATTERN
+## VII. CONTROLLER PATTERN
 
 ```java
-// modules/collection/domain/service/CollectionDomainService.java
-@Service
-@RequiredArgsConstructor
-public class CollectionDomainService {
-    
-    private final UserStampRepository stampRepository;
-    private final CampaignRepository campaignRepository;
-    
-    /**
-     * Validate stamp collection constraints.
-     * 
-     * @throws StampAlreadyCollectedException if (user, station, campaign) exists
-     * @throws CampaignExpiredException if campaign not active
-     */
-    public void validateStampCollection(UUID userId, UUID stationId, UUID campaignId) {
-        // Check unique constraint at DB level, but also domain-level validation
-        boolean exists = stampRepository.existsByUserIdAndStationIdAndCampaignId(
-            userId, stationId, campaignId
-        );
-        
-        if (exists) {
-            throw new StampAlreadyCollectedException(userId, stationId);
-        }
-        
-        // Check campaign active
-        Campaign campaign = campaignRepository.findById(campaignId)
-            .orElseThrow(() -> new CampaignNotFoundException(campaignId));
-        
-        if (!campaign.isActive()) {
-            throw new CampaignExpiredException(campaignId);
-        }
-    }
-    
-    /**
-     * Evaluate if stamp collection hits milestone.
-     */
-    public Optional<Milestone> evaluateMilestone(UUID userId, UUID campaignId) {
-        long stampCount = stampRepository.countByUserIdAndCampaignId(userId, campaignId);
-        // ... find milestone matching stampCount
-        return Optional.empty();  // or return matching milestone
-    }
-}
-```
-
----
-
-## VIII. CONTROLLER PATTERN
-
-```java
-// modules/collection/presentation/controller/CollectionController.java
 @RestController
 @RequestMapping("/api/v1/collection")
 @RequiredArgsConstructor
-@Tag(name = "Collection", description = "Stamp collection operations")
-public class CollectionController {
-    
+public class CollectionRuntimeController {
     private final CollectionCommandService commandService;
-    private final CollectionQueryService queryService;
-    private final UserStampMapper mapper;
-    
+    private final CollectionPresentationMapper mapper;
+
     @PostMapping("/collect")
-    @Operation(summary = "Collect stamp by station scan")
-    @ApiResponse(responseCode = "201", description = "Stamp collected")
-    @ApiResponse(responseCode = "409", description = "Stamp already collected")
-    public ResponseEntity<ApiResponse<StampCollectResponse>> collectStamp(
-        @Valid @RequestBody CollectStampRequest request,
-        @AuthenticationPrincipal UserPrincipal user
+    public ResponseEntity<ApiResponse<CollectStampResponse>> collect(
+            @Valid @RequestBody CollectStampRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        CollectStampCommand cmd = CollectStampCommand.builder()
-            .userId(user.getId())
-            .stationId(request.stationId())
-            .campaignId(request.campaignId())
-            .deviceFingerprint(request.deviceFingerprint())
-            .gpsLat(request.latitude())
-            .gpsLng(request.longitude())
-            .build();
-        
-        StampCollectResponse response = commandService.collectStamp(cmd);
-        
+        var result = commandService.collect(mapper.toCommand(request, user.getId()));
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.success(response, "Stamp collected successfully"));
-    }
-    
-    @GetMapping("/stamp-book/{userId}/{lineId}")
-    @Operation(summary = "Get user's stamp book for a line")
-    public ResponseEntity<ApiResponse<StampBookResponse>> getStampBook(
-        @PathVariable UUID userId,
-        @PathVariable UUID lineId
-    ) {
-        StampBookResponse response = queryService.getStampBook(userId, lineId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+                .body(ApiResponse.ok(mapper.toResponse(result)));
     }
 }
 ```
+
+Presentation depends on **application** + presentation DTOs only.
 
 ---
 
-## IX. REQUEST/RESPONSE DTO PATTERN
+## VIII. EXCEPTIONS (transport-agnostic domain)
 
-### Request DTO (with validation)
-
-```java
-// modules/collection/presentation/request/CollectStampRequest.java
-@Data
-@Builder
-public class CollectStampRequest {
-    
-    @NotNull(message = "stationId cannot be null")
-    private UUID stationId;
-    
-    @NotNull(message = "campaignId cannot be null")
-    private UUID campaignId;
-    
-    @NotBlank(message = "deviceFingerprint cannot be blank")
-    private String deviceFingerprint;
-    
-    @NotNull(message = "latitude is required")
-    @DecimalMin(value = "-90.0", message = "latitude must be between -90 and 90")
-    @DecimalMax(value = "90.0")
-    private Double latitude;
-    
-    @NotNull(message = "longitude is required")
-    @DecimalMin(value = "-180.0", message = "longitude must be between -180 and 180")
-    @DecimalMax(value = "180.0")
-    private Double longitude;
-}
-```
-
-### Response DTO (no business logic)
+Domain exceptions must **not** store `HttpStatus` or other web types.
 
 ```java
-// modules/collection/presentation/response/StampCollectResponse.java
-@Data
-@Builder
-public class StampCollectResponse {
-    
-    private UUID stampId;
-    private StationInfo station;
-    private StampDesignInfo design;
-    private LocalDateTime collectedAt;
-    
-    // Milestone info (if achieved)
-    private MilestoneInfo milestone;
-    private RewardInfo reward;
-    
-    // Progress info
-    private Integer totalStationsInLine;
-    private Integer collectedInLine;
-    
-    @Data
-    @Builder
-    public static class StationInfo {
-        private UUID id;
-        private String name;
-        private String lineName;
-    }
-    
-    @Data
-    @Builder
-    public static class StampDesignInfo {
-        private UUID id;
-        private String imageUrl;
-        private String description;
-    }
-    
-    @Data
-    @Builder
-    public static class MilestoneInfo {
-        private UUID id;
-        private Integer requiredStamps;
-    }
-    
-    @Data
-    @Builder
-    public static class RewardInfo {
-        private UUID id;
-        private String name;
-        private String rewardType;
-    }
-}
-```
-
----
-
-## X. EXCEPTION HANDLING
-
-### Domain Exceptions
-
-```java
-// modules/collection/domain/exception/StampAlreadyCollectedException.java
+// domain
 public class StampAlreadyCollectedException extends DomainException {
-    
-    public StampAlreadyCollectedException(UUID userId, UUID stationId) {
-        super("Stamp already collected by user " + userId + " at station " + stationId);
-        this.errorCode = "STAMP_DUPLICATE";
-        this.httpStatus = HttpStatus.CONFLICT;
+    public StampAlreadyCollectedException(UUID stationId) {
+        super("Stamp already collected for station " + stationId);
     }
 }
 
-// modules/common/exceptions/DomainException.java
-public abstract class DomainException extends RuntimeException {
-    protected String errorCode;
-    protected HttpStatus httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
-    
+// common
+public class DomainException extends RuntimeException {
     public DomainException(String message) {
         super(message);
     }
-    
-    public String getErrorCode() {
-        return errorCode;
-    }
-    
-    public HttpStatus getHttpStatus() {
-        return httpStatus;
-    }
 }
 ```
 
-### Global Handler (existing, just use it)
-
-```java
-// common/exceptions/GlobalExceptionHandler.java
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-    
-    @ExceptionHandler(DomainException.class)
-    public ResponseEntity<ErrorResponse> handleDomainException(
-        DomainException ex,
-        HttpServletRequest request
-    ) {
-        return ResponseEntity
-            .status(ex.getHttpStatus())
-            .body(ErrorResponse.of(
-                ex.getErrorCode(),
-                ex.getMessage(),
-                ex.getHttpStatus().value(),
-                request.getRequestURI()
-            ));
-    }
-}
-```
+HTTP status / error-code mapping belongs in `GlobalExceptionHandler` (presentation/common web layer), keyed by exception type.
 
 ---
 
-## XI. CACHING PATTERN (Redis)
+## IX. EVENTS
 
-### Using BaseCacheRepository
+### Preferred domain event (new code)
 
 ```java
-// modules/collection/infrastructure/cache/UserStampCacheRepository.java
-@Component
-@RequiredArgsConstructor
-public class UserStampCacheRepository extends BaseCacheRepository<StampBookResponse> {
-    
-    private static final String CACHE_PREFIX = "stamp-book:";
-    
-    @Value("${cache.ttl.user-data:1800}")  // 30 minutes default
-    private long ttl;
-    
-    public StampBookResponse get(String key) {
-        return super.get(CACHE_PREFIX + key, StampBookResponse.class);
-    }
-    
-    public void set(String key, StampBookResponse value) {
-        super.set(CACHE_PREFIX + key, value, Duration.ofSeconds(ttl));
-    }
-    
-    public void evict(String key) {
-        super.delete(CACHE_PREFIX + key);
-    }
-}
+public record StampCollectedEvent(
+        UUID eventId,
+        UUID stampId,
+        UUID userId,
+        UUID stationId,
+        UUID lineId,
+        UUID campaignId,
+        LocalDateTime collectedAt
+) {}
 ```
+
+### Publishing / listening
+
+- Publish from **application** after successful commit.
+- Listen in **infrastructure** (`@EventListener`, `@Async`).
+- Spring `ApplicationEvent` inheritance on domain events is **legacy pragmatic** — do not use as the template for new events.
 
 ---
 
-## XII. EVENT-DRIVEN PATTERN
+## X. CACHING
 
-### Domain Event
+- Read: miss → source → put.
+- Write: persist → evict/invalidate via port or cache adapter from application orchestration.
+- TTL from config (`@Value` / `@ConfigurationProperties`), not hardcoded magic numbers in business logic.
 
-```java
-// modules/collection/domain/event/PostCollectStampEvent.java
-@Getter
-public class PostCollectStampEvent extends ApplicationEvent {
-    
-    private final UserStamp stamp;
-    private final LocalDateTime occurredAt;
-    
-    public PostCollectStampEvent(UserStamp stamp) {
-        super(stamp);
-        this.stamp = stamp;
-        this.occurredAt = LocalDateTime.now();
-    }
-}
-```
+---
 
-### Event Listener (async, in reward module)
+## XI. CROSS-MODULE RULES
 
-```java
-// modules/reward/infrastructure/event/PostCollectStampEventListener.java
-@Component
-@RequiredArgsConstructor
-public class PostCollectStampEventListener {
-    
-    private final RewardCommandService rewardService;
-    
-    @EventListener
-    @Async  // ✅ non-blocking
-    public void onStampCollected(PostCollectStampEvent event) {
-        try {
-            rewardService.evaluateAndIssueReward(
-                event.getStamp().getUserId(),
-                event.getStamp().getCampaignId()
-            );
-        } catch (Exception e) {
-            log.error("Failed to evaluate reward for user {}", event.getStamp().getUserId(), e);
-            // Implement retry logic if needed
-        }
-    }
-}
-```
+| Allowed | Forbidden |
+|---------|-----------|
+| A.application → B.application.port | A.* → B.infrastructure |
+| A.infrastructure listens to B domain event (ID payload) | A.application → B.domain.repository |
+| Shared `common` / `infra` utilities | Circular module infrastructure coupling |
+
+---
+
+## XII. PACKAGE CONVENTION (no mass move)
+
+| Concern | Canonical (new) | Grandfathered |
+|---------|-----------------|---------------|
+| Application services | `application/service/` | auth/user/rbac/metro may use `application/` root |
+| Controllers | `presentation/controller/` | older modules may use `presentation/` root |
+| Domain models | `domain/model` + `@Entity` | same |
+| Infra repos | `infrastructure/repository` or `persistence` | rbac may be flat under `infrastructure/` |
+
+Incremental rule: new files in a grandfathered module may follow that module’s existing layout; **new modules** follow canonical.
 
 ---
 
 ## XIII. TRANSACTION BOUNDARIES
 
-### ✅ DO
-
-```java
-@Service
-@Transactional
-public class MyCommandService {
-    
-    // Method 1: write operation = @Transactional
-    public Result doWrite(Command cmd) {
-        repo.save(entity);  // single transaction
-    }
-    
-    // Method 2: call domain service = same transaction
-    public Result doComplexWrite(Command cmd) {
-        domainService.validate(entity);  // same txn
-        repo.save(entity);                 // same txn
-    }
-    
-    // Method 3: event publish = still same txn
-    public Result doWriteWithEvent(Command cmd) {
-        repo.save(entity);
-        eventPublisher.publishEvent(event);  // queued, sent after commit
-        return result;
-    }
-}
-```
-
-### ❌ DON'T
-
-```java
-// ❌ calling write service from read service
-@Service
-@Transactional(readOnly = true)
-public class MyQueryService {
-    
-    private final MyCommandService cmdService;  // ❌ DON'T INJECT
-    
-    public void query() {
-        cmdService.doWrite(cmd);  // ❌ mixes read + write transaction!
-    }
-}
-```
+- Write methods: `@Transactional`
+- Read services: `@Transactional(readOnly = true)` when appropriate
+- Domain validation called from command service shares the same transaction
+- Prefer after-commit publish for integration events
 
 ---
 
 ## XIV. TESTING CHECKLIST
 
-### Unit Test Template
-
-```java
-class CollectionCommandServiceTest {
-    
-    @Mock private UserStampRepository stampRepo;
-    @Mock private StationRepository stationRepo;
-    @Mock private CollectionDomainService domainService;
-    @InjectMocks private CollectionCommandService service;
-    
-    @Test
-    void collectStamp_success() {
-        // Arrange
-        UUID userId = UUID.randomUUID();
-        UUID stationId = UUID.randomUUID();
-        CollectStampCommand cmd = CollectStampCommand.builder()
-            .userId(userId)
-            .stationId(stationId)
-            .build();
-        
-        Station mockStation = new Station(...);
-        when(stationRepo.findById(stationId)).thenReturn(Optional.of(mockStation));
-        when(domainService.validateStampCollection(...)).thenNothing();
-        
-        UserStamp mockStamp = new UserStamp(...);
-        when(stampRepo.save(any())).thenReturn(mockStamp);
-        
-        // Act
-        StampCollectResponse response = service.collectStamp(cmd);
-        
-        // Assert
-        assertNotNull(response.stampId);
-        verify(stampRepo).save(any(UserStamp.class));
-        verify(domainService).validateStampCollection(userId, stationId, null);
-    }
-    
-    @Test
-    void collectStamp_duplicate_throwsException() {
-        // Arrange
-        when(domainService.validateStampCollection(...))
-            .thenThrow(StampAlreadyCollectedException.class);
-        
-        // Act & Assert
-        assertThrows(StampAlreadyCollectedException.class, () -> {
-            service.collectStamp(cmd);
-        });
-    }
-}
-```
-
-### Integration Test Template
-
-```java
-@SpringBootTest
-class CollectionIntegrationTest {
-    
-    @Autowired private CollectionCommandService commandService;
-    @Autowired private UserStampRepository stampRepository;
-    @Autowired private TestEntityManager em;
-    
-    @Test
-    @Transactional
-    void collectStamp_savesToDatabase() {
-        // Arrange
-        StationEntity station = em.persistAndFlush(new StationEntity(...));
-        
-        // Act
-        StampCollectResponse response = commandService.collectStamp(cmd);
-        em.flush();
-        
-        // Assert
-        UserStampEntity saved = em.find(UserStampEntity.class, response.stampId);
-        assertNotNull(saved);
-        assertEquals(station.getId(), saved.getStationId());
-    }
-}
-```
+- Unit: command/query + domain policy happy/error paths
+- ArchUnit: `ArchitectureBoundaryTest` must pass
+- Integration: uniqueness / concurrency for collect & reward where relevant
+- Do not assert HTTP status inside domain unit tests
 
 ---
 
-## XV. QUICK REFERENCE - COMMON MISTAKES
+## XV. QUICK REFERENCE — COMMON MISTAKES
 
-| Mistake | ❌ Wrong | ✅ Right |
-|---------|---------|---------|
-| JPA in application | `@Autowired JpaRepository` | `@Autowired DomainRepository` |
-| No @Transactional on write | `public void save() { repo.save() }` | `@Transactional public void save()` |
-| readOnly=true on write | `@Transactional(readOnly=true) save()` | `@Transactional save()` |
-| Business logic in entity | `entity.validate()` | `domainService.validate(entity)` |
-| Exposing sensitive data | `new UserResponse(user.password)` | mapper filters sensitive fields |
-| No cache eviction | After write, query returns stale data | `cacheRepo.evict(key)` after write |
-| Hardcoded constants | `TTL = 1800` in code | `@Value("${cache.ttl}")` |
-| No domain validation | Rely only on DB constraint | Add domain service validation |
-| Direct event publishing | `new Event()` without context | `eventPublisher.publishEvent(event)` |
-| Synchronous event | `listener.onEvent()` blocking | `@EventListener @Async` non-blocking |
+| Mistake | Wrong | Right |
+|---------|-------|-------|
+| JPA in application | inject `JpaRepository` | inject domain repository / port |
+| Domain imports application | domain facade → policy in application | delete facade; call policy from application |
+| HttpStatus on domain exception | `ex.httpStatus = CONFLICT` | map in `GlobalExceptionHandler` |
+| Mandatory Entity/Domain split | always `StationEntity` | JPA-backed `Station` default |
+| Business workflow on entity | `entity.collectEverything()` | CommandService orchestration |
+| Foreign module infra | auth → `user.infrastructure.Jpa*` | `UserRepository` / `UserAccountPort` |
+| Mandatory `ApplicationEvent` | domain extends Spring event | plain immutable event + app publish |
 
 ---
 
 ## XVI. CODE REVIEW CHECKLIST
 
-Before pushing, check:
-
-- [ ] No layer imports violate dependency direction
-- [ ] All write services have `@Transactional`
-- [ ] All read services have `@Transactional(readOnly=true)`
-- [ ] Domain service does business validation
-- [ ] Repository is interface in domain, adapter in infrastructure
-- [ ] DTOs don't expose sensitive fields (passwords, tokens, etc.)
-- [ ] Cache eviction after writes (where applicable)
-- [ ] Events are async (@Async listener)
-- [ ] Exceptions are domain-level (not JPA exceptions)
-- [ ] Tests cover happy path + error path
-- [ ] No hardcoded TTL/rule values (use @Value)
-- [ ] Hot-path queries are indexed (check DDL)
-- [ ] Mapper properly converts domain ↔ DTO
-- [ ] API documentation clear (OpenAPI tags, @Operation)
+- [ ] No forbidden layer / cross-module infrastructure imports
+- [ ] Write/read transaction annotations correct
+- [ ] Invariants in entity/policy; orchestration in application
+- [ ] Repository interface in domain; adapter in infrastructure
+- [ ] DTOs do not expose secrets
+- [ ] Cache eviction after writes where applicable
+- [ ] Domain exceptions transport-agnostic
+- [ ] ArchUnit green
+- [ ] OpenAPI annotations clear
 
 ---
 
-Done! Use this as reference while coding. When you're ready to start, we'll go line-by-line through Metro module implementation.
+Done. Prefer this file + ADR-001 over older textbook hexagonal snippets.

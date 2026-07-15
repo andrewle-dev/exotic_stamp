@@ -1,7 +1,6 @@
 package metro.ExoticStamp.infra.storage.local;
 
 import lombok.RequiredArgsConstructor;
-import metro.ExoticStamp.infra.storage.StorageProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -13,9 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 @RestController
 @ConditionalOnProperty(name = "storage.provider", havingValue = "local", matchIfMissing = true)
@@ -24,7 +23,7 @@ public class StaticFileController {
 
     private static final String UPLOADS_PREFIX = "/uploads";
 
-    private final StorageProperties storageProperties;
+    private final LocalStorageService localStorageService;
 
     @GetMapping("/uploads/**")
     public ResponseEntity<Resource> serve(HttpServletRequest request) throws Exception {
@@ -38,21 +37,35 @@ public class StaticFileController {
         if (relative.startsWith("/")) {
             relative = relative.substring(1);
         }
-        if (relative.isBlank()) {
+        if (relative.isBlank() || relative.endsWith("/")) {
             return ResponseEntity.notFound().build();
         }
-        Path base = Paths.get(storageProperties.getLocal().getBasePath()).normalize();
+        Path base = localStorageService.getResolvedBasePath();
         Path file = base.resolve(relative).normalize();
         if (!file.startsWith(base) || !Files.isRegularFile(file)) {
             return ResponseEntity.notFound().build();
         }
         Resource resource = new FileSystemResource(file.toFile());
-        String contentType = Files.probeContentType(file);
-        if (contentType == null) {
-            contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
-        }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .header(HttpHeaders.CONTENT_TYPE, resolveContentType(file))
                 .body(resource);
+    }
+
+    private static String resolveContentType(Path file) throws IOException {
+        String probed = Files.probeContentType(file);
+        String name = file.getFileName().toString().toLowerCase();
+        if (name.endsWith(".png")) {
+            return MediaType.IMAGE_PNG_VALUE;
+        }
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) {
+            return MediaType.IMAGE_JPEG_VALUE;
+        }
+        if (name.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (probed != null && !probed.isBlank()) {
+            return probed;
+        }
+        return MediaType.APPLICATION_OCTET_STREAM_VALUE;
     }
 }
