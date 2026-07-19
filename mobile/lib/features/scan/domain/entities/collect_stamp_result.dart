@@ -79,6 +79,11 @@ class CollectStampResult extends Equatable {
   final String? nextRewardHint;
   final CollectSponsorAd? sponsorAd;
 
+  // TODO(reward-unlock): Backend StampCollectResponse has no newlyIssuedReward /
+  // rewardUnlocked field (rewards issue async via StampCollectedEvent). When the
+  // API adds it, map here and surface CTA on StampCollectedSuccessScreen →
+  // RouteNames.scanRewardUnlocked. Do not infer unlock from local progress.
+
   @override
   List<Object?> get props => [stamp, progress, isNew, nextRewardHint, sponsorAd];
 }

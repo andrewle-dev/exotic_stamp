@@ -10,60 +10,79 @@ class HomeCollectCta extends StatelessWidget {
 
   final VoidCallback onTap;
 
+  /// Soft deeper red derived from [AppColors.accentRed] — not a new brand HEX.
+  static Color get _accentRedDeep =>
+      Color.lerp(AppColors.accentRed, AppColors.textPrimary, 0.16)!;
+
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.accentRed,
+      color: Colors.transparent,
       borderRadius: AppRadius.xlAll,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: AppRadius.xlAll,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xl,
-            vertical: AppSpacing.xl,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.accentRed,
+                _accentRedDeep,
+              ],
+            ),
+            borderRadius: AppRadius.xlAll,
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'STAMP NOW!',
-                      style: AppTextStyles.displayMedium.copyWith(
-                        color: AppColors.backgroundWhite,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 24,
-                        height: 1.1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.xl,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'STAMP NOW!',
+                        style: AppTextStyles.displayMedium.copyWith(
+                          color: AppColors.backgroundWhite,
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 24,
+                          height: 1.1,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Tìm thấy thẻ NFC? Chạm vào đây để lưu stamp.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.backgroundWhite.withValues(alpha: 0.92),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Tìm thấy thẻ NFC? Chạm vào đây để lưu stamp.',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color:
+                              AppColors.backgroundWhite.withValues(alpha: 0.92),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundWhite.withValues(alpha: 0.22),
-                  shape: BoxShape.circle,
+                const SizedBox(width: AppSpacing.lg),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundWhite.withValues(alpha: 0.22),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.nfc_rounded,
+                    color: AppColors.backgroundWhite,
+                    size: 30,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.nfc_rounded,
-                  color: AppColors.backgroundWhite,
-                  size: 30,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

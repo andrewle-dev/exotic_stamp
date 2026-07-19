@@ -5,7 +5,8 @@ import { Calendar, FileText, Image, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
 import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
-import { PublicAssetUploadField } from '../../uploads/components/PublicAssetUploadField'
+import { ASSET_UPLOAD_HELP } from '../../uploads/assetUploadPurpose'
+import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 import {
   fromDatetimeLocalValue,
   toDatetimeLocalValue,
@@ -182,16 +183,18 @@ export function CampaignFormDrawer({
             name="bannerImageUrl"
             control={control}
             render={({ field }) => (
-              <PublicAssetUploadField
+              <AssetImageFieldCard
                 id="bannerImageUrl"
-                label="Banner image"
+                title="Banner image"
                 value={field.value ?? ''}
                 onChange={field.onChange}
                 error={errors.bannerImageUrl?.message}
                 formDirty={isDirty}
                 previewSize="lg"
                 previewAspect="wide"
-                help="Campaign banner for promotional surfaces. Recommended: landscape (≈16:9)."
+                help={ASSET_UPLOAD_HELP.campaignBanner}
+                purpose="CAMPAIGN_BANNER"
+                clearable
               />
             )}
           />
@@ -200,15 +203,17 @@ export function CampaignFormDrawer({
             name="thumbnailImageUrl"
             control={control}
             render={({ field }) => (
-              <PublicAssetUploadField
+              <AssetImageFieldCard
                 id="thumbnailImageUrl"
-                label="Thumbnail image"
+                title="Thumbnail image"
                 value={field.value ?? ''}
                 onChange={field.onChange}
                 error={errors.thumbnailImageUrl?.message}
                 formDirty={isDirty}
                 previewSize="lg"
-                help="Campaign thumbnail for lists and cards. Recommended: square (1:1), ideally 2048×2048."
+                help={ASSET_UPLOAD_HELP.campaignThumbnail}
+                purpose="CAMPAIGN_THUMBNAIL"
+                clearable
               />
             )}
           />

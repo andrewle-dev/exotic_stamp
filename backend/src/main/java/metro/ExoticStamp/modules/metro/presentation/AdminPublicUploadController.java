@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import metro.ExoticStamp.common.response.ApiResponse;
+import metro.ExoticStamp.infra.storage.AssetUploadPurpose;
 import metro.ExoticStamp.modules.metro.application.PublicAssetUploadService;
 import metro.ExoticStamp.modules.metro.presentation.dto.response.PublicAssetUploadResponse;
 import metro.ExoticStamp.modules.metro.presentation.mapper.MetroPresentationMapper;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,10 +30,19 @@ public class AdminPublicUploadController {
 
     @PostMapping(value = "/public", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN') and hasAuthority('UPLOAD_PUBLIC_ASSET')")
-    @Operation(summary = "Upload public asset", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            summary = "Upload public asset",
+            description =
+                    "Optional purpose query param enforces dimension/aspect rules "
+                            + "(STAMP_ARTWORK, PARTNER_LOGO, PARTNER_BANNER, etc.). "
+                            + "Omit or use GENERIC for type+size only.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<ApiResponse<PublicAssetUploadResponse>> uploadPublic(
-            @RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                presentationMapper.toResponse(publicAssetUploadService.uploadPublicAsset(file))));
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "purpose", required = false, defaultValue = "GENERIC")
+                    String purpose) {
+        AssetUploadPurpose resolved = AssetUploadPurpose.fromParam(purpose);
+        return ResponseEntity.ok(ApiResponse.ok(presentationMapper.toResponse(
+                publicAssetUploadService.uploadPublicAsset(file, resolved))));
     }
 }

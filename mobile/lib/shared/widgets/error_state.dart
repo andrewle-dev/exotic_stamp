@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
@@ -23,6 +24,9 @@ class AppErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showBackendCode =
+        kDebugMode && failure?.backendCode != null;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -40,7 +44,7 @@ class AppErrorState extends StatelessWidget {
               style: AppTextStyles.cardTitle,
               textAlign: TextAlign.center,
             ),
-            if (failure?.backendCode != null) ...[
+            if (showBackendCode) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
                 failure!.backendCode!,

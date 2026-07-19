@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_radius.dart';
@@ -9,6 +8,7 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../cubit/scan_flow_cubit.dart';
 import '../cubit/scan_flow_state.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
 import '../widgets/gps_status_card.dart';
 import '../widgets/scan_action_buttons.dart';
@@ -24,14 +24,9 @@ class LocationVerificationScreen extends StatelessWidget {
       child: ScanFlowListener(
         child: Scaffold(
           backgroundColor: AppColors.backgroundWhite,
-          appBar: AppBar(
-            backgroundColor: AppColors.backgroundWhite,
-            foregroundColor: AppColors.textPrimary,
-            title: const Text('Xác minh vị trí'),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              onPressed: () => context.pop(),
-            ),
+          appBar: const AppSecondaryAppBar(
+            title: 'Xác minh vị trí',
+            showBottomDivider: false,
           ),
           body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
             builder: (context, state) {
@@ -85,8 +80,8 @@ class LocationVerificationScreen extends StatelessWidget {
                     ],
                     const SizedBox(height: AppSpacing.xl),
                     Text(
-                      'GPS giúp xác minh bạn ở gần ga. Máy chủ sẽ quyết định '
-                      'phạm vi hợp lệ — không lưu kết quả cục bộ.',
+                      'Ứng dụng dùng GPS để kiểm tra bạn đang ở gần ga '
+                      'trước khi thu stamp.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -116,9 +111,9 @@ class LocationVerificationScreen extends StatelessWidget {
                     if (station.zoneRadiusMeters != null) ...[
                       const SizedBox(height: AppSpacing.md),
                       GpsStatusCard(
-                        title: 'Phạm vi ga (máy chủ)',
+                        title: 'Phạm vi ga',
                         subtitle:
-                            'Bán kính ~${station.zoneRadiusMeters} m — xác minh bởi backend',
+                            'Bán kính khoảng ${station.zoneRadiusMeters} m quanh ga',
                         icon: Icons.radar_rounded,
                         statusLabel: 'Tham khảo',
                         isPositive: true,

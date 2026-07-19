@@ -9,18 +9,16 @@ class StationActionRow extends StatelessWidget {
   const StationActionRow({
     super.key,
     this.onDirections,
-    this.onFavorite,
     this.onVirtualTour,
   });
 
   final VoidCallback? onDirections;
-  final VoidCallback? onFavorite;
   final VoidCallback? onVirtualTour;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
+    final actions = <Widget>[
+      if (onDirections != null)
         Expanded(
           child: _ActionCard(
             label: 'Directions',
@@ -29,16 +27,7 @@ class StationActionRow extends StatelessWidget {
             onTap: onDirections,
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _ActionCard(
-            label: 'Favorite',
-            icon: Icons.favorite_border_rounded,
-            iconColor: AppColors.accentRed,
-            onTap: onFavorite,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
+      if (onVirtualTour != null)
         Expanded(
           child: _ActionCard(
             label: 'Virtual Tour',
@@ -47,6 +36,18 @@ class StationActionRow extends StatelessWidget {
             onTap: onVirtualTour,
           ),
         ),
+    ];
+
+    if (actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      children: [
+        for (var i = 0; i < actions.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.md),
+          actions[i],
+        ],
       ],
     );
   }

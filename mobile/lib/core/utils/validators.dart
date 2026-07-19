@@ -1,4 +1,8 @@
 class Validators {
+  /// Aligned with backend [PasswordPolicy] (min 8, max 50).
+  static const minPasswordLength = 8;
+  static const maxPasswordLength = 50;
+
   static bool isNotEmpty(String value) => value.trim().isNotEmpty;
 
   static bool isValidEmail(String value) {
@@ -14,5 +18,6 @@ class Validators {
     return RegExp(r'^\d{8,15}$').hasMatch(normalized);
   }
 
-  static bool isValidPassword(String value) => value.length >= 6;
+  static bool isValidPassword(String value) =>
+      value.length >= minPasswordLength && value.length <= maxPasswordLength;
 }

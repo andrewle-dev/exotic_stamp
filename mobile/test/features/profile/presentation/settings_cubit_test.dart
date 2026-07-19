@@ -4,7 +4,6 @@ import 'package:metro_stamp_app/core/errors/failure.dart';
 import 'package:metro_stamp_app/features/profile/domain/entities/profile.dart';
 import 'package:metro_stamp_app/features/profile/domain/repositories/profile_repository.dart';
 import 'package:metro_stamp_app/features/profile/domain/usecases/get_profile_usecase.dart';
-import 'package:metro_stamp_app/features/profile/domain/usecases/logout_profile_usecase.dart';
 import 'package:metro_stamp_app/features/profile/domain/usecases/update_profile_usecase.dart';
 import 'package:metro_stamp_app/features/profile/presentation/cubit/settings_cubit.dart';
 import 'package:metro_stamp_app/features/profile/presentation/cubit/settings_state.dart';
@@ -29,7 +28,6 @@ void main() {
     cubit = SettingsCubit(
       getProfileUseCase: GetProfileUseCase(repository),
       updateProfileUseCase: UpdateProfileUseCase(repository),
-      logoutProfileUseCase: LogoutProfileUseCase(repository),
     );
   });
 
@@ -110,18 +108,36 @@ void main() {
   );
 
   blocTest<SettingsCubit, SettingsState>(
-    'logout calls repository logout',
+    'updateProfile emits unauthorized on auth failure',
     build: () {
-      when(() => repository.logout()).thenAnswer((_) async {});
+      when(
+        () => repository.updateProfile(
+          firstname: any(named: 'firstname'),
+          lastname: any(named: 'lastname'),
+          bio: any(named: 'bio'),
+          avatarUrl: any(named: 'avatarUrl'),
+        ),
+      ).thenThrow(
+        const Failure(
+          code: FailureCode.unauthorized,
+          message: 'Session expired',
+        ),
+      );
       return cubit;
     },
-    act: (cubit) => cubit.logout(),
+    seed: () => const SettingsState(
+      status: SettingsStatus.loaded,
+      profile: profile,
+    ),
+    act: (cubit) => cubit.updateProfile(
+      firstname: 'Alex',
+      lastname: 'Chen',
+    ),
     expect: () => [
       isA<SettingsState>()
-          .having((s) => s.status, 'status', SettingsStatus.loggingOut),
+          .having((s) => s.status, 'status', SettingsStatus.saving),
+      isA<SettingsState>()
+          .having((s) => s.status, 'status', SettingsStatus.unauthorized),
     ],
-    verify: (_) {
-      verify(() => repository.logout()).called(1);
-    },
   );
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 /// Canonical icon mapping for chrome and navigation.
 ///
@@ -8,9 +7,9 @@ abstract final class AppIcons {
   static const IconData home = Icons.home_outlined;
   static const IconData homeActive = Icons.home_rounded;
 
-  /// Rubber-stamp glyph (Font Awesome) for the Stamp book tab.
-  static const IconData stamp = FontAwesomeIcons.stamp;
-  static const IconData stampActive = FontAwesomeIcons.stamp;
+  /// Stamp book tab — outline inactive / filled active for clear chrome state.
+  static const IconData stamp = Icons.collections_bookmark_outlined;
+  static const IconData stampActive = Icons.collections_bookmark;
 
   static const IconData scan = Icons.center_focus_weak_rounded;
 
@@ -22,8 +21,11 @@ abstract final class AppIcons {
 
   static const IconData search = Icons.search_rounded;
   static const IconData settings = Icons.settings_outlined;
-  static const IconData filter = Icons.tune_rounded;
+  static const IconData filter = Icons.filter_alt_outlined;
   static const IconData lock = Icons.lock_rounded;
   static const IconData collected = Icons.check_rounded;
   static const IconData reward = Icons.card_giftcard_outlined;
+
+  /// Secondary-screen back affordance (simple Material arrow, no circle).
+  static const IconData back = Icons.arrow_back;
 }

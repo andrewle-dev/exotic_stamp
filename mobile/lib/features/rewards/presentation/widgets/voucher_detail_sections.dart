@@ -192,9 +192,25 @@ class VoucherCodeQrSection extends StatelessWidget {
               color: AppColors.primaryBlue.withValues(alpha: 0.85),
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.md),
           Text(
-            'Mã voucher',
+            'Redeem code',
+            style: AppTextStyles.labelLarge.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Xuất trình mã tại đối tác. Đổi quà online chưa được hỗ trợ.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Mã đổi quà',
             style: AppTextStyles.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,

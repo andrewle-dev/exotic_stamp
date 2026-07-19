@@ -11,6 +11,7 @@ import '../../../../core/config/scan_capabilities.dart';
 import '../../../../core/nfc/nfc_availability.dart';
 import '../../../../core/nfc/nfc_reader.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../cubit/scan_flow_cubit.dart';
 import '../cubit/scan_flow_state.dart';
 import '../widgets/nfc_pulse_circle.dart';
@@ -217,15 +218,10 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
         listener: (_, __) => _syncNfcSession(),
         child: Scaffold(
           backgroundColor: AppColors.backgroundWhite,
-          appBar: AppBar(
-            backgroundColor: AppColors.backgroundWhite,
-            foregroundColor: AppColors.textPrimary,
-            title: const Text('Quét NFC'),
-            centerTitle: true,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              onPressed: _cancelScan,
-            ),
+          appBar: AppSecondaryAppBar(
+            title: 'Quét NFC',
+            showBottomDivider: false,
+            onBack: _cancelScan,
           ),
           body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
             builder: (context, state) {
@@ -289,7 +285,8 @@ class _NfcScanView extends StatelessWidget {
     return switch (state.nfcAvailability) {
       NfcAvailabilityStatus.disabled => 'NFC đang tắt',
       NfcAvailabilityStatus.unavailable => 'NFC không hỗ trợ',
-      NfcAvailabilityStatus.iosTestBuildDisabled => 'NFC tạm tắt (iOS test)',
+      NfcAvailabilityStatus.iosTestBuildDisabled =>
+        'NFC tạm không khả dụng trên thiết bị này',
       _ => nfcSessionActive ? 'Đang quét...' : 'Sẵn sàng quét',
     };
   }
@@ -303,7 +300,7 @@ class _NfcScanView extends StatelessWidget {
         NfcAvailabilityStatus.unavailable =>
           'Thiết bị không hỗ trợ NFC. Không thể thu stamp trên thiết bị này.',
         NfcAvailabilityStatus.iosTestBuildDisabled =>
-          'NFC tạm tắt trên bản test iOS. Thử lại trên thiết bị hỗ trợ NFC.',
+          'NFC tạm không khả dụng trên thiết bị này. Thử lại trên thiết bị hỗ trợ NFC.',
         _ =>
           'Chạm điện thoại vào tag NFC tại ga và giữ yên vài giây.',
       };
@@ -311,11 +308,11 @@ class _NfcScanView extends StatelessWidget {
 
     return switch (state.nfcAvailability) {
       NfcAvailabilityStatus.disabled =>
-        'Bật NFC trong Cài đặt hoặc dùng QR fallback.',
+        'Bật NFC trong Cài đặt hoặc dùng mã QR.',
       NfcAvailabilityStatus.unavailable =>
-        'Thiết bị không hỗ trợ NFC. Dùng QR fallback nếu cần.',
+        'Thiết bị không hỗ trợ NFC. Dùng mã QR nếu cần.',
       NfcAvailabilityStatus.iosTestBuildDisabled =>
-        'NFC tạm tắt trên bản test iOS. Dùng QR fallback nếu cần.',
+        'NFC tạm không khả dụng trên thiết bị này. Dùng mã QR nếu cần.',
       _ =>
         'Chạm điện thoại vào tag NFC tại ga và giữ yên vài giây.',
     };
@@ -357,7 +354,7 @@ class _NfcScanView extends StatelessWidget {
             TextButton(
               onPressed: onUseQr,
               child: Text(
-                'Dùng QR fallback',
+                'Dùng mã QR',
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                   decoration: TextDecoration.underline,
@@ -393,14 +390,14 @@ class _QrFallbackView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'QR fallback',
+            'Quét mã QR',
             style: AppTextStyles.sectionTitle.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Chỉ dùng khi NFC không khả dụng hoặc bạn chọn fallback.',
+            'Chỉ dùng khi NFC không khả dụng hoặc bạn chọn quét mã QR.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.textSecondary,
             ),

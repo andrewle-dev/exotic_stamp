@@ -1,6 +1,7 @@
 package metro.ExoticStamp.modules.auth.application;
 
 import metro.ExoticStamp.infra.mail.MailService;
+import metro.ExoticStamp.modules.auth.application.command.ChangePasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.LoginCommand;
 import metro.ExoticStamp.modules.auth.application.command.RefreshTokenCommand;
@@ -18,9 +19,13 @@ import metro.ExoticStamp.modules.auth.application.view.AuthView;
 import metro.ExoticStamp.modules.auth.application.view.IssuedAccessTokenView;
 import metro.ExoticStamp.modules.auth.config.AuthSecurityProperties;
 import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
+import metro.ExoticStamp.modules.auth.domain.exception.CurrentPasswordIncorrectException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
+import metro.ExoticStamp.modules.auth.domain.exception.NewPasswordSameAsCurrentException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
+import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMismatchException;
+import metro.ExoticStamp.modules.auth.domain.exception.PasswordPolicyViolationException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
@@ -30,6 +35,7 @@ import metro.ExoticStamp.modules.auth.domain.repository.AccessTokenRepository;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
 import metro.ExoticStamp.modules.user.application.port.UserAccountPort;
 import metro.ExoticStamp.modules.user.domain.exception.UserFieldAlreadyTakenException;
+import metro.ExoticStamp.modules.user.domain.exception.UserNotFoundException;
 import metro.ExoticStamp.modules.user.domain.model.User;
 import metro.ExoticStamp.modules.user.domain.model.UserStatus;
 import org.junit.jupiter.api.AfterEach;
@@ -112,7 +118,7 @@ class AuthCommandServiceTest {
         RegisterCommand cmd = RegisterCommand.builder()
                 .email("new@test.com")
                 .username("newuser")
-                .password("secret")
+                .password("secret12")
                 .firstname("A")
                 .lastname("B")
                 .phoneNumber("+10000000001")
@@ -489,7 +495,7 @@ class AuthCommandServiceTest {
         RegisterCommand cmd = RegisterCommand.builder()
                 .email("race@test.com")
                 .username("race")
-                .password("p")
+                .password("secret12")
                 .build();
         AtomicInteger saves = new AtomicInteger();
         when(userAccountPort.existsByEmail(cmd.getEmail())).thenAnswer(inv -> saves.get() > 0);
@@ -523,5 +529,183 @@ class AuthCommandServiceTest {
         pool.shutdown();
         assertTrue(pool.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals(1, failures.get());
+    }
+
+    private ChangePasswordCommand changePasswordCmd(String current, String next, String confirm) {
+        return ChangePasswordCommand.builder()
+                .currentPassword(current)
+                .newPassword(next)
+                .confirmNewPassword(confirm)
+                .ipAddress("127.0.0.1")
+                .build();
+    }
+
+    @Test
+    void changePassword_success_encodesPasswordRevokesSessionsAndAudits() {
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("old-secret", "encoded")).thenReturn(true);
+        when(passwordEncoder.matches("new-secret1", "encoded")).thenReturn(false);
+        when(passwordEncoder.encode("new-secret1")).thenReturn("new-hash");
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
+        when(userAccountPort.findTokenVersionById(USER_ID)).thenReturn(Optional.of(1L));
+
+        authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "new-secret1"));
+
+        assertEquals("new-hash", activeUser.getPassword());
+        assertNotNull(activeUser.getPasswordUpdateAt());
+        verify(userAccountPort).save(activeUser);
+        verify(accessTokenRepository).revokeAllByUserId(USER_ID, AccessToken.REASON_PASSWORD_CHANGED);
+        verify(refreshTokenStore).revokeAllForUser(USER_ID);
+        verify(userAccountPort).incrementTokenVersionById(USER_ID);
+        verify(accessTokenRevocation).setCachedTokenVersion(USER_ID, 1L);
+        verify(auditLogService).log(
+                eq(USER_ID),
+                eq("users"),
+                eq("PASSWORD_CHANGED"),
+                isNull(),
+                any(),
+                eq("127.0.0.1")
+        );
+        verify(passwordEncoder).encode("new-secret1");
+        verify(passwordEncoder, never()).encode("old-secret");
+    }
+
+    @Test
+    void changePassword_usesAuthenticatedUserIdNotRequestIdentity() {
+        UUID otherId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("old-secret", "encoded")).thenReturn(true);
+        when(passwordEncoder.matches("new-secret1", "encoded")).thenReturn(false);
+        when(passwordEncoder.encode("new-secret1")).thenReturn("new-hash");
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
+
+        authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "new-secret1"));
+
+        verify(userAccountPort).findById(USER_ID);
+        verify(userAccountPort, never()).findById(otherId);
+        verify(accessTokenRepository).revokeAllByUserId(eq(USER_ID), anyString());
+    }
+
+    @Test
+    void changePassword_currentPasswordIncorrect_rejectedWithoutRevocationOrAudit() {
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("wrong", "encoded")).thenReturn(false);
+
+        assertThrows(CurrentPasswordIncorrectException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("wrong", "new-secret1", "new-secret1")));
+
+        verify(userAccountPort, never()).save(any());
+        verify(accessTokenRepository, never()).revokeAllByUserId(any(), anyString());
+        verify(refreshTokenStore, never()).revokeAllForUser(any());
+        verify(userAccountPort, never()).incrementTokenVersionById(any());
+        verify(auditLogService, never()).log(any(), anyString(), eq("PASSWORD_CHANGED"), any(), any(), any());
+    }
+
+    @Test
+    void changePassword_confirmationMismatch_rejected() {
+        assertThrows(PasswordConfirmationMismatchException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "other")));
+
+        verify(userAccountPort, never()).findById(any());
+        verify(auditLogService, never()).log(any(), anyString(), eq("PASSWORD_CHANGED"), any(), any(), any());
+    }
+
+    @Test
+    void changePassword_sameAsCurrent_rejectedAfterVerification() {
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("same-pass", "encoded")).thenReturn(true);
+
+        assertThrows(NewPasswordSameAsCurrentException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("same-pass", "same-pass", "same-pass")));
+
+        verify(userAccountPort, never()).save(any());
+        verify(accessTokenRepository, never()).revokeAllByUserId(any(), anyString());
+        verify(auditLogService, never()).log(any(), anyString(), eq("PASSWORD_CHANGED"), any(), any(), any());
+    }
+
+    @Test
+    void changePassword_weakPassword_rejected() {
+        assertThrows(PasswordPolicyViolationException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "short", "short")));
+
+        verify(userAccountPort, never()).findById(any());
+        verify(auditLogService, never()).log(any(), anyString(), eq("PASSWORD_CHANGED"), any(), any(), any());
+    }
+
+    @Test
+    void changePassword_inactiveUser_rejected() {
+        activeUser.setStatus(UserStatus.SUSPENDED);
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+
+        assertThrows(UserNotActiveException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "new-secret1")));
+
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(userAccountPort, never()).save(any());
+        verify(auditLogService, never()).log(any(), anyString(), eq("PASSWORD_CHANGED"), any(), any(), any());
+    }
+
+    @Test
+    void changePassword_userNotFound_throws() {
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "new-secret1")));
+    }
+
+    @Test
+    void changePassword_tokenVersionBumpedExactlyOnce() {
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("old-secret", "encoded")).thenReturn(true);
+        when(passwordEncoder.matches("new-secret1", "encoded")).thenReturn(false);
+        when(passwordEncoder.encode("new-secret1")).thenReturn("new-hash");
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
+
+        authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "new-secret1"));
+
+        verify(userAccountPort, times(1)).incrementTokenVersionById(USER_ID);
+    }
+
+    @Test
+    void changePassword_concurrentSecondRequestFailsWhenCurrentNoLongerMatches() {
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("old-secret", "encoded")).thenReturn(true);
+        when(passwordEncoder.matches("new-secret1", "encoded")).thenReturn(false);
+        when(passwordEncoder.encode("new-secret1")).thenReturn("new-hash");
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
+
+        authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "new-secret1", "new-secret1"));
+
+        activeUser.setPassword("new-hash");
+        when(passwordEncoder.matches("old-secret", "new-hash")).thenReturn(false);
+
+        assertThrows(CurrentPasswordIncorrectException.class, () ->
+                authCommandService.changePassword(USER_ID, changePasswordCmd("old-secret", "other-secret", "other-secret")));
+    }
+
+    @Test
+    void changePassword_oldPasswordCannotLogin_newPasswordCan() {
+        activeUser.setPassword("new-hash");
+        when(userAccountPort.findByEmail("user@test.com")).thenReturn(Optional.of(activeUser));
+        when(passwordEncoder.matches("old-secret", "new-hash")).thenReturn(false);
+        assertThrows(InvalidCredentialsException.class, () ->
+                authCommandService.login(LoginCommand.builder()
+                        .identifier("user@test.com")
+                        .password("old-secret")
+                        .build()));
+
+        when(passwordEncoder.matches("new-secret1", "new-hash")).thenReturn(true);
+        when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
+        when(accessTokenPort.issueAccessToken(any(), any())).thenReturn(new IssuedAccessTokenView("a", "jti"));
+        when(accessTokenPort.generateRefreshToken(USER_ID)).thenReturn("r");
+        when(accessTokenPort.hashToken(anyString())).thenReturn("h");
+        when(tokenTtlPort.getRefreshTokenTtl()).thenReturn(Duration.ofHours(1));
+
+        assertDoesNotThrow(() -> authCommandService.login(LoginCommand.builder()
+                .identifier("user@test.com")
+                .password("new-secret1")
+                .ipAddress("127.0.0.1")
+                .userAgent("test")
+                .build()));
     }
 }

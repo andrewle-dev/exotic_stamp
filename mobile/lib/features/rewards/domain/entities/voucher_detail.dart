@@ -60,9 +60,10 @@ class VoucherDetail extends Equatable {
   bool get showVoucherCode =>
       status == UserRewardStatus.available && voucherCode != null;
 
-  bool get canRedeem => status == UserRewardStatus.available;
+  /// Online redeem mutation is disabled on backend (410). Never show redeem CTA.
+  bool get canRedeem => false;
 
-  bool get showRedeemCta => canRedeem;
+  bool get showRedeemCta => false;
 
   VoucherDetail copyWithStatus(UserRewardStatus status) {
     return VoucherDetail(

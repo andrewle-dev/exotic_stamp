@@ -3,6 +3,7 @@ package metro.ExoticStamp.modules.auth.presentation.dto.request;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import metro.ExoticStamp.modules.auth.domain.PasswordPolicy;
 
 public class RegisterRequest {
 
@@ -25,7 +26,7 @@ public class RegisterRequest {
     private String phoneNumber;
 
     @NotBlank
-    @Size(min = 8, max = 50)
+    @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH)
     private String password;
 
     public String getFirstname() {

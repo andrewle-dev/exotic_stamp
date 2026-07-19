@@ -70,7 +70,7 @@ class ScanErrorPresentation {
               errorCode: 'NFC_INVALID',
               title: 'Tag NFC không hợp lệ',
               message:
-                  'Không nhận diện được tag NFC. Hãy thử chạm lại hoặc dùng QR fallback.',
+                  'Không nhận diện được tag NFC. Hãy thử chạm lại hoặc dùng mã QR.',
               tagLabel: 'NFC',
               icon: Icons.nfc_rounded,
             )

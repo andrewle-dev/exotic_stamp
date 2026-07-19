@@ -6,6 +6,7 @@ import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_button.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../../domain/entities/reward_unlocked_share_payload.dart';
 import '../widgets/reward_unlocked_sections.dart';
 
@@ -25,14 +26,10 @@ class RewardUnlockedShareScreen extends StatelessWidget {
     if (resolved == null) {
       return Scaffold(
         backgroundColor: AppColors.backgroundWhite,
-        appBar: AppBar(
-          backgroundColor: AppColors.backgroundWhite,
-          foregroundColor: AppColors.textPrimary,
-          title: const Text('Phần thưởng'),
-          leading: IconButton(
-            icon: const Icon(Icons.close_rounded),
-            onPressed: () => context.pop(),
-          ),
+        appBar: AppSecondaryAppBar(
+          title: 'Phần thưởng',
+          showBottomDivider: false,
+          onBack: () => context.pop(),
         ),
         body: const Center(
           child: Text('Không có dữ liệu phần thưởng để hiển thị.'),
@@ -42,50 +39,61 @@ class RewardUnlockedShareScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundWhite,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.pop(),
-        ),
+      appBar: AppSecondaryAppBar(
+        title: 'Phần thưởng',
+        showBottomDivider: false,
+        onBack: () => context.pop(),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            children: [
-              const Spacer(),
-              const RewardUnlockedCelebrationHeader(),
-              const SizedBox(height: AppSpacing.xxl),
-              RewardUnlockedCard(payload: resolved),
-              const Spacer(),
-              AppButton(
-                label: 'Chia sẻ phần thưởng',
-                variant: AppButtonVariant.accent,
-                onPressed: () => _shareReward(resolved),
-                icon: const Icon(
-                  Icons.ios_share_rounded,
-                  color: AppColors.backgroundWhite,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: 'Xem phần thưởng',
-                variant: AppButtonVariant.outlined,
-                onPressed: () {
-                  context.push(RouteNames.voucherDetail(resolved.rewardId));
-                },
-                icon: const Icon(
-                  Icons.card_giftcard_outlined,
-                  color: AppColors.primaryBlue,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.blueTint,
+              AppColors.blueSurface,
+              AppColors.backgroundWhite,
             ],
+            stops: [0.0, 0.32, 0.6],
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xxl),
+            child: Column(
+              children: [
+                const Spacer(),
+                const RewardUnlockedCelebrationHeader(),
+                const SizedBox(height: AppSpacing.xxl),
+                RewardUnlockedCard(payload: resolved),
+                const Spacer(),
+                AppButton(
+                  label: 'Chia sẻ phần thưởng',
+                  variant: AppButtonVariant.accent,
+                  onPressed: () => _shareReward(resolved),
+                  icon: const Icon(
+                    Icons.ios_share_rounded,
+                    color: AppColors.backgroundWhite,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppButton(
+                  label: 'Xem phần thưởng',
+                  variant: AppButtonVariant.outlined,
+                  onPressed: () {
+                    context.push(RouteNames.voucherDetail(resolved.rewardId));
+                  },
+                  icon: const Icon(
+                    Icons.card_giftcard_outlined,
+                    color: AppColors.primaryBlue,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+            ),
           ),
         ),
       ),

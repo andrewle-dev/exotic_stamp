@@ -5,7 +5,8 @@ import { Flag, Gift, MapPin, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
 import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
-import { PublicAssetUploadField } from '../../uploads/components/PublicAssetUploadField'
+import { ASSET_UPLOAD_HELP } from '../../uploads/assetUploadPurpose'
+import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 import type { CampaignResponse } from '../../../types/campaigns'
 import type { MilestoneResponse } from '../../../types/milestones'
 import {
@@ -251,14 +252,16 @@ export function MilestoneFormDrawer({
             name="rewardImageUrl"
             control={control}
             render={({ field }) => (
-              <PublicAssetUploadField
+              <AssetImageFieldCard
                 id="rewardImageUrl"
-                label="Reward image"
+                title="Reward image"
                 value={field.value ?? ''}
                 onChange={field.onChange}
                 error={errors.rewardImageUrl?.message}
                 formDirty={isDirty}
-                help="Shown when the milestone unlocks. Recommended: square (1:1)."
+                help={ASSET_UPLOAD_HELP.milestoneReward}
+                purpose="MILESTONE_REWARD"
+                clearable
               />
             )}
           />

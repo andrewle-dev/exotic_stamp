@@ -2,7 +2,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/errors/failure.dart';
 import '../../domain/usecases/get_profile_usecase.dart';
-import '../../domain/usecases/logout_profile_usecase.dart';
 import '../../domain/usecases/update_profile_usecase.dart';
 import 'settings_state.dart';
 
@@ -10,15 +9,12 @@ class SettingsCubit extends Cubit<SettingsState> {
   SettingsCubit({
     required GetProfileUseCase getProfileUseCase,
     required UpdateProfileUseCase updateProfileUseCase,
-    required LogoutProfileUseCase logoutProfileUseCase,
   })  : _getProfileUseCase = getProfileUseCase,
         _updateProfileUseCase = updateProfileUseCase,
-        _logoutProfileUseCase = logoutProfileUseCase,
         super(const SettingsState());
 
   final GetProfileUseCase _getProfileUseCase;
   final UpdateProfileUseCase _updateProfileUseCase;
-  final LogoutProfileUseCase _logoutProfileUseCase;
 
   Future<void> load() async {
     emit(state.copyWith(status: SettingsStatus.loading, clearFailure: true));
@@ -34,7 +30,9 @@ class SettingsCubit extends Cubit<SettingsState> {
     } on Failure catch (failure) {
       emit(
         state.copyWith(
-          status: SettingsStatus.saveFailure,
+          status: failure.isAuthFailure
+              ? SettingsStatus.unauthorized
+              : SettingsStatus.error,
           failure: failure,
           clearProfile: true,
         ),
@@ -42,10 +40,10 @@ class SettingsCubit extends Cubit<SettingsState> {
     } catch (_) {
       emit(
         state.copyWith(
-          status: SettingsStatus.saveFailure,
+          status: SettingsStatus.error,
           failure: const Failure(
             code: FailureCode.unknown,
-            message: 'Không thể tải cài đặt.',
+            message: 'Unable to load personal information.',
           ),
           clearProfile: true,
         ),
@@ -56,16 +54,21 @@ class SettingsCubit extends Cubit<SettingsState> {
   Future<void> updateProfile({
     required String firstname,
     required String lastname,
+    String? bio,
   }) async {
     final trimmedFirst = firstname.trim();
     final trimmedLast = lastname.trim();
+    final trimmedBio = bio?.trim();
     final fieldErrors = <String, String>{};
 
     if (trimmedFirst.isEmpty) {
-      fieldErrors['firstname'] = 'Vui lòng nhập tên.';
+      fieldErrors['firstname'] = 'Please enter your first name.';
     }
     if (trimmedLast.isEmpty) {
-      fieldErrors['lastname'] = 'Vui lòng nhập họ.';
+      fieldErrors['lastname'] = 'Please enter your last name.';
+    }
+    if (trimmedBio != null && trimmedBio.length > 100) {
+      fieldErrors['bio'] = 'Bio must be 100 characters or fewer.';
     }
 
     if (fieldErrors.isNotEmpty) {
@@ -93,18 +96,29 @@ class SettingsCubit extends Cubit<SettingsState> {
         UpdateProfileParams(
           firstname: trimmedFirst,
           lastname: trimmedLast,
+          bio: trimmedBio,
         ),
       );
       emit(
         state.copyWith(
           status: SettingsStatus.saveSuccess,
           profile: profile,
-          successMessage: 'Đã cập nhật hồ sơ.',
+          successMessage: 'Profile updated.',
           clearFailure: true,
           clearFieldErrors: true,
         ),
       );
     } on Failure catch (failure) {
+      if (failure.isAuthFailure) {
+        emit(
+          state.copyWith(
+            status: SettingsStatus.unauthorized,
+            failure: failure,
+            clearFieldErrors: true,
+          ),
+        );
+        return;
+      }
       emit(
         state.copyWith(
           status: SettingsStatus.saveFailure,
@@ -118,21 +132,11 @@ class SettingsCubit extends Cubit<SettingsState> {
           status: SettingsStatus.saveFailure,
           failure: const Failure(
             code: FailureCode.networkError,
-            message: 'Không thể cập nhật hồ sơ.',
+            message: 'Unable to update profile.',
           ),
         ),
       );
     }
-  }
-
-  Future<void> logout() async {
-    emit(
-      state.copyWith(
-        status: SettingsStatus.loggingOut,
-        clearFailure: true,
-      ),
-    );
-    await _logoutProfileUseCase();
   }
 
   Map<String, String> _mapValidationErrors(Failure failure) {
@@ -148,6 +152,9 @@ class SettingsCubit extends Cubit<SettingsState> {
     }
     if (message.contains('lastname') || message.contains('last name')) {
       errors['lastname'] = failure.message;
+    }
+    if (message.contains('bio')) {
+      errors['bio'] = failure.message;
     }
 
     return errors;

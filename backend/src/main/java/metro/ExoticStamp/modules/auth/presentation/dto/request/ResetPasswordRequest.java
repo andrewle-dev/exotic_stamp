@@ -3,6 +3,7 @@ package metro.ExoticStamp.modules.auth.presentation.dto.request;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import metro.ExoticStamp.modules.auth.domain.PasswordPolicy;
 
 public class ResetPasswordRequest {
 
@@ -15,7 +16,7 @@ public class ResetPasswordRequest {
     private String otp;
 
     @NotBlank
-    @Size(min = 8)
+    @Size(min = PasswordPolicy.MIN_LENGTH, max = PasswordPolicy.MAX_LENGTH)
     private String newPassword;
 
     public String getEmail() {

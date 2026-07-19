@@ -44,6 +44,7 @@ class AppButton extends StatelessWidget {
       AppButtonVariant.outlined => SecondaryButton(
           label: label,
           onPressed: onPressed,
+          isLoading: isLoading,
           expand: expand,
           icon: icon,
         ),

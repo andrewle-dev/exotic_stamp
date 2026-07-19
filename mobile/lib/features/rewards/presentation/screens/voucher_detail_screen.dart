@@ -6,6 +6,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../../../../shared/widgets/app_error_view.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
 import '../../domain/entities/user_reward.dart';
@@ -59,10 +60,9 @@ class _VoucherDetailView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundWhite,
-        foregroundColor: AppColors.textPrimary,
-        title: const Text('Chi tiết Voucher'),
+      appBar: const AppSecondaryAppBar(
+        title: 'Chi tiết Voucher',
+        showBottomDivider: false,
       ),
       body: BlocConsumer<VoucherDetailCubit, VoucherDetailState>(
         listenWhen: (previous, current) =>
@@ -89,10 +89,7 @@ class _VoucherDetailView extends StatelessWidget {
               if (detail == null) {
                 return const AppLoadingView();
               }
-              return _VoucherDetailBody(
-                detail: detail,
-                isRedeeming: state.status == VoucherDetailStatus.redeeming,
-              );
+              return _VoucherDetailBody(detail: detail);
             case VoucherDetailStatus.failure:
               return AppErrorView(
                 message:
@@ -107,34 +104,17 @@ class _VoucherDetailView extends StatelessWidget {
 }
 
 class _VoucherDetailBody extends StatelessWidget {
-  const _VoucherDetailBody({
-    required this.detail,
-    required this.isRedeeming,
-  });
+  const _VoucherDetailBody({required this.detail});
 
   final VoucherDetail detail;
-  final bool isRedeeming;
 
   void _saveVoucher(BuildContext context) {
     if (detail.voucherCode != null) {
       Clipboard.setData(ClipboardData(text: detail.voucherCode!));
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Đã lưu voucher vào bộ nhớ tạm.')),
+      const SnackBar(content: Text('Đã sao chép mã đổi quà.')),
     );
-  }
-
-  Future<void> _redeem(BuildContext context) async {
-    await context.read<VoucherDetailCubit>().redeem();
-    if (!context.mounted) {
-      return;
-    }
-    final next = context.read<VoucherDetailCubit>().state;
-    if (next.detail?.status == UserRewardStatus.used) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đổi quà thành công!')),
-      );
-    }
   }
 
   @override
@@ -160,7 +140,7 @@ class _VoucherDetailBody extends StatelessWidget {
               const SizedBox(height: AppSpacing.xl),
             if (detail.status == UserRewardStatus.pending)
               Text(
-                'Phần thưởng đang chờ mã voucher từ máy chủ. Vui lòng quay lại sau.',
+                'Phần thưởng đang chờ mã voucher. Vui lòng quay lại sau.',
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -173,7 +153,7 @@ class _VoucherDetailBody extends StatelessWidget {
                     ClipboardData(text: detail.voucherCode!),
                   );
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Đã sao chép mã voucher.')),
+                    const SnackBar(content: Text('Đã sao chép mã đổi quà.')),
                   );
                 },
               ),
@@ -200,7 +180,7 @@ class _VoucherDetailBody extends StatelessWidget {
             const SizedBox(height: AppSpacing.xxl),
             if (detail.showVoucherCode)
               OutlinedButton(
-                onPressed: disabled || isRedeeming ? null : () => _saveVoucher(context),
+                onPressed: disabled ? null : () => _saveVoucher(context),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primaryBlue,
                   side: const BorderSide(color: AppColors.primaryBlue),
@@ -209,32 +189,9 @@ class _VoucherDetailBody extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                child: const Text('Lưu Voucher'),
+                child: const Text('Sao chép mã đổi quà'),
               ),
-            if (detail.showRedeemCta) const SizedBox(height: AppSpacing.md),
-            if (detail.showRedeemCta)
-              ElevatedButton(
-                onPressed: isRedeeming ? null : () => _redeem(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  foregroundColor: AppColors.backgroundWhite,
-                  disabledBackgroundColor: AppColors.border,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                child: isRedeeming
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.backgroundWhite,
-                        ),
-                      )
-                    : const Text('Đổi quà ngay'),
-              ),
+            // Redeem mutation intentionally omitted: backend returns 410.
           ],
         ),
       ),

@@ -15,20 +15,43 @@ class RewardUnlockedCelebrationHeader extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 88,
-          height: 88,
+          width: 112,
+          height: 112,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.blueTint,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.35),
-              width: 2,
+            gradient: RadialGradient(
+              colors: [
+                AppColors.blueTint,
+                AppColors.blueSurface.withValues(alpha: 0.7),
+                AppColors.backgroundWhite.withValues(alpha: 0),
+              ],
+              stops: const [0.0, 0.55, 1.0],
             ),
           ),
-          child: const Icon(
-            Icons.celebration_rounded,
-            size: 48,
-            color: AppColors.primaryBlue,
+          child: Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.backgroundWhite,
+                  AppColors.blueTint,
+                ],
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.35),
+                width: 2,
+              ),
+            ),
+            child: const Icon(
+              Icons.celebration_rounded,
+              size: 48,
+              color: AppColors.primaryBlue,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.xl),
@@ -70,7 +93,14 @@ class RewardUnlockedCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: AppColors.backgroundWhite,
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.backgroundWhite,
+            AppColors.blueSurface,
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.primaryBlue, width: 2),
         boxShadow: const [

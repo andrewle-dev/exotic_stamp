@@ -73,7 +73,7 @@ void main() {
     expect(find.text('Coffee Voucher'), findsWidgets);
     expect(find.text('Milestones sync delayed'), findsOneWidget);
     expect(find.text('No vouchers yet'), findsNothing);
-    expect(find.text('Redeem'), findsOneWidget);
+    expect(find.text('Redeem code'), findsOneWidget);
   });
 
   testWidgets('milestone timeline renders backend claim status only',

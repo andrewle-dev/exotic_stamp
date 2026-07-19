@@ -47,7 +47,9 @@ void main() {
     expect(find.text('#152'), findsNothing);
     expect(find.text('12/24'), findsNothing);
     expect(
-      find.text('Stats will appear when the backend provides profile data.'),
+      find.text(
+        'Your stamp stats will show up here once you’ve started collecting.',
+      ),
       findsOneWidget,
     );
     expect(find.text('0'), findsNothing);

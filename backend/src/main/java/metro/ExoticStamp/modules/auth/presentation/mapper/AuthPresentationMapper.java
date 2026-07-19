@@ -1,11 +1,13 @@
 package metro.ExoticStamp.modules.auth.presentation.mapper;
 
+import metro.ExoticStamp.modules.auth.application.command.ChangePasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.LoginCommand;
 import metro.ExoticStamp.modules.auth.application.command.RegisterCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResetPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.view.AuthUserView;
 import metro.ExoticStamp.modules.auth.application.view.AuthView;
+import metro.ExoticStamp.modules.auth.presentation.dto.request.ChangePasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ForgotPasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.LoginRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.RegisterRequest;
@@ -48,6 +50,15 @@ public class AuthPresentationMapper {
                 .email(req.getEmail())
                 .otp(req.getOtp())
                 .newPassword(req.getNewPassword())
+                .build();
+    }
+
+    public ChangePasswordCommand toChangePasswordCommand(ChangePasswordRequest req, String ipAddress) {
+        return ChangePasswordCommand.builder()
+                .currentPassword(req.getCurrentPassword())
+                .newPassword(req.getNewPassword())
+                .confirmNewPassword(req.getConfirmNewPassword())
+                .ipAddress(ipAddress)
                 .build();
     }
 

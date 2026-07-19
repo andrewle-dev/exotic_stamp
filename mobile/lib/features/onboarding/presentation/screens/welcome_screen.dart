@@ -9,6 +9,7 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
 import '../../../../shared/widgets/app_action_buttons.dart';
+import '../../../../shared/widgets/app_logo.dart';
 
 /// First-launch onboarding aligned with `visily-welcome.png`.
 class WelcomeScreen extends StatelessWidget {
@@ -34,7 +35,7 @@ class WelcomeScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  const _BrandMark(),
+                  const AppLogo(size: 40),
                   const Spacer(),
                   TextButton(
                     onPressed: () => _completeOnboarding(context),
@@ -115,26 +116,6 @@ class WelcomeScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _BrandMark extends StatelessWidget {
-  const _BrandMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.textPrimary,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Icon(
-        Icons.bolt_rounded,
-        color: AppColors.backgroundWhite,
       ),
     );
   }

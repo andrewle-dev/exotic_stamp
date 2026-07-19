@@ -106,8 +106,11 @@ void main() {
 
     expect(find.text('Stations'), findsOneWidget);
     expect(find.text('Station Directory'), findsOneWidget);
+    expect(find.text('Sorted by distance'), findsNothing);
+    expect(find.byIcon(Icons.filter_alt_outlined), findsOneWidget);
     expect(find.byType(StationDirectoryRow), findsOneWidget);
     expect(find.text('Ben Thanh'), findsWidgets);
+    expect(find.text('View Map'), findsOneWidget);
   });
 
   testWidgets('shows empty search state', (tester) async {

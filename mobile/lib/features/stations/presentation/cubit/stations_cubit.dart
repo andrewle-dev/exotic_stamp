@@ -6,6 +6,7 @@ import '../../domain/entities/station.dart';
 import '../../domain/usecases/get_lines_usecase.dart';
 import '../../domain/usecases/get_stations_usecase.dart';
 import '../utils/stations_line_filter.dart';
+import '../utils/stations_list_presenter.dart';
 import 'stations_state.dart';
 
 class StationsCubit extends Cubit<StationsState> {
@@ -68,6 +69,113 @@ class StationsCubit extends Cubit<StationsState> {
     await _reloadStations();
   }
 
+  void updateSortMode(StationsSortMode sortMode) {
+    final next = state.copyWith(sortMode: sortMode);
+    emit(
+      next.copyWith(
+        status: _resolveLoadedStatus(
+          stations: next.stations,
+          searchQuery: next.searchQuery,
+          collectionFilter: next.collectionFilter,
+          availabilityFilter: next.availabilityFilter,
+        ),
+      ),
+    );
+  }
+
+  void updateCollectionFilter(StationsCollectionFilter filter) {
+    final next = state.copyWith(collectionFilter: filter);
+    emit(
+      next.copyWith(
+        status: _resolveLoadedStatus(
+          stations: next.stations,
+          searchQuery: next.searchQuery,
+          collectionFilter: next.collectionFilter,
+          availabilityFilter: next.availabilityFilter,
+        ),
+      ),
+    );
+  }
+
+  void updateAvailabilityFilter(StationsAvailabilityFilter filter) {
+    final next = state.copyWith(availabilityFilter: filter);
+    emit(
+      next.copyWith(
+        status: _resolveLoadedStatus(
+          stations: next.stations,
+          searchQuery: next.searchQuery,
+          collectionFilter: next.collectionFilter,
+          availabilityFilter: next.availabilityFilter,
+        ),
+      ),
+    );
+  }
+
+  Future<void> applyFilterSheet({
+    required StationsSortMode sortMode,
+    required String selectedLineId,
+    required StationsCollectionFilter collectionFilter,
+    required StationsAvailabilityFilter availabilityFilter,
+  }) async {
+    final lineChanged = selectedLineId != state.selectedLineId;
+    emit(
+      state.copyWith(
+        sortMode: sortMode,
+        collectionFilter: collectionFilter,
+        availabilityFilter: availabilityFilter,
+        selectedLineId: selectedLineId,
+        status: lineChanged ? StationsStatus.loading : state.status,
+        clearFailure: true,
+      ),
+    );
+    if (lineChanged) {
+      await _reloadStations();
+      return;
+    }
+    emit(
+      state.copyWith(
+        status: _resolveLoadedStatus(
+          stations: state.stations,
+          searchQuery: state.searchQuery,
+          collectionFilter: collectionFilter,
+          availabilityFilter: availabilityFilter,
+        ),
+      ),
+    );
+  }
+
+  Future<void> resetFilters() async {
+    final shouldReload =
+        state.selectedLineId != StationsLineFilter.allLines;
+    final defaultSort = state.hasGpsCoordinates
+        ? StationsSortMode.distance
+        : StationsSortMode.lineOrder;
+    emit(
+      state.copyWith(
+        sortMode: defaultSort,
+        collectionFilter: StationsCollectionFilter.all,
+        availabilityFilter: StationsAvailabilityFilter.all,
+        selectedLineId: StationsLineFilter.allLines,
+        status: shouldReload ? StationsStatus.loading : state.status,
+        clearFailure: true,
+      ),
+    );
+    if (shouldReload) {
+      await _reloadStations();
+      return;
+    }
+    emit(
+      state.copyWith(
+        status: _resolveLoadedStatus(
+          stations: state.stations,
+          searchQuery: state.searchQuery,
+          collectionFilter: StationsCollectionFilter.all,
+          availabilityFilter: StationsAvailabilityFilter.all,
+        ),
+      ),
+    );
+  }
+
   void updateUserLocation({required double latitude, required double longitude}) {
     emit(
       state.copyWith(
@@ -77,19 +185,29 @@ class StationsCubit extends Cubit<StationsState> {
         status: _resolveLoadedStatus(
           stations: state.stations,
           searchQuery: state.searchQuery,
+          collectionFilter: state.collectionFilter,
+          availabilityFilter: state.availabilityFilter,
         ),
       ),
     );
   }
 
   void markGpsDisabled() {
+    final nextSort = state.sortMode == StationsSortMode.distance
+        ? StationsSortMode.lineOrder
+        : state.sortMode;
     emit(
       state.copyWith(
         gpsStatus: StationsGpsStatus.disabled,
+        sortMode: nextSort,
         clearUserLocation: true,
-        status: state.stations.isEmpty && state.searchQuery.isNotEmpty
-            ? StationsStatus.emptySearch
-            : StationsStatus.gpsDisabled,
+        status: _resolveLoadedStatus(
+          stations: state.stations,
+          searchQuery: state.searchQuery,
+          collectionFilter: state.collectionFilter,
+          availabilityFilter: state.availabilityFilter,
+          forceGpsDisabled: true,
+        ),
       ),
     );
   }
@@ -129,6 +247,8 @@ class StationsCubit extends Cubit<StationsState> {
     final status = _resolveLoadedStatus(
       stations: stations,
       searchQuery: state.searchQuery,
+      collectionFilter: state.collectionFilter,
+      availabilityFilter: state.availabilityFilter,
     );
     return state.copyWith(
       status: status,
@@ -142,11 +262,24 @@ class StationsCubit extends Cubit<StationsState> {
   StationsStatus _resolveLoadedStatus({
     required List<Station> stations,
     required String searchQuery,
+    required StationsCollectionFilter collectionFilter,
+    required StationsAvailabilityFilter availabilityFilter,
+    bool forceGpsDisabled = false,
   }) {
     if (stations.isEmpty && searchQuery.trim().isNotEmpty) {
       return StationsStatus.emptySearch;
     }
-    if (state.gpsStatus == StationsGpsStatus.disabled) {
+
+    final visible = StationsListPresenter.applyClientFilters(
+      stations: stations,
+      collectionFilter: collectionFilter,
+      availabilityFilter: availabilityFilter,
+    );
+    if (stations.isNotEmpty && visible.isEmpty) {
+      return StationsStatus.emptyFilter;
+    }
+
+    if (forceGpsDisabled || state.gpsStatus == StationsGpsStatus.disabled) {
       return StationsStatus.gpsDisabled;
     }
     return StationsStatus.loaded;

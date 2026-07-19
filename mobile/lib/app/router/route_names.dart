@@ -34,6 +34,12 @@ abstract final class RouteNames {
   static String voucherDetail(String voucherId) =>
       '/rewards/vouchers/$voucherId';
   static const profile = '/profile';
+  static const personalInformation = '/profile/personal-information';
+  static const privacySecurity = '/profile/privacy-security';
+  static const changePassword = '/profile/privacy-security/change-password';
+  static const helpCenter = '/profile/help';
+
+  /// Legacy alias — redirects to [personalInformation].
   static const settings = '/profile/settings';
   static const apiDebug = '/profile/api-debug';
   static const adminNfcWriter = '/admin/nfc-writer';

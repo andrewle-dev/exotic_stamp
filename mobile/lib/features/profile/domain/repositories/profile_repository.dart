@@ -11,4 +11,7 @@ abstract class ProfileRepository {
   });
 
   Future<void> logout();
+
+  /// Ends every session for the current user, including this device.
+  Future<void> logoutAll();
 }

@@ -8,12 +8,17 @@ class ErrorMapper {
 
   static const backendCodeMap = <String, FailureCode>{
     'INVALID_CREDENTIALS': FailureCode.invalidCredentials,
+    'CURRENT_PASSWORD_INCORRECT': FailureCode.invalidCredentials,
+    'PASSWORD_CONFIRMATION_MISMATCH': FailureCode.validationError,
+    'NEW_PASSWORD_SAME_AS_CURRENT': FailureCode.validationError,
+    'PASSWORD_POLICY_VIOLATION': FailureCode.validationError,
     'ACCOUNT_NOT_VERIFIED': FailureCode.accountNotVerified,
     'OTP_EXPIRED': FailureCode.validationError,
     'RESEND_COOLDOWN': FailureCode.validationError,
     'TOKEN_EXPIRED': FailureCode.tokenExpired,
     'EMAIL_TAKEN': FailureCode.emailTaken,
     'VALIDATION_ERROR': FailureCode.validationError,
+    'INVALID_INPUT': FailureCode.validationError,
     'OTP_INVALID': FailureCode.validationError,
     'UNAUTHORIZED': FailureCode.unauthorized,
     'INVALID_TOKEN': FailureCode.unauthorized,
@@ -44,7 +49,7 @@ class ErrorMapper {
     if (_isNetworkFailure(exception)) {
       return const Failure(
         code: FailureCode.networkError,
-        message: 'Không thể kết nối máy chủ. Kiểm tra mạng và thử lại.',
+        message: 'Không thể kết nối. Kiểm tra mạng và thử lại.',
       );
     }
 
@@ -131,7 +136,7 @@ class ErrorMapper {
       FailureCode.redeemNotSupported =>
         'Đổi voucher trong app chưa được hỗ trợ.',
       FailureCode.networkError =>
-        'Không thể kết nối máy chủ. Kiểm tra mạng và thử lại.',
+        'Không thể kết nối. Kiểm tra mạng và thử lại.',
       FailureCode.unknown => 'Đã xảy ra lỗi không xác định.',
     };
   }

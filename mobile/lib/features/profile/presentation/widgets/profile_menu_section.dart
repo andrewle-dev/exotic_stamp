@@ -8,14 +8,18 @@ import '../../../../app/theme/app_text_styles.dart';
 class ProfileMenuSection extends StatelessWidget {
   const ProfileMenuSection({
     super.key,
-    required this.onSettingsTap,
+    required this.onPersonalInformationTap,
+    required this.onPrivacySecurityTap,
+    required this.onHelpCenterTap,
     required this.onLogoutTap,
     this.onApiDebugTap,
     this.onAdminNfcWriterTap,
     this.showAdminTools = false,
   });
 
-  final VoidCallback onSettingsTap;
+  final VoidCallback onPersonalInformationTap;
+  final VoidCallback onPrivacySecurityTap;
+  final VoidCallback onHelpCenterTap;
   final VoidCallback onLogoutTap;
   final VoidCallback? onApiDebugTap;
   final VoidCallback? onAdminNfcWriterTap;
@@ -34,13 +38,13 @@ class ProfileMenuSection extends StatelessWidget {
           _MenuTile(
             icon: Icons.person_outline_rounded,
             title: 'Personal Information',
-            onTap: onSettingsTap,
+            onTap: onPersonalInformationTap,
           ),
           const Divider(height: 1, color: AppColors.border),
           _MenuTile(
             icon: Icons.shield_outlined,
             title: 'Privacy & Security',
-            onTap: onSettingsTap,
+            onTap: onPrivacySecurityTap,
           ),
           if (onApiDebugTap != null) ...[
             const Divider(height: 1, color: AppColors.border),
@@ -62,7 +66,7 @@ class ProfileMenuSection extends StatelessWidget {
           _MenuTile(
             icon: Icons.help_outline_rounded,
             title: 'Help Center',
-            onTap: () {},
+            onTap: onHelpCenterTap,
           ),
           const Divider(height: 1, color: AppColors.border),
           _MenuTile(

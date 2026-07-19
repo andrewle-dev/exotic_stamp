@@ -55,7 +55,7 @@ void main() {
     expect(find.text('Chụp ảnh'), findsOneWidget);
     expect(find.text('Chia sẻ'), findsOneWidget);
     expect(
-      find.textContaining('không tải ảnh lên máy chủ'),
+      find.textContaining('không tải ảnh lên dịch vụ'),
       findsOneWidget,
     );
   });

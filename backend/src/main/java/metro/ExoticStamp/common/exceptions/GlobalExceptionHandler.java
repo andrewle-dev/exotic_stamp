@@ -3,9 +3,13 @@ package metro.ExoticStamp.common.exceptions;
 import metro.ExoticStamp.common.response.ErrorResponse;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
+import metro.ExoticStamp.modules.auth.domain.exception.CurrentPasswordIncorrectException;
+import metro.ExoticStamp.modules.auth.domain.exception.NewPasswordSameAsCurrentException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpMaxAttemptsExceededException;
+import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMismatchException;
+import metro.ExoticStamp.modules.auth.domain.exception.PasswordPolicyViolationException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
@@ -13,6 +17,7 @@ import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedExcepti
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
 import metro.ExoticStamp.common.exceptions.storage.FileTooLargeException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
+import metro.ExoticStamp.common.exceptions.storage.InvalidImageDimensionsException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidImageTypeException;
 import metro.ExoticStamp.common.exceptions.storage.StorageWriteFailedException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignArchivedException;
@@ -278,6 +283,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidImageType(InvalidImageTypeException ex, HttpServletRequest req) {
         log.warn("[400] {}", ex.getMessage());
         return build(400, "INVALID_IMAGE_TYPE", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(InvalidImageDimensionsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidImageDimensions(
+            InvalidImageDimensionsException ex, HttpServletRequest req) {
+        log.warn("[400] {}", ex.getMessage());
+        return build(400, "INVALID_IMAGE_DIMENSIONS", ex.getMessage(), req);
     }
 
     @ExceptionHandler(FileTooLargeException.class)
@@ -593,6 +605,42 @@ public class GlobalExceptionHandler {
     ) {
         log.warn("[401] Invalid credentials: {}", ex.getMessage());
         return build(401, "INVALID_CREDENTIALS", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(CurrentPasswordIncorrectException.class)
+    public ResponseEntity<ErrorResponse> handleCurrentPasswordIncorrect(
+            CurrentPasswordIncorrectException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[400] Current password incorrect at {}", req.getRequestURI());
+        return build(400, "CURRENT_PASSWORD_INCORRECT", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(PasswordConfirmationMismatchException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordConfirmationMismatch(
+            PasswordConfirmationMismatchException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[400] Password confirmation mismatch at {}", req.getRequestURI());
+        return build(400, "PASSWORD_CONFIRMATION_MISMATCH", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(NewPasswordSameAsCurrentException.class)
+    public ResponseEntity<ErrorResponse> handleNewPasswordSameAsCurrent(
+            NewPasswordSameAsCurrentException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[400] New password same as current at {}", req.getRequestURI());
+        return build(400, "NEW_PASSWORD_SAME_AS_CURRENT", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(PasswordPolicyViolationException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordPolicyViolation(
+            PasswordPolicyViolationException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[400] Password policy violation at {}", req.getRequestURI());
+        return build(400, "PASSWORD_POLICY_VIOLATION", ex.getMessage(), req);
     }
 
     @ExceptionHandler(TokenExpiredException.class)

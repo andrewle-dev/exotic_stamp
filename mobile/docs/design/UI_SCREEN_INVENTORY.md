@@ -29,15 +29,18 @@
 
 ## 2. NFC-First Policy (Strict)
 
-Exotic Stamp is **NFC-first**. QR is **fallback only**.
+Exotic Stamp is **NFC-first**. For **MVP**, NFC is the **only visible collect flow**. QR collect remains **gated / intentionally hidden** and must not be restored by visual polish tasks.
 
 | Rule | Requirement |
 |------|-------------|
 | Default scan mode | **NFC** — never QR-first |
+| MVP visible collect | **NFC only** |
 | Primary UI copy | **"Chạm NFC"** / NFC tap language |
-| QR copy & placement | Secondary; only when NFC is unavailable or user explicitly chooses fallback |
+| QR collect | Gated (`ENABLE_QR_FLOW` / `ScanCapabilities.enableQrFlow`); not a public default path |
+| QR copy & placement | Do not surface QR collect CTAs while gated; if re-enabled later, secondary fallback only |
 | Scan implementation | Do **not** implement scan as QR-first |
 | Visual hierarchy | NFC tap affordance dominates; QR must not be the default tab or hero |
+| Visual polish | Must **not** restore QR collect UI |
 
 Applies to screens: Welcome, Home (scan CTA), Tap To Collect, Scan, Location Verification, Station Detail (collect CTA), Stamp Collected Success.
 
@@ -71,16 +74,21 @@ All Visily exports live under `docs/design/visily/` (flat — no nested subfolde
 
 ## 4. Bottom Navigation
 
-MVP user app tabs:
+MVP bottom navigation (canonical, 2026-07-18):
 
 ```text
 Home
-Book
-Scan
+Stamp (Book)
+Scan FAB (center)
 Stations
-Rewards
 Profile
 ```
+
+**Rewards is not a bottom-nav tab.** It is a **secondary screen** reached from:
+
+- Home → Claim Rewards shortcut
+- Stamp Collected Success / Reward CTA when available (reward unlock still backend-contract dependent — do not fake)
+- Profile entry if applicable
 
 Implementation target:
 
@@ -95,6 +103,8 @@ Rules:
 - Active tab uses `#01599D`.
 - Scan/collect action may use `#E83B28`.
 - Do not put backend calls in the shell widget.
+- Do not add a Rewards tab without a new product decision.
+- MVP collect UI is **NFC only**; QR collect stays gated and must not be restored by visual polish.
 
 ---
 
@@ -210,7 +220,7 @@ Critical rule:
 | Feature | `scan` |
 | Flutter screen | `ScanScreen` |
 | Source path | `lib/features/scan/presentation/screens/scan_screen.dart` |
-| Purpose | Collect station stamp. NFC is primary, QR is fallback. |
+| Purpose | Collect station stamp. NFC is primary; for MVP NFC is the only visible collect flow. QR collect is gated. |
 | API | `POST /api/v1/mobile/collection/collect` or backend-defined equivalent |
 
 Input to backend:
@@ -246,11 +256,12 @@ States:
 Critical rules:
 
 - Default scan mode must be **NFC**, not QR.
-- Primary copy: **"Chạm NFC"**; QR copy is secondary fallback only.
+- MVP: NFC is the **only visible collect flow**; QR collect stays gated — do not restore via visual polish.
+- Primary copy: **"Chạm NFC"**; do not surface QR collect CTAs while gated.
 - Do not implement scan as QR-first.
 - Do not mark collection success until backend confirms.
 - Every collect request must include idempotency key.
-- NFC copy and UX must dominate QR fallback.
+- NFC copy and UX must dominate any future QR fallback.
 
 ---
 
@@ -319,6 +330,18 @@ States:
 | Source path | `lib/features/rewards/presentation/screens/rewards_screen.dart` |
 | Purpose | Milestone progress and available vouchers. |
 | API | `GET /api/v1/mobile/rewards` |
+| Navigation | **Secondary screen — not a bottom-nav tab** (decided 2026-07-18) |
+
+Entry points:
+
+- Home → Claim Rewards shortcut
+- Stamp Collected Success / Reward CTA when available (unlock celebration still **BACKEND_CONTRACT_REQUIRED** — do not fake)
+- Profile entry if applicable
+
+Chrome:
+
+- Use secondary / back header (`AppScreenHeader.secondary`), not a top-level tab header.
+- Bottom nav remains Home \| Stamp \| Scan FAB \| Stations \| Profile (no Rewards highlight required).
 
 States:
 
@@ -332,6 +355,7 @@ Critical rules:
 
 - Reward availability must come from backend.
 - Claim/redeem cannot be local-only.
+- Do not add Rewards to bottom nav without a new product decision.
 
 ---
 
@@ -406,6 +430,7 @@ Required response data:
 - nextReward
 - newlyIssuedReward nullable
 
+> **API gap (2026-07-17):** `POST /api/v1/collection/collect` / `StampCollectResponse` does **not** return `newlyIssuedReward` or `nextReward`. Rewards are issued asynchronously (`StampCollectedEvent`). Success screen must not fake unlock until the contract adds a field (or an agreed poll/push path).
 Actions:
 
 - View Stamp Book
@@ -553,6 +578,8 @@ States:
 | Source path | `lib/features/rewards/presentation/screens/reward_unlocked_share_screen.dart` |
 | Purpose | Milestone reward celebration and sharing. |
 | API | Renders collect/reward response; optional share event tracking. |
+
+> **Reachability gap (2026-07-17):** Routes registered (`/rewards/share`, `/scan/reward-unlocked`) but production collect cannot open this screen — no unlock payload on collect. Prefer `/scan/reward-unlocked` once backend supports it. Debug preview: Profile → API Debug (debug builds only). **Do not fake unlock in UI.** Reward Unlocked remains **BACKEND_CONTRACT_REQUIRED** (confirmed 2026-07-18 polish decisions).
 
 States:
 

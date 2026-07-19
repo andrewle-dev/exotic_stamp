@@ -17,6 +17,7 @@ import '../../domain/entities/station_detail.dart';
 import '../../domain/usecases/get_station_detail_usecase.dart';
 import '../cubit/station_detail_cubit.dart';
 import '../cubit/station_detail_state.dart';
+import '../utils/station_map_launcher.dart';
 import '../widgets/nearby_places_section.dart';
 import '../widgets/station_action_row.dart';
 import '../widgets/station_collect_cta.dart';
@@ -177,7 +178,7 @@ class _StationDetailContent extends StatelessWidget {
                                   detail.longitude!,
                                 )
                             : null,
-                        onFavorite: () {},
+                        // Favorite omitted: no backend favorite-station API.
                         onVirtualTour: detail.virtualTourUrl != null
                             ? () => _openUrl(detail.virtualTourUrl!)
                             : null,
@@ -250,12 +251,10 @@ class _StationDetailContent extends StatelessWidget {
   }
 
   Future<void> _openDirections(double lat, double lng) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
+    await StationMapLauncher.openDirections(
+      latitude: lat,
+      longitude: lng,
     );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   Future<void> _openUrl(String url) async {

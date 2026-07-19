@@ -1,6 +1,7 @@
 package metro.ExoticStamp.modules.auth.application;
 
 import metro.ExoticStamp.infra.mail.MailService;
+import metro.ExoticStamp.modules.auth.application.command.ChangePasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.LoginCommand;
 import metro.ExoticStamp.modules.auth.application.command.RefreshTokenCommand;
@@ -18,12 +19,16 @@ import metro.ExoticStamp.modules.auth.application.view.AuthUserView;
 import metro.ExoticStamp.modules.auth.application.view.AuthView;
 import metro.ExoticStamp.modules.auth.application.view.IssuedAccessTokenView;
 import metro.ExoticStamp.modules.auth.config.AuthSecurityProperties;
+import metro.ExoticStamp.modules.auth.domain.PasswordPolicy;
 import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
+import metro.ExoticStamp.modules.auth.domain.exception.CurrentPasswordIncorrectException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
+import metro.ExoticStamp.modules.auth.domain.exception.NewPasswordSameAsCurrentException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpMaxAttemptsExceededException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
+import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMismatchException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
@@ -67,7 +72,9 @@ public class AuthCommandService {
     private static final String TOKEN_PREFIX_BEARER = "Bearer";
 
     private static final String AUDIT_TABLE_ACCESS_TOKENS = "access_tokens";
+    private static final String AUDIT_TABLE_USERS = "users";
     private static final String AUDIT_ACTION_LOGIN = "LOGIN";
+    private static final String AUDIT_ACTION_PASSWORD_CHANGED = "PASSWORD_CHANGED";
 
     private static final String OTP_CHARS = "0123456789";
     private static final SecureRandom RNG = new SecureRandom();
@@ -156,6 +163,8 @@ public class AuthCommandService {
         if (userAccountPort.existsByPhoneNumber(cmd.getPhoneNumber())) {
             throw new UserFieldAlreadyTakenException("phone", cmd.getPhoneNumber());
         }
+
+        PasswordPolicy.validatePlaintext(cmd.getPassword());
 
         User user = User.builder()
                 .firstname(cmd.getFirstname())
@@ -331,6 +340,7 @@ public class AuthCommandService {
         User user = userAccountPort.findByEmail(cmd.getEmail())
                 .orElseThrow(() -> new UserNotFoundException("email", cmd.getEmail()));
 
+        PasswordPolicy.validatePlaintext(cmd.getNewPassword());
         user.setPassword(passwordEncoder.encode(cmd.getNewPassword()));
         user.setPasswordUpdateAt(LocalDateTime.now());
         userAccountPort.save(user);
@@ -339,6 +349,57 @@ public class AuthCommandService {
         refreshTokenStore.revokeAllForUser(user.getId());
         bumpTokenVersionAndSyncRedis(user.getId());
         otpStore.delete(cmd.getEmail(), OtpType.FORGOT_PASSWORD);
+    }
+
+    /**
+     * Authenticated user changes their own password.
+     * Derives identity from {@code authenticatedUserId} only — never from the request body.
+     * On success, invalidates all sessions via the same path as logout-all / password-reset.
+     */
+    @Transactional
+    public void changePassword(UUID authenticatedUserId, ChangePasswordCommand cmd) {
+        if (cmd.getNewPassword() == null || cmd.getConfirmNewPassword() == null
+                || !cmd.getNewPassword().equals(cmd.getConfirmNewPassword())) {
+            throw new PasswordConfirmationMismatchException();
+        }
+
+        PasswordPolicy.validatePlaintext(cmd.getNewPassword());
+
+        User user = userAccountPort.findById(authenticatedUserId)
+                .orElseThrow(() -> new UserNotFoundException(authenticatedUserId));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new UserNotActiveException();
+        }
+
+        if (!passwordEncoder.matches(cmd.getCurrentPassword(), user.getPassword())) {
+            log.warn("[Auth] change-password failed: current password incorrect userId={}", authenticatedUserId);
+            throw new CurrentPasswordIncorrectException();
+        }
+
+        // After current-password verification: reject reuse of the same password.
+        if (cmd.getNewPassword().equals(cmd.getCurrentPassword())
+                || passwordEncoder.matches(cmd.getNewPassword(), user.getPassword())) {
+            throw new NewPasswordSameAsCurrentException();
+        }
+
+        user.setPassword(passwordEncoder.encode(cmd.getNewPassword()));
+        user.setPasswordUpdateAt(LocalDateTime.now());
+        userAccountPort.save(user);
+
+        // Same invalidation path as resetPassword / logoutAll — do not invent a second mechanism.
+        accessTokenRepository.revokeAllByUserId(user.getId(), AccessToken.REASON_PASSWORD_CHANGED);
+        refreshTokenStore.revokeAllForUser(user.getId());
+        bumpTokenVersionAndSyncRedis(user.getId());
+
+        auditLogService.log(
+                user.getId(),
+                AUDIT_TABLE_USERS,
+                AUDIT_ACTION_PASSWORD_CHANGED,
+                null,
+                Map.of("sessionsRevoked", true),
+                cmd.getIpAddress()
+        );
     }
 
     @Transactional

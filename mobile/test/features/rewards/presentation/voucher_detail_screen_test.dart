@@ -33,7 +33,7 @@ void main() {
       when(() => cubit.redeem()).thenAnswer((_) async {});
     });
 
-    testWidgets('shows code and redeem CTA', (tester) async {
+    testWidgets('shows redeem code without online redeem CTA', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: VoucherDetailScreen(
@@ -45,9 +45,9 @@ void main() {
       await tester.pump();
 
       expect(find.text('ABC-123'), findsOneWidget);
-      expect(find.text('Đổi quà ngay'), findsOneWidget);
-      expect(find.text('Lưu Voucher'), findsOneWidget);
-      expect(find.text('Xuất trình mã tại quầy'), findsNothing);
+      expect(find.text('Redeem code'), findsOneWidget);
+      expect(find.text('Đổi quà ngay'), findsNothing);
+      expect(find.text('Sao chép mã đổi quà'), findsOneWidget);
     });
   });
 

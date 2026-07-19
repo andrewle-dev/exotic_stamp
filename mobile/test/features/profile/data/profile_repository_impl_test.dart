@@ -112,4 +112,15 @@ void main() {
     verify(() => remoteDataSource.logout()).called(1);
     verify(() => apiClient.clearSession()).called(1);
   });
+
+  test('logoutAll clears token and cookies even if backend logout-all fails',
+      () async {
+    when(() => remoteDataSource.logoutAll()).thenThrow(Exception('network'));
+    when(() => apiClient.clearSession()).thenAnswer((_) async {});
+
+    await repository.logoutAll();
+
+    verify(() => remoteDataSource.logoutAll()).called(1);
+    verify(() => apiClient.clearSession()).called(1);
+  });
 }

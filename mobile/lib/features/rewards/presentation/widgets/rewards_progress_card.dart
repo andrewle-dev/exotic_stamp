@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../domain/entities/rewards_overview.dart';
@@ -30,8 +31,15 @@ class RewardsProgressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: AppColors.blueTint,
-        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.blueTint,
+            AppColors.blueSurface,
+          ],
+        ),
+        borderRadius: AppRadius.xxlAll,
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
@@ -157,7 +165,7 @@ class RewardsProgressCard extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
                 color: AppColors.backgroundWhite.withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: AppRadius.lgAll,
               ),
               child: Text.rich(
                 TextSpan(

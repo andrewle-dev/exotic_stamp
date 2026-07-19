@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_action_buttons.dart';
 
+/// Scan-flow primary CTA — visual tokens aligned with [AppPrimaryButton].
 class ScanPrimaryButton extends StatelessWidget {
   const ScanPrimaryButton({
     required this.label,
@@ -18,30 +21,15 @@ class ScanPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = ElevatedButton(
+    return AppPrimaryButton(
+      label: label,
       onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: AppColors.backgroundWhite,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl,
-          vertical: AppSpacing.lg,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-      child: Text(label, style: AppTextStyles.labelLarge),
+      expand: expand,
     );
-
-    if (!expand) {
-      return button;
-    }
-
-    return SizedBox(width: double.infinity, child: button);
   }
 }
 
+/// Scan-flow outline CTA — visual tokens aligned with [AppSecondaryButton].
 class ScanOutlineButton extends StatelessWidget {
   const ScanOutlineButton({
     required this.label,
@@ -54,20 +42,9 @@ class ScanOutlineButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primaryBlue,
-          side: const BorderSide(color: AppColors.primaryBlue),
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        child: Text(label),
-      ),
+    return AppSecondaryButton(
+      label: label,
+      onPressed: onPressed,
     );
   }
 }
@@ -91,7 +68,7 @@ class ScanHeroCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.xxl),
       decoration: BoxDecoration(
         color: AppColors.blueTint,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: AppRadius.xxlAll,
         border: Border.all(color: AppColors.border),
       ),
       child: Column(

@@ -27,7 +27,21 @@ class HomeCollectionCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: AppShadow.cardDecoration(borderRadius: AppRadius.xlAll),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.blueTint,
+            AppColors.blueSurface,
+            AppColors.backgroundWhite,
+          ],
+          stops: [0.0, 0.55, 1.0],
+        ),
+        borderRadius: AppRadius.xxlAll,
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadow.softCard,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -61,7 +75,7 @@ class HomeCollectionCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.blueTint,
+                  color: AppColors.backgroundWhite.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.border),
                 ),

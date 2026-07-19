@@ -46,7 +46,7 @@ class StationCollectCta extends StatelessWidget {
               const SizedBox(width: AppSpacing.lg),
               Expanded(
                 child: Text(
-                  'COLLECT STATION STAMP',
+                  'Collect this stamp',
                   style: AppTextStyles.buttonLabel.copyWith(
                     letterSpacing: 0.6,
                     fontSize: 15,

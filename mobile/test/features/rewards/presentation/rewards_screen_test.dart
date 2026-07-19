@@ -64,5 +64,19 @@ void main() {
     expect(find.text('Silver Digital Sticker Pack'), findsWidgets);
     expect(find.text('Redeem'), findsNothing);
     expect(find.text('Claim'), findsNothing);
+    expect(find.text('Rewards'), findsOneWidget);
+  });
+
+  testWidgets('rewards header shows back button for secondary navigation',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RewardsScreen(cubit: cubit),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Rewards'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
   });
 }

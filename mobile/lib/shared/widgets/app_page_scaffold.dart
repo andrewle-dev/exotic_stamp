@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/router/route_names.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_dimensions.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_typography.dart';
+import 'app_back_button.dart';
 
 /// Mobile-safe page shell with consistent background and padding.
 class AppPageScaffold extends StatelessWidget {
@@ -15,6 +17,7 @@ class AppPageScaffold extends StatelessWidget {
     this.actions,
     this.showBackButton = false,
     this.onBack,
+    this.fallbackRoute = RouteNames.home,
     this.bottomNavigationBar,
     this.floatingActionButton,
     this.floatingActionButtonLocation,
@@ -31,6 +34,7 @@ class AppPageScaffold extends StatelessWidget {
   final List<Widget>? actions;
   final bool showBackButton;
   final VoidCallback? onBack;
+  final String fallbackRoute;
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation? floatingActionButtonLocation;
@@ -84,9 +88,9 @@ class AppPageScaffold extends StatelessWidget {
               elevation: 0,
               title: Text(title!, style: AppTextStyles.appTitle),
               leading: showBackButton
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      onPressed: onBack ?? () => Navigator.maybePop(context),
+                  ? AppBackButton(
+                      onPressed: onBack,
+                      fallbackRoute: fallbackRoute,
                     )
                   : null,
               actions: actions,

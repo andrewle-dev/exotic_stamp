@@ -18,6 +18,7 @@ import '../../domain/usecases/get_rewards_overview_usecase.dart';
 import '../cubit/rewards_cubit.dart';
 import '../cubit/rewards_state.dart';
 import '../widgets/milestone_timeline_item.dart';
+import '../widgets/milestones_bottom_sheet.dart';
 import '../widgets/reward_voucher_card.dart';
 import '../widgets/rewards_progress_card.dart';
 import '../widgets/rewards_refresh_listener.dart';
@@ -166,7 +167,7 @@ class _RewardsContent extends StatelessWidget {
           if (showPendingBanner)
             const _InfoBanner(
               message:
-                  'A reward is pending fulfillment from the server. Pull to refresh.',
+                  'Your reward is almost ready. Pull to refresh.',
               color: AppColors.blueTint,
               textColor: AppColors.primaryBlue,
             ),
@@ -178,7 +179,14 @@ class _RewardsContent extends StatelessWidget {
             RewardsSectionHeader(
               title: 'Road to $goalTotal',
               actionLabel: 'View Milestones',
-              onActionTap: () {},
+              onActionTap: () => showMilestonesBottomSheet(
+                context: context,
+                milestones: milestones,
+                rewardForMilestone: _rewardForMilestone,
+                onOpenReward: (reward) => context.push(
+                  RouteNames.voucherDetail(reward.id),
+                ),
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             ...List.generate(milestones.length, (index) {
@@ -207,8 +215,8 @@ class _RewardsContent extends StatelessWidget {
             AppEmptyState(
               title: 'No vouchers yet',
               message: showNoRewardsBanner
-                  ? 'Keep collecting stamps to unlock server-issued rewards.'
-                  : 'Pull down to refresh reward data from the server.',
+                  ? 'Keep collecting stamps to unlock rewards.'
+                  : 'Pull down to refresh your rewards.',
               icon: Icons.card_giftcard_outlined,
             )
           else

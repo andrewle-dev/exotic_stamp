@@ -44,7 +44,7 @@ class AdminPublicUploadControllerTest {
     @Test
     @WithMockUser(authorities = {"ROLE_ADMIN", "UPLOAD_PUBLIC_ASSET"})
     void uploadPng_success() throws Exception {
-        when(publicAssetUploadService.uploadPublicAsset(any())).thenReturn(
+        when(publicAssetUploadService.uploadPublicAsset(any(), any())).thenReturn(
                 PublicAssetUploadView.builder().url("http://localhost:8080/uploads/public/abc.png").build());
 
         MockMultipartFile file = new MockMultipartFile("file", "a.png", "image/png", new byte[10]);
@@ -56,7 +56,7 @@ class AdminPublicUploadControllerTest {
     @Test
     @WithMockUser(authorities = {"ROLE_ADMIN", "UPLOAD_PUBLIC_ASSET"})
     void uploadSvg_rejected() throws Exception {
-        when(publicAssetUploadService.uploadPublicAsset(any()))
+        when(publicAssetUploadService.uploadPublicAsset(any(), any()))
                 .thenThrow(new InvalidImageTypeException("image/svg+xml"));
 
         MockMultipartFile file = new MockMultipartFile("file", "a.svg", "image/svg+xml", new byte[10]);

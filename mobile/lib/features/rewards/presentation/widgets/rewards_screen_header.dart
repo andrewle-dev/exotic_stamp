@@ -12,7 +12,8 @@ class RewardsScreenHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppScreenHeader.title(
+    // Secondary route (not in bottom nav) — back + title, no app logo.
+    return AppScreenHeader.secondary(
       title: 'Rewards',
       actionIcon: AppIcons.reward,
       actionTooltip: 'Rewards',

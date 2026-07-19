@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,6 +6,7 @@ import '../../core/di/injection.dart';
 import '../../features/app_config/presentation/screens/force_update_route_screen.dart';
 import '../../features/app_config/presentation/screens/maintenance_route_screen.dart';
 import '../../features/app_shell/presentation/screens/main_shell_screen.dart';
+import '../../features/auth/presentation/screens/change_password_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
@@ -16,8 +18,10 @@ import '../../features/memories/presentation/screens/photo_share_screen.dart';
 import '../../core/auth/role_gates.dart';
 import '../../features/admin_nfc/presentation/screens/nfc_tag_writer_screen.dart';
 import '../../features/debug/presentation/screens/api_debug_screen.dart';
+import '../../features/profile/presentation/screens/help_center_screen.dart';
+import '../../features/profile/presentation/screens/personal_information_screen.dart';
+import '../../features/profile/presentation/screens/privacy_security_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
-import '../../features/profile/presentation/screens/settings_screen.dart';
 
 import '../../features/rewards/presentation/screens/reward_unlocked_share_screen.dart';
 import '../../features/rewards/presentation/screens/rewards_screen.dart';
@@ -123,12 +127,38 @@ GoRouter createAppRouter() {
         },
       ),
       GoRoute(
+        path: RouteNames.personalInformation,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PersonalInformationScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.privacySecurity,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PrivacySecurityScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.changePassword,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.helpCenter,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HelpCenterScreen(),
+      ),
+      GoRoute(
         path: RouteNames.settings,
-        builder: (context, state) => const SettingsScreen(),
+        redirect: (context, state) => RouteNames.personalInformation,
       ),
       GoRoute(
         path: RouteNames.apiDebug,
         parentNavigatorKey: _rootNavigatorKey,
+        redirect: (context, state) {
+          if (!kDebugMode) {
+            return RouteNames.profile;
+          }
+          return null;
+        },
         builder: (context, state) => const ApiDebugScreen(),
       ),
       GoRoute(

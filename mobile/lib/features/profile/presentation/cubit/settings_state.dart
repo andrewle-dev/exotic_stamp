@@ -10,7 +10,8 @@ enum SettingsStatus {
   saving,
   saveSuccess,
   saveFailure,
-  loggingOut,
+  unauthorized,
+  error,
 }
 
 class SettingsState extends Equatable {

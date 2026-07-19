@@ -8,11 +8,13 @@ class StationModel {
     required this.code,
     required this.name,
     this.displayName,
+    this.lineName,
     this.latitude,
     this.longitude,
     this.imageUrl,
     this.stampPreviewUrl,
     this.status,
+    this.sortOrder,
     this.collectedStatus = StationCollectedStatus.unknown,
   });
 
@@ -23,11 +25,13 @@ class StationModel {
       code: json['code'] as String? ?? '',
       name: json['name'] as String? ?? '',
       displayName: json['displayName'] as String?,
+      lineName: json['lineName'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       imageUrl: json['imageUrl'] as String?,
       stampPreviewUrl: json['stampPreviewUrl'] as String?,
-      status: json['status'] as String?,
+      status: _statusToString(json['status']),
+      sortOrder: (json['sortOrder'] as num?)?.toInt(),
     );
   }
 
@@ -36,11 +40,13 @@ class StationModel {
   final String code;
   final String name;
   final String? displayName;
+  final String? lineName;
   final double? latitude;
   final double? longitude;
   final String? imageUrl;
   final String? stampPreviewUrl;
   final String? status;
+  final int? sortOrder;
   final StationCollectedStatus collectedStatus;
 
   StationModel copyWithCollectedStatus(StationCollectedStatus collectedStatus) {
@@ -50,11 +56,13 @@ class StationModel {
       code: code,
       name: name,
       displayName: displayName,
+      lineName: lineName,
       latitude: latitude,
       longitude: longitude,
       imageUrl: imageUrl,
       stampPreviewUrl: stampPreviewUrl,
       status: status,
+      sortOrder: sortOrder,
       collectedStatus: collectedStatus,
     );
   }
@@ -66,13 +74,21 @@ class StationModel {
       code: code,
       name: name,
       displayName: displayName,
+      lineName: lineName,
       latitude: latitude,
       longitude: longitude,
       imageUrl: imageUrl,
       stampPreviewUrl: stampPreviewUrl,
       status: status,
+      sortOrder: sortOrder,
       collectedStatus: collectedStatus,
     );
+  }
+
+  static String? _statusToString(Object? raw) {
+    if (raw == null) return null;
+    if (raw is String) return raw;
+    return raw.toString();
   }
 }
 

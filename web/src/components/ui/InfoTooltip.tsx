@@ -9,6 +9,8 @@ export interface InfoTooltipProps {
   className?: string
   /** Preferred placement relative to the icon. */
   side?: 'top' | 'bottom'
+  /** Horizontal alignment of the tooltip panel relative to the icon. */
+  align?: 'start' | 'center' | 'end'
 }
 
 /**
@@ -20,6 +22,7 @@ export function InfoTooltip({
   label = 'More information',
   className,
   side = 'top',
+  align = 'center',
 }: InfoTooltipProps) {
   return (
     <span className={cn('relative inline-flex shrink-0', className)}>
@@ -37,11 +40,14 @@ export function InfoTooltip({
       <span
         role="tooltip"
         className={cn(
-          'pointer-events-none absolute left-1/2 z-50 w-max max-w-[16rem] -translate-x-1/2',
+          'pointer-events-none absolute z-50 w-max max-w-[16rem]',
           'rounded-md border border-border bg-card px-2.5 py-1.5 text-left text-xs leading-relaxed text-foreground shadow-md',
           'opacity-0 transition-opacity duration-150',
           'peer-hover:opacity-100 peer-focus-visible:opacity-100',
           side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
+          align === 'end' && 'right-0',
+          align === 'start' && 'left-0',
+          align === 'center' && 'left-1/2 -translate-x-1/2',
         )}
       >
         {content}

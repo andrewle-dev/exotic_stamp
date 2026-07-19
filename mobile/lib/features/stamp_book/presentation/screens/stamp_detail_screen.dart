@@ -8,6 +8,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../../../../shared/widgets/app_error_view.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
 import '../../domain/entities/stamp_detail.dart';
@@ -59,11 +60,9 @@ class _StampDetailView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundWhite,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        title: const Text('Chi tiết Stamp'),
+      appBar: const AppSecondaryAppBar(
+        title: 'Chi tiết Stamp',
+        showBottomDivider: false,
       ),
       body: BlocBuilder<StampDetailCubit, StampDetailState>(
         builder: (context, state) {

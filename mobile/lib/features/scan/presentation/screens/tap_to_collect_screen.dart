@@ -5,6 +5,7 @@ import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../widgets/onboarding_feature_chips.dart';
 import '../widgets/onboarding_page_indicator.dart';
 import '../widgets/scan_action_buttons.dart';
@@ -17,15 +18,9 @@ class TapToCollectScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundWhite,
-        foregroundColor: AppColors.textPrimary,
-        title: const _BrandMark(),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
-        ),
+      appBar: AppSecondaryAppBar(
+        title: 'Thu stamp',
+        showBottomDivider: false,
         actions: [
           TextButton(
             onPressed: () => context.go(RouteNames.home),
@@ -75,27 +70,6 @@ class TapToCollectScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _BrandMark extends StatelessWidget {
-  const _BrandMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: AppColors.textPrimary,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: const Icon(
-        Icons.bolt_rounded,
-        color: AppColors.backgroundWhite,
-        size: 18,
       ),
     );
   }

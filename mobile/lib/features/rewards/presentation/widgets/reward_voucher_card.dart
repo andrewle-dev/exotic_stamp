@@ -92,17 +92,18 @@ class RewardVoucherCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: onFavoriteTap,
-                    icon: Icon(
-                      reward.isFavorite
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      color: reward.isFavorite
-                          ? Colors.amber.shade700
-                          : AppColors.textSecondary,
+                  if (onFavoriteTap != null)
+                    IconButton(
+                      onPressed: onFavoriteTap,
+                      icon: Icon(
+                        reward.isFavorite
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        color: reward.isFavorite
+                            ? Colors.amber.shade700
+                            : AppColors.textSecondary,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -182,8 +183,8 @@ class RewardVoucherCard extends StatelessWidget {
 
   static String _actionLabel(UserRewardStatus status) {
     return switch (status) {
-      UserRewardStatus.available => 'Redeem',
-      UserRewardStatus.used => 'Redeemed',
+      UserRewardStatus.available => 'Redeem code',
+      UserRewardStatus.used => 'Used',
       UserRewardStatus.expired => 'Expired',
       UserRewardStatus.pending => 'Pending',
       UserRewardStatus.unavailable => 'Unavailable',

@@ -7,6 +7,7 @@ import '../../../../core/network/auth_interceptor.dart';
 import '../../../../core/network/error_interceptor.dart';
 import '../../../../core/services/device_fingerprint_service.dart';
 import '../models/auth_response_model.dart';
+import '../models/change_password_request.dart';
 import '../models/forgot_password_request.dart';
 import '../models/login_request.dart';
 import '../models/register_request.dart';
@@ -123,6 +124,17 @@ class AuthRemoteDataSource {
     }
   }
 
+  Future<void> changePassword(ChangePasswordRequest request) async {
+    try {
+      await _apiClient.post<Map<String, dynamic>>(
+        '/auth/change-password',
+        data: request.toJson(),
+      );
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
   Future<UserModel> getMe() async {
     try {
       final response = await _apiClient.get<Map<String, dynamic>>('/users/me');
@@ -157,7 +169,7 @@ class AuthRemoteDataSource {
       if (body == null) {
         throw const Failure(
           code: FailureCode.unknown,
-          message: 'Phản hồi từ máy chủ không hợp lệ.',
+          message: 'Phản hồi không hợp lệ. Vui lòng thử lại.',
         );
       }
 

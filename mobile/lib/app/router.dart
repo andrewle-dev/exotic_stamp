@@ -16,5 +16,6 @@ class AppRouter {
   static const stampBook = RouteNames.stampBook;
   static const rewards = RouteNames.rewards;
   static const profile = RouteNames.profile;
+  static const personalInformation = RouteNames.personalInformation;
   static const settings = RouteNames.settings;
 }

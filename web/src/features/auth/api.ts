@@ -1,6 +1,6 @@
 import { apiClient } from '../../lib/api/client'
 import { tokenStore } from '../../lib/auth/tokenStore'
-import type { AuthResponse, LoginRequest, UserResponse } from './types'
+import type { AuthResponse, ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, UserResponse } from './types'
 
 export async function login(request: LoginRequest): Promise<AuthResponse> {
   const { data } = await apiClient.post<AuthResponse>('/api/v1/auth/login', request, {
@@ -39,6 +39,14 @@ export async function logout(): Promise<void> {
   } finally {
     tokenStore.clear()
   }
+}
+
+export async function requestPasswordReset(request: ForgotPasswordRequest): Promise<void> {
+  await apiClient.post('/api/v1/auth/forgot-password', request)
+}
+
+export async function resetPassword(request: ResetPasswordRequest): Promise<void> {
+  await apiClient.post('/api/v1/auth/reset-password', request)
 }
 
 export async function getCurrentUser(): Promise<UserResponse> {

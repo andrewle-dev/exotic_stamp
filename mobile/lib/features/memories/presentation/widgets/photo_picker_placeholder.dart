@@ -45,7 +45,7 @@ class PhotoPickerPlaceholder extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
               child: Text(
-                'Ảnh chỉ được lưu trên thiết bị của bạn. Ứng dụng không tải ảnh lên máy chủ.',
+                'Ảnh chỉ được lưu trên thiết bị của bạn. Ứng dụng không tải ảnh lên dịch vụ.',
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),

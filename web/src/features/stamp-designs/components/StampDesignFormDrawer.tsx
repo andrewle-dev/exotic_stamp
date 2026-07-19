@@ -12,6 +12,7 @@ import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 
 import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
 
+import { ASSET_UPLOAD_HELP } from '../../uploads/assetUploadPurpose'
 import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 
 import type { StampDesignResponse } from '../../../types/stamp-designs'
@@ -401,27 +402,18 @@ export function StampDesignFormDrawer({
             render={({ field }) => (
 
               <AssetImageFieldCard
-
                 id="imageUrl"
-
                 title="Main stamp artwork"
-
                 required
-
                 value={field.value}
-
                 onChange={field.onChange}
-
                 error={errors.imageUrl?.message}
-
                 formDirty={isDirty}
-
                 previewSize="lg"
-
                 objectFit="contain"
-
-                help="Used in stamp book and collection screens. Recommended: square image (1:1), ideally 2048×2048 or 2560×2560."
-
+                help={ASSET_UPLOAD_HELP.stampArtwork}
+                purpose="STAMP_ARTWORK"
+                clearable
               />
 
             )}
@@ -439,25 +431,17 @@ export function StampDesignFormDrawer({
             render={({ field }) => (
 
               <AssetImageFieldCard
-
                 id="previewImageUrl"
-
                 title="Thumbnail / stamp preview"
-
                 value={field.value ?? ''}
-
                 onChange={field.onChange}
-
                 error={errors.previewImageUrl?.message}
-
                 formDirty={isDirty}
-
                 previewSize="lg"
-
                 objectFit="contain"
-
-                help="Optional compact preview. Falls back to main stamp artwork when empty. Recommended: square (1:1)."
-
+                help={ASSET_UPLOAD_HELP.stampPreview}
+                purpose="STAMP_PREVIEW"
+                clearable
               />
 
             )}

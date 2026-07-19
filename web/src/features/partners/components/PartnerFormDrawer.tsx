@@ -5,6 +5,7 @@ import { Building2, Calendar, Image } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
 import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input } from '../../../components/ui/FormField'
+import { ASSET_UPLOAD_HELP } from '../../uploads/assetUploadPurpose'
 import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 import type { PartnerResponse } from '../../../types/partners'
 import {
@@ -137,7 +138,8 @@ export function PartnerFormDrawer({
                 <AssetImageFieldCard
                   id="logoUrl"
                   title="Partner logo"
-                  help="Used across reward and partner surfaces. Recommended: square logo (1:1)."
+                  help={ASSET_UPLOAD_HELP.partnerLogo}
+                  purpose="PARTNER_LOGO"
                   value={field.value ?? ''}
                   onChange={field.onChange}
                   error={errors.logoUrl?.message}
@@ -156,7 +158,8 @@ export function PartnerFormDrawer({
                   <AssetImageFieldCard
                     id="bannerImageUrl"
                     title="Partner banner"
-                    help="Shown in the mobile Home promotional carousel. Recommended: landscape banner (≈16:9)."
+                    help={ASSET_UPLOAD_HELP.partnerBanner}
+                    purpose="PARTNER_BANNER"
                     value={field.value ?? ''}
                     onChange={field.onChange}
                     error={errors.bannerImageUrl?.message}

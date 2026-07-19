@@ -86,7 +86,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!Validators.isValidPassword(password)) {
       _showNotice(
         title: 'Mật khẩu chưa đạt yêu cầu',
-        message: 'Mật khẩu cần có ít nhất 6 ký tự.',
+        message:
+            'Mật khẩu cần có ít nhất ${Validators.minPasswordLength} ký tự.',
       );
       return;
     }

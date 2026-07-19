@@ -15,6 +15,7 @@ class Station extends Equatable {
     this.imageUrl,
     this.stampPreviewUrl,
     this.status,
+    this.sortOrder,
     this.collectedStatus = StationCollectedStatus.unknown,
   });
 
@@ -29,6 +30,7 @@ class Station extends Equatable {
   final String? imageUrl;
   final String? stampPreviewUrl;
   final String? status;
+  final int? sortOrder;
   final StationCollectedStatus collectedStatus;
 
   String get label => displayName ?? name;
@@ -36,6 +38,8 @@ class Station extends Equatable {
   bool get isActive => status == null || status == 'ACTIVE';
 
   bool get isCollected => collectedStatus == StationCollectedStatus.collected;
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   @override
   List<Object?> get props => [
@@ -50,6 +54,7 @@ class Station extends Equatable {
         imageUrl,
         stampPreviewUrl,
         status,
+        sortOrder,
         collectedStatus,
       ];
 }

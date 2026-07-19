@@ -128,7 +128,7 @@ class RewardsRepositoryImpl implements RewardsRepository {
   Future<VoucherDetail> redeemVoucher({required String id}) async {
     throw const Failure(
       code: FailureCode.redeemNotSupported,
-      message: 'Đổi quà trực tuyến chưa được hỗ trợ trên backend.',
+      message: 'Đổi quà trực tuyến chưa được hỗ trợ. Vui lòng dùng mã đổi quà tại cửa hàng.',
     );
   }
 

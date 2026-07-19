@@ -13,4 +13,20 @@ enum StationsGpsStatus {
 /// Sort order for the station directory list.
 enum StationsSortMode {
   distance,
+  lineOrder,
+  collectedStatus,
+  name,
+}
+
+/// Client-side collection status filter (stamp-book merge).
+enum StationsCollectionFilter {
+  all,
+  collected,
+  notCollected,
+}
+
+/// Client-side active/status filter when API provides [Station.status].
+enum StationsAvailabilityFilter {
+  all,
+  activeOnly,
 }

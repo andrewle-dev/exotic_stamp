@@ -51,4 +51,9 @@ class MockProfileRepository implements ProfileRepository {
   Future<void> logout() async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
   }
+
+  @override
+  Future<void> logoutAll() async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  }
 }

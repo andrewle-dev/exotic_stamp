@@ -5,6 +5,7 @@ import { FileText, Image, MapPin, Send } from 'lucide-react'
 import { FormDrawer } from '../../../components/ui/FormDrawer'
 import { DrawerSectionCard } from '../../../components/ui/DrawerSectionCard'
 import { FormField, Input, Select, Textarea } from '../../../components/ui/FormField'
+import { ASSET_UPLOAD_HELP } from '../../uploads/assetUploadPurpose'
 import { AssetImageFieldCard } from '../../uploads/components/AssetImageFieldCard'
 import type { StationResponse } from '../../../types/stations'
 import type { LineResponse } from '../../../types/metro-lines'
@@ -226,7 +227,9 @@ export function StationFormDrawer({
                 formDirty={isDirty}
                 previewSize="lg"
                 objectFit="cover"
-                help="Used in station discovery and station detail screens. Recommended: square image (1:1), ideally 2048×2048 or 2560×2560."
+                help={ASSET_UPLOAD_HELP.stationCover}
+                purpose="STATION_COVER"
+                clearable
               />
             )}
           />
@@ -244,7 +247,9 @@ export function StationFormDrawer({
                 formDirty={isDirty}
                 previewSize="lg"
                 objectFit="cover"
-                help="Used for station cards, lists, and previews. Recommended: square image (1:1)."
+                help={ASSET_UPLOAD_HELP.stationCard}
+                purpose="STATION_CARD"
+                clearable
               />
             )}
           />

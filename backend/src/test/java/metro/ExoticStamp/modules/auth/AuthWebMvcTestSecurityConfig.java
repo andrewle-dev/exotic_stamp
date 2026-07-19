@@ -18,7 +18,12 @@ public class AuthWebMvcTestSecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/v1/auth/logout-all").authenticated()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/logout",
+                                "/api/v1/auth/logout-all",
+                                "/api/v1/auth/change-password"
+                        ).authenticated()
                         .anyRequest().permitAll());
         return http.build();
     }

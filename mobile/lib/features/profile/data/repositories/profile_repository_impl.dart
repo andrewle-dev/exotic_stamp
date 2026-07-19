@@ -60,4 +60,15 @@ class ProfileRepositoryImpl implements ProfileRepository {
       await _apiClient.clearSession();
     }
   }
+
+  @override
+  Future<void> logoutAll() async {
+    try {
+      await _remoteDataSource.logoutAll();
+    } catch (_) {
+      // Best-effort backend logout-all; local session is always cleared below.
+    } finally {
+      await _apiClient.clearSession();
+    }
+  }
 }

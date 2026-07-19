@@ -4,6 +4,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../shared/widgets/empty_state.dart';
 import '../../domain/entities/profile.dart';
 
 class ProfileStatsRow extends StatelessWidget {
@@ -17,21 +18,11 @@ class ProfileStatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!stats.hasAnyData) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: AppRadius.xlAll,
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Text(
-          'Stats will appear when the backend provides profile data.',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-          textAlign: TextAlign.center,
-        ),
+      return const AppEmptyState(
+        title: 'Chưa có thống kê',
+        message:
+            'Your stamp stats will show up here once you’ve started collecting.',
+        icon: Icons.emoji_events_outlined,
       );
     }
 

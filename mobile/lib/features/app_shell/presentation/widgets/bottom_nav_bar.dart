@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -36,7 +35,6 @@ class BottomNavBar extends StatelessWidget {
       icon: AppIcons.stamp,
       activeIcon: AppIcons.stampActive,
       label: 'Stamp',
-      useFontAwesome: true,
     ),
     _ShellTab(
       index: ShellTabIndex.stations,
@@ -113,18 +111,11 @@ class _ShellNavItem extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (tab.useFontAwesome)
-                  FaIcon(
-                    iconData,
-                    size: ShellNavMetrics.tabIconSize - 2,
-                    color: color,
-                  )
-                else
-                  Icon(
-                    iconData,
-                    size: ShellNavMetrics.tabIconSize,
-                    color: color,
-                  ),
+                Icon(
+                  iconData,
+                  size: ShellNavMetrics.tabIconSize,
+                  color: color,
+                ),
                 const SizedBox(height: ShellNavMetrics.tabIconLabelGap),
                 Text(
                   tab.label,
@@ -152,14 +143,12 @@ class _ShellTab {
     required this.icon,
     required this.activeIcon,
     required this.label,
-    this.useFontAwesome = false,
   });
 
   final int index;
   final IconData icon;
   final IconData activeIcon;
   final String label;
-  final bool useFontAwesome;
 }
 
 /// Legacy export — prefer [BottomNavBar].

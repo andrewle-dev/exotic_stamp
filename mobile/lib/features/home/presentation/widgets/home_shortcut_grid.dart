@@ -31,6 +31,7 @@ class HomeShortcutGrid extends StatelessWidget {
           label: 'Claim Rewards',
           icon: Icons.card_giftcard_outlined,
           iconColor: AppColors.accentRed,
+          // Secondary route (not a bottom-nav tab). Back on Rewards returns here.
           onTap: () => context.go(RouteNames.rewards),
         ),
         _ShortcutTile(

@@ -7,6 +7,7 @@ import '../../domain/entities/session.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
+import '../models/change_password_request.dart';
 import '../models/register_request.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -90,6 +91,21 @@ class AuthRepositoryImpl implements AuthRepository {
     } finally {
       await _apiClient.clearSession();
     }
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmNewPassword,
+  }) {
+    return _remoteDataSource.changePassword(
+      ChangePasswordRequest(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        confirmNewPassword: confirmNewPassword,
+      ),
+    );
   }
 
   @override

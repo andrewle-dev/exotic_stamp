@@ -1,9 +1,22 @@
 # UI Implementation Audit Report
 
 > **Scope:** Read-only comparison of Visily design references + `UI_SCREEN_INVENTORY.md` against Flutter source under `mobile/lib/`.  
-> **Date:** 2026-07-15  
+> **Date:** 2026-07-15 (decisions amended 2026-07-18)  
 > **Product:** Exotic Stamp / Metro Stamp mobile module  
 > **Constraints honored:** No code changes. Color HEX, mock images, exact copy, and &lt;8px spacing ignored unless they break layout intent.
+
+### Product decisions (2026-07-18)
+
+| Decision | Status |
+|----------|--------|
+| Bottom nav | **Home \| Stamp \| Scan FAB \| Stations \| Profile** — Rewards is **not** a tab |
+| Rewards | Secondary screen via Home Claim Rewards, Success/Reward CTA, Profile if applicable |
+| Collect (MVP) | **NFC only** visible; QR collect remains gated — do not restore via visual polish |
+| Rewards not in bottom nav | **Not P0** (intentional) |
+| Reward Unlocked after collect | **BACKEND_CONTRACT_REQUIRED** — do not fake unlock |
+| Full locale / l10n | Later — not current polish sprint |
+
+See also [`UI_UX_POLISH_AUDIT_REPORT.md`](./UI_UX_POLISH_AUDIT_REPORT.md).
 
 ---
 
@@ -16,22 +29,22 @@
 | Screens with Flutter file | **16 / 16** inventory screens |
 | Screens with registered route | **16 / 16** (Reward Unlocked has **2** dual routes) |
 | Missing screen files | **0** |
-| Intentionally hidden (QR collect UI) | **1 policy area** (gated; not deleted) |
-| Major structural mismatches | **5+** (nav tabs, dead reward share route, QR design vs NFC product, stub CTAs, shared-card drift) |
+| Intentionally hidden (QR collect UI) | **1 policy area** (gated; not deleted) — **MVP: keep gated** |
+| Major structural mismatches | Reduced after 2026-07-18 nav decision; remaining: dead reward share route (API), QR design vs NFC product, stub CTAs, shared-card drift |
 
 ### Highest-risk issues
 
-1. **P0 — Rewards missing from bottom nav** while inventory and `visily-rewards.png` expect a Rewards tab; shell has a Rewards branch but chrome only shows Home / Stamp / Scan FAB / Stations / Profile.
-2. **P0 — Reward Unlocked / Collect & Share share flow not reachable** — routes exist (`/rewards/share`, `/scan/reward-unlocked`) but no in-app `go`/`push` from collect/success/rewards flow was found.
-3. **P1 — Visily `visily-scan.png` is QR-first**; product + code are NFC-first with QR gated off. Treat SyncWave NFC asset as the closer live target for Scan.
-4. **P1 — Multiple shell/detail CTAs are no-ops** (Stations View Map / filter, Rewards View Milestones, Station Favorite).
-5. **P2 — Shared design-system drift** — `StationCard`, `VoucherCard`, `ProgressCard`, `AppPageScaffold` (as scaffold) largely unused; feature-local duplicates and local AppBars on flow screens.
+1. **P0 — Reward Unlocked / Collect & Share share flow not reachable from collect** — routes exist (`/rewards/share`, `/scan/reward-unlocked`); **blocked by backend gap**: `POST /collection/collect` has no `newlyIssuedReward` / `rewardUnlocked` (rewards issue async via `StampCollectedEvent`). Debug preview only: Profile → API Debug (kDebugMode). Do **not** fake unlock in production.
+2. **P1 — Visily `visily-scan.png` is QR-first**; product + code are NFC-only for MVP collect with QR gated off. Treat SyncWave NFC asset as the closer live target for Scan. Do **not** restore QR collect via polish.
+3. **P1 — Multiple shell/detail CTAs** — verify stubs vs wired (Stations View Map / filter, Rewards View Milestones, Station Favorite); see §6.
+4. **P2 — Shared design-system drift** — `StationCard`, `VoucherCard`, `ProgressCard`, `AppPageScaffold` (as scaffold) largely unused; feature-local duplicates and local AppBars on flow screens. Sprint C: visible consistency only — no broad card refactor.
+5. ~~**P0 — Rewards missing from bottom nav**~~ — **RESOLVED as product decision (2026-07-18):** Rewards is intentionally **not** a bottom-nav tab.
 
 ### Intentionally hidden
 
 - Stamp-collection **QR UI** (`ScanCapabilities.enableQrFlow`, default `false` / `ENABLE_QR_FLOW`).
 - Classification: **INTENTIONALLY_HIDDEN** for collect QR surfaces; routes for QR scanner view remain behind the flag (not a public default path). Voucher redemption “QR” graphic is separate (decorative icon).
-
+- **MVP policy:** NFC is the only visible collect flow. Visual polish must not re-enable QR collect.
 ---
 
 ## 2. Screen Coverage Matrix
@@ -49,12 +62,12 @@
 | Scan Error | `visily-scan-error.png` | `lib/features/scan/presentation/screens/scan_error_screen.dart` | `/scan/error` | IMPLEMENTED_BUT_VISUALLY_OFF | P1 | Design mock is a **catalog of 3 cases** on one canvas; app correctly shows **one phase-driven error**. Missing help/report footer block from mock. AppBar title differs. |
 | Stations List | `visily-stations-list.png` | `lib/features/stations/presentation/screens/stations_list_screen.dart` (`StationsScreen` typedef) | `/stations` (shell) | COMPLETE_ENOUGH | P1 | Nearby hero + directory present. **View Map** and header **filter** are no-ops. Does not use shared `StationCard`. |
 | Station Detail | `visily-station-detail.png` | `lib/features/stations/presentation/screens/station_detail_screen.dart` | `/stations/:stationId` | COMPLETE_ENOUGH | P2 | Hero, social proof, actions, history, nearby, red collect CTA. Favorite is no-op. No `AppScreenHeader`. |
-| Rewards | `visily-rewards.png` | `lib/features/rewards/presentation/screens/rewards_screen.dart` | `/rewards` (shell branch) | PARTIAL | P0 | Screen implemented; **not in bottom nav**. Reachable mainly via Home shortcut. “View Milestones” no-op. No tab highlight when active. |
+| Rewards | `visily-rewards.png` | `lib/features/rewards/presentation/screens/rewards_screen.dart` | `/rewards` (secondary) | COMPLETE_ENOUGH *(nav decided)* | P1 *(wording/polish)* | **Decided 2026-07-18:** not a bottom-nav tab. Secondary via Home Claim Rewards, Success/Reward CTA, Profile if applicable. Secondary header OK. |
 | Profile | `visily-profile.png` | `lib/features/profile/presentation/screens/profile_screen.dart` | `/profile` (shell) | COMPLETE_ENOUGH | P2 | Avatar/stats/invite/memories/achievements/menu + version footer. Visily bottom nav here is 5-tab (no Rewards) — matches chrome. Some menu items stubbed. |
 | Stamp Detail | `visily-stamp-detail.png` | `lib/features/stamp_book/presentation/screens/stamp_detail_screen.dart` | `/stamps/:stationId` (MVP param) | MISSING_ROUTE *(inventory stampId)* / COMPLETE_ENOUGH *(UI)* | P2 | Inventory route `/stamps/:stampId`; code uses **stationId** by design (documented). Structure broadly matches. AppBar local. |
 | Voucher Detail | `visily-voucher-detail.png` | `lib/features/rewards/presentation/screens/voucher_detail_screen.dart` | `/rewards/vouchers/:voucherId` | IMPLEMENTED_BUT_VISUALLY_OFF | P1 | Hero/terms/redeem present. `VoucherCodeQrSection` uses **icon placeholder**, not generated QR of code. |
 | Photo Share | `visily-photo-share.png` | `lib/features/memories/presentation/screens/photo_share_screen.dart` | `/memories/create` | COMPLETE_ENOUGH | P2 | Preview, stamp selector, toggles, Share/Save present. Reachable from Stamp Detail. Manual visual pass recommended for overlay fidelity. |
-| Collect & Share Rewards / Reward Unlocked | `visily-collect-&-share-rewards.png` | `lib/features/rewards/presentation/screens/reward_unlocked_share_screen.dart` | `/rewards/share`, `/scan/reward-unlocked` | MISSING_ROUTE *(unreachable from CTAs)* | P0 | Widget + dual routes registered; **no navigator call from collect/success/rewards**. PNG reads like celebratory/onboarding collage — confirm intended map vs `Welcome` in design review. |
+| Collect & Share Rewards / Reward Unlocked | `visily-collect-&-share-rewards.png` | `lib/features/rewards/presentation/screens/reward_unlocked_share_screen.dart` | `/rewards/share`, `/scan/reward-unlocked` | **BACKEND_CONTRACT_REQUIRED** *(unreachable from success)* | P0 | Screen + dual routes registered. Collect API has **no** reward unlock field (`StampCollectResponse`: stamp + progress + `isNew` only). Rewards issue **async** after collect. Integration TODOs on success screen + entity; debug preview via API Debug. |
 | Login / Auth (out of Visily inventory) | — | `login_screen.dart`, etc. | `/login`, … | UNKNOWN_NEEDS_MANUAL_CHECK | — | Not in Visily PNG set; out of primary audit surface. |
 
 **Statuses used:** `COMPLETE_ENOUGH` · `IMPLEMENTED_BUT_VISUALLY_OFF` · `PARTIAL` · `MISSING_ROUTE` · `MISSING_SCREEN` · `INTENTIONALLY_HIDDEN` · `UNKNOWN_NEEDS_MANUAL_CHECK`
@@ -63,16 +76,16 @@
 
 ## 3. Major Visual Mismatches
 
-### 3.1 Bottom navigation — Rewards tab missing
+### 3.1 Bottom navigation — Rewards not a tab (**decided**)
 
 | | |
 |--|--|
 | **Screen** | App shell / all tab screens |
-| **Design expects** | Inventory §4: Home · Book · Scan · Stations · **Rewards** · Profile. `visily-rewards.png` shows Rewards selected. (Note: Home/Profile/Stations Visily frames often show **5** tabs without Rewards — Visily itself is inconsistent.) |
-| **Implementation** | `BottomNavBar`: Home · Stamp · *(FAB gap)* · Stations · Profile. Rewards is shell branch index 4 only. |
-| **Why it matters** | Core MVP destination not discoverable; on `/rewards` no tab appears active. |
-| **Suggested fix direction** | Align product decision: either add Rewards to bottom nav per inventory, or update inventory/design to “shortcut-only Rewards” and document active-state rules. |
-| **Severity** | **P0** |
+| **Product decision (2026-07-18)** | Rewards is **not** a bottom navigation tab. Canonical chrome: **Home \| Stamp \| Scan FAB \| Stations \| Profile**. |
+| **Implementation** | `BottomNavBar`: Home · Stamp · *(FAB gap)* · Stations · Profile. Matches decision. |
+| **Rewards entry** | Secondary screen: Home “Claim Rewards”, Success/Reward CTA when available, Profile if applicable. `AppScreenHeader.secondary` is correct. |
+| **Visily note** | Some Visily frames show Rewards selected / 6 tabs; Home/Profile/Stations frames often show 5 tabs without Rewards. Prefer chrome that matches this decision over Rewards-selected mock. |
+| **Severity** | **Resolved — not P0.** Do not add Rewards tab in polish sprints. |
 
 ### 3.2 Scan — Visily QR-first vs NFC-first product
 
@@ -112,12 +125,25 @@
 | | |
 |--|--|
 | **Screen** | Reward Unlocked Share |
-| **Design expects** | Celebration / share milestone after unlock (`visily-collect-&-share-rewards.png`). |
-| **Implementation** | Screen exists with celebration + share + view reward CTAs, but **never navigated to** from scan success or claim flow (grep: routes + screen only). |
+| **Design expects** | Celebration / share milestone after unlock (`visily-collect-&-share-rewards.png`). Inventory also expects `newlyIssuedReward` on collect success. |
+| **Implementation** | Screen exists with celebration + share + view reward CTAs. Routes registered. **Not wired from success** because collect response cannot signal unlock. |
+| **Support classification (2026-07-17)** | **NOT_SUPPORTED** — see §3.5.1 |
 | **Why it matters** | Milestone celebration/share missing from MVP collect→reward loop. |
-| **Suggested fix direction** | Wire from collect response / claim when `newlyIssuedReward` (or equivalent) present; keep dual routes or consolidate. |
-| **Severity** | **P0** |
+| **Suggested fix direction** | Backend must add sync `newlyIssuedReward` (or equivalent) on collect **or** mobile must poll `GET /rewards/my` after success with clear pending UX. Prefer preferred route `/scan/reward-unlocked` + `RewardUnlockedSharePayload` via `extra`. |
+| **Severity** | **P0** (blocked on API) |
 
+#### 3.5.1 Collect → reward unlock — integration gap
+
+| Field | Status |
+|-------|--------|
+| Classification | **NOT_SUPPORTED** |
+| Backend DTO | `StampCollectResponse` (`stampId`, `stationId`, `stationName`, `lineId`, `campaignId`, `stampDesignUrl`, `collectedAt`, `isNew`, `collectMethod`, `progress`) |
+| Missing for unlock UX | `newlyIssuedReward` / `rewardUnlocked` / milestone + voucher payload on collect |
+| Reward issuance today | Async after commit: `StampCollectedEvent` → `RewardEvaluationService` (not in HTTP collect body) |
+| Flutter model today | `CollectStampResult`: stamp, progress, `isNew`, `nextRewardHint`, `sponsorAd` — no unlock object |
+| Contract doc | `docs/api/MOBILE_API_CONTRACT.md` § collect: `rewardUnlocked` **MISSING** |
+| Mobile interim | TODO on `StampCollectedSuccessScreen` + `CollectStampResult`; **debug-only** preview: Profile → API Debug → “Preview Reward Unlocked” |
+| Must not do | Infer unlock from local stamp count; fake voucher ownership; show unlock on duplicate (`isNew: false`) |
 ### 3.6 Stations — missing interactive pattern from mock
 
 | | |
@@ -136,8 +162,8 @@
 | Item | Status | Detail |
 |------|--------|--------|
 | Missing screen **files** | None | All 16 inventory screens have a Dart screen class. |
-| Rewards (nav discoverability) | **PARTIAL** | Implemented + routed; not in bottom nav. |
-| Reward Unlocked / Collect & Share | **MISSING_ROUTE** (reachable wiring) | Routes registered; no CTA navigation. |
+| Rewards (nav discoverability) | **COMPLETE_ENOUGH *(policy)*** | Secondary screen by design (2026-07-18); not a bottom-nav tab |
+| Reward Unlocked / Collect & Share | **BACKEND_CONTRACT_REQUIRED** | Routes registered; collect response has no unlock signal; debug preview only. |
 | Stamp Detail route param | Inventory mismatch | Inventory: `/stamps/:stampId`. Code: `/stamps/:stationId` (documented MVP). |
 | Multi-page Welcome / Tap onboarding | **PARTIAL** | Visual page dots without real pages. |
 | SyncWave NFC asset | Not in inventory §3 table | Present on disk; useful as NFC Scan reference. |
@@ -167,8 +193,9 @@
 ### Bottom nav
 
 - Notched bar + red Scan FAB matches Visily center-scan idea.
-- **Mismatch:** inventory 6 tabs vs code 4 tabs + FAB; Rewards omitted.
+- **Canonical (2026-07-18):** Home · Stamp · Scan FAB · Stations · Profile. Rewards is **not** a tab (secondary screen).
 - FAB → `/scan/tap-to-collect` (not `/scan` directly) — extra instructional step; aligns with Tap To Collect asset.
+- MVP collect: **NFC only**; QR collect remains gated.
 
 ### Cards / buttons / tiles
 
@@ -206,8 +233,8 @@
 
 | Screen | Gap |
 |--------|-----|
-| Rewards | No bottom-nav entry; Home “Claim Rewards” shortcut / deep `go` only |
-| Reward Unlocked Share | Dual routes; **no feature CTA navigation found** |
+| Rewards | Secondary (not a tab); Home “Claim Rewards”, Success/Reward CTA, Profile if applicable |
+| Reward Unlocked Share | Dual routes; production wire blocked until collect returns unlock; debug preview via API Debug |
 | Scan (`/scan`) | Reachable via Tap To Collect “Tiếp theo”; FAB skips straight entry to Tap To Collect |
 
 ### Routes missing / mismatched vs inventory
@@ -222,8 +249,22 @@
 
 | Location | Control |
 |----------|---------|
-| Stations list | “View Map” |
-| Stations header | Filter icon (`onFilterTap` never passed) |
+| Stations list | ~~“View Map”~~ / ~~Filter~~ — wired (funnel + external map) |
+| Stations header | Funnel opens filter/sort sheet |
+| Rewards | ~~“View Milestones”~~ — opens milestones bottom sheet |
+| Station Detail | ~~Favorite~~ — **hidden** (no favorite-station API) |
+| Voucher Detail | Redeem mutation **disabled** (410); UI shows **Redeem code** only |
+| Rewards voucher card | Favorite star hidden unless callback provided |
+
+### Unused shared widgets (P2 — keep for now)
+
+| Widget | Note |
+|--------|------|
+| `StationCard` | Unused — feature uses local directory/hero cards |
+| `VoucherCard` | Unused — Rewards uses `RewardVoucherCard` |
+| `ProgressCard` | Unused — duplicated as feature progress cards |
+
+Do **not** delete yet; consolidate in a dedicated shared-card cleanup pass.
 | Rewards | “View Milestones” |
 | Station detail | Favorite |
 | Profile menu | At least one `onTap: () {}` stub |
@@ -252,34 +293,36 @@
 | Voucher QR | Unrelated decorative/icon QR on voucher detail — still visible; does **not** use `enableQrFlow` |
 | SyncWave asset | Extra NFC Scan reference on disk; should be added to inventory §3 if adopted as canonical |
 
-**Recommendation note (no deletion requested):** Keep QR implementation gated until product re-enables fallback; do not delete.
+**Recommendation note:** Keep QR implementation gated for MVP; do not delete; do **not** restore via visual polish. NFC is the only visible collect flow.
 
 ---
 
 ## 8. Prioritized Fix Plan
 
-### P0 — must fix before MVP manual testing
+### P0 — must address before publish-quality MVP (non-nav)
 
-1. **Decide + implement Rewards in chrome** (add tab **or** officially demote to shortcut-only and update inventory/design).
-2. **Wire Reward Unlocked Share** after milestone unlock / claim (navigate with payload; cover both dual routes or pick one).
-3. **Audit collect→success→reward** path on device: confirm newly issued reward surfaces somewhere usable.
+1. **Wire Reward Unlocked Share** — **blocked**: add `newlyIssuedReward` (or poll strategy) on backend first; then success CTA → `/scan/reward-unlocked` with payload. Do not fake in production.
+2. **Audit collect→success→reward** path — confirm once API exposes unlock; until then only debug preview is reachable.
+3. **User-facing technical leakage** — see polish Sprint A in [`UI_UX_POLISH_AUDIT_REPORT.md`](./UI_UX_POLISH_AUDIT_REPORT.md) (`backendCode`, server/backend copy). Not a nav task.
+
+~~Decide + implement Rewards in chrome~~ — **Done as decision:** Rewards is secondary, not a tab.
 
 ### P1 — visual / layout alignment
 
-1. Canonicalize Scan against **SyncWave NFC** (+ document `visily-scan.png` as fallback/legacy).
+1. Canonicalize Scan against **SyncWave NFC** (+ document `visily-scan.png` as legacy; do not restore QR collect).
 2. Restyle Scan Error single-state screen to Visily case card language; add optional help footer.
-3. Replace voucher QR placeholder with real code QR.
-4. Remove or wire Stations stubs (View Map, filter) and Rewards “View Milestones”.
-5. When on `/rewards`, ensure bottom-nav active state makes sense under chosen tab policy.
+3. Optional later: voucher **redeem-code** QR graphic (not stamp-collect QR).
+4. Verify Stations / Rewards CTAs are wired or hidden (View Map, filter, View Milestones).
+5. Ensure Rewards secondary entry points remain clear (Home Claim Rewards, etc.) — do **not** add bottom-nav tab.
 
-### P2 — shared component cleanup
+### P2 — shared component cleanup (visible consistency only in polish Sprint C)
 
-1. Adopt or delete unused `StationCard` / `VoucherCard` / `ProgressCard`; consolidate progress + voucher cards.
-2. Standardize overlay headers (scan/detail) vs `AppScreenHeader` / back patterns.
+1. Do **not** broad-adopt unused `StationCard` / `VoucherCard` / `ProgressCard` in polish Sprint C; consolidate only where users see inconsistency.
+2. Standardize overlay headers (scan/detail) vs `AppScreenHeader` / back patterns where drift is visible.
 3. Replace duplicate `_BrandMark` with `AppLogo` where appropriate.
 4. Make Home recent stamps open Stamp Detail when collected.
 5. Resolve Welcome / Tap page indicators (real carousel **or** remove dots).
-6. Reduce EN/VI inconsistency on shell screens (Home/Stations/Rewards/Profile vs scan VI).
+6. Full EN/VI unification — **Later** (not current polish sprint).
 
 ### P3 — polish
 

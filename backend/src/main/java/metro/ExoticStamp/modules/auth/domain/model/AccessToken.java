@@ -71,6 +71,7 @@ public class AccessToken {
     public static final String REASON_LOGOUT = "LOGOUT";
     public static final String REASON_LOGOUT_ALL = "LOGOUT_ALL";
     public static final String REASON_PASSWORD_RESET = "PASSWORD_RESET";
+    public static final String REASON_PASSWORD_CHANGED = "PASSWORD_CHANGED";
     public static final String REASON_REUSE_ATTACK = "REUSE_ATTACK";
     public static final String REASON_ROTATED = "ROTATED";
 }

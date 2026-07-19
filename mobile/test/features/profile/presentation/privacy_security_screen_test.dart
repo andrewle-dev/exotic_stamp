@@ -10,14 +10,14 @@ import 'package:metro_stamp_app/core/storage/secure_token_storage.dart';
 import 'package:metro_stamp_app/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:metro_stamp_app/features/auth/presentation/cubit/auth_state.dart';
 import 'package:metro_stamp_app/features/profile/domain/entities/profile.dart';
-import 'package:metro_stamp_app/features/profile/presentation/cubit/settings_cubit.dart';
-import 'package:metro_stamp_app/features/profile/presentation/cubit/settings_state.dart';
-import 'package:metro_stamp_app/features/profile/presentation/screens/settings_screen.dart';
+import 'package:metro_stamp_app/features/profile/presentation/cubit/privacy_security_cubit.dart';
+import 'package:metro_stamp_app/features/profile/presentation/cubit/privacy_security_state.dart';
+import 'package:metro_stamp_app/features/profile/presentation/screens/privacy_security_screen.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class MockSettingsCubit extends MockCubit<SettingsState>
-    implements SettingsCubit {}
+class MockPrivacySecurityCubit extends MockCubit<PrivacySecurityState>
+    implements PrivacySecurityCubit {}
 
 class MockAuthCubit extends MockCubit<AuthState> implements AuthCubit {}
 
@@ -28,7 +28,7 @@ class MockSecureTokenStorage extends Mock implements SecureTokenStorage {}
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late MockSettingsCubit settingsCubit;
+  late MockPrivacySecurityCubit privacyCubit;
   late MockAuthCubit authCubit;
 
   setUp(() async {
@@ -37,7 +37,7 @@ void main() {
     final localPreferences = LocalPreferences();
     await localPreferences.init();
 
-    settingsCubit = MockSettingsCubit();
+    privacyCubit = MockPrivacySecurityCubit();
     authCubit = MockAuthCubit();
 
     await Injection.instance.init(
@@ -48,9 +48,9 @@ void main() {
       restoreSession: false,
     );
 
-    when(() => settingsCubit.state).thenReturn(
-      const SettingsState(
-        status: SettingsStatus.loaded,
+    when(() => privacyCubit.state).thenReturn(
+      const PrivacySecurityState(
+        status: PrivacySecurityStatus.loaded,
         profile: Profile(
           id: 'user-1',
           email: 'an@example.com',
@@ -60,8 +60,9 @@ void main() {
         ),
       ),
     );
-    when(() => settingsCubit.load()).thenAnswer((_) async {});
-    when(() => settingsCubit.logout()).thenAnswer((_) async {});
+    when(() => privacyCubit.load()).thenAnswer((_) async {});
+    when(() => privacyCubit.logout()).thenAnswer((_) async {});
+    when(() => privacyCubit.logoutAll()).thenAnswer((_) async {});
     when(() => authCubit.markUnauthenticated()).thenReturn(null);
     when(() => authCubit.isClosed).thenReturn(false);
     when(() => authCubit.close()).thenAnswer((_) async {});
@@ -71,13 +72,28 @@ void main() {
     Injection.instance.reset();
   });
 
-  testWidgets('logout navigates to /login', (tester) async {
+  testWidgets('shows change password entry', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrivacySecurityScreen(cubit: privacyCubit),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Change Password'), findsOneWidget);
+    expect(find.text('Update your account password'), findsOneWidget);
+    expect(find.text('Coming soon'), findsNothing);
+    expect(find.text('an@example.com'), findsOneWidget);
+  });
+
+  testWidgets('logout this device navigates to /login', (tester) async {
     final router = GoRouter(
-      initialLocation: RouteNames.settings,
+      initialLocation: RouteNames.privacySecurity,
       routes: [
         GoRoute(
-          path: RouteNames.settings,
-          builder: (context, state) => SettingsScreen(cubit: settingsCubit),
+          path: RouteNames.privacySecurity,
+          builder: (context, state) =>
+              PrivacySecurityScreen(cubit: privacyCubit),
         ),
         GoRoute(
           path: RouteNames.login,
@@ -92,20 +108,47 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final logoutFinder = find.descendant(
-      of: find.byType(SingleChildScrollView),
-      matching: find.text('Đăng xuất'),
-    );
-    await tester.ensureVisible(logoutFinder);
-    await tester.pumpAndSettle();
-    await tester.tap(logoutFinder);
+    await tester.tap(find.text('Log out this device'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Đăng xuất').last);
+    await tester.tap(find.text('Log Out').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Login Screen'), findsOneWidget);
-    verify(() => settingsCubit.logout()).called(1);
+    verify(() => privacyCubit.logout()).called(1);
+    verify(() => authCubit.markUnauthenticated()).called(1);
+  });
+
+  testWidgets('logout all devices navigates to /login', (tester) async {
+    final router = GoRouter(
+      initialLocation: RouteNames.privacySecurity,
+      routes: [
+        GoRoute(
+          path: RouteNames.privacySecurity,
+          builder: (context, state) =>
+              PrivacySecurityScreen(cubit: privacyCubit),
+        ),
+        GoRoute(
+          path: RouteNames.login,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Login Screen')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp.router(routerConfig: router),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Log out all devices'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Log Out All'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Login Screen'), findsOneWidget);
+    verify(() => privacyCubit.logoutAll()).called(1);
     verify(() => authCubit.markUnauthenticated()).called(1);
   });
 }

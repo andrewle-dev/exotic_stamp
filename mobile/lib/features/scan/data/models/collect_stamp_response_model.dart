@@ -10,7 +10,10 @@ class CollectStampResponseModel {
   });
 
   factory CollectStampResponseModel.fromJson(Map<String, dynamic> json) {
-    final stampJson = json['stamp'] as Map<String, dynamic>? ?? {};
+    // Supports nested `{ stamp: {...} }` (mobile contract examples) and flat
+    // StampCollectResponse (OpenAPI / Java DTO). Neither shape includes
+    // newlyIssuedReward — see CollectStampResult TODO(reward-unlock).
+    final stampJson = json['stamp'] as Map<String, dynamic>? ?? json;
     final progressJson = json['progress'] as Map<String, dynamic>?;
     final sponsorJson = json['sponsorAd'] as Map<String, dynamic>?;
 

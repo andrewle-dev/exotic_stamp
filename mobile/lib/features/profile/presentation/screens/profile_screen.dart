@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -94,8 +95,7 @@ class _ProfileView extends StatelessWidget {
                       children: [
                         ProfileHeader(
                           profile: profile,
-                          onSettingsTap: () =>
-                              context.push(RouteNames.settings),
+                          onSettingsTap: () => _openPersonalInformation(context),
                         ),
                         const SizedBox(height: AppSpacing.xxl),
                         ProfileStatsRow(
@@ -117,9 +117,15 @@ class _ProfileView extends StatelessWidget {
                         ],
                         const SizedBox(height: AppSpacing.xxl),
                         ProfileMenuSection(
-                          onSettingsTap: () =>
-                              context.push(RouteNames.settings),
-                          onApiDebugTap: Injection.instance.isInitialized
+                          onPersonalInformationTap: () =>
+                              _openPersonalInformation(context),
+                          onPrivacySecurityTap: () => context.push(
+                            RouteNames.privacySecurity,
+                          ),
+                          onHelpCenterTap: () =>
+                              context.push(RouteNames.helpCenter),
+                          onApiDebugTap: kDebugMode &&
+                                  Injection.instance.isInitialized
                               ? () => context.push(RouteNames.apiDebug)
                               : null,
                           showAdminTools: Injection.instance.isInitialized &&
@@ -141,6 +147,13 @@ class _ProfileView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openPersonalInformation(BuildContext context) async {
+    await context.push(RouteNames.personalInformation);
+    if (context.mounted) {
+      await context.read<ProfileCubit>().load();
+    }
   }
 
   Future<void> _confirmLogout(BuildContext context) async {

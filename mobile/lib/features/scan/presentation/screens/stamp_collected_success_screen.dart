@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../app/router/stamp_book_route_refresh.dart';
 import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/utils/media_url_resolver.dart';
@@ -25,85 +26,105 @@ class StampCollectedSuccessScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final body = Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      body: SafeArea(
-        child: BlocBuilder<ScanFlowCubit, ScanFlowState>(
-          builder: (context, state) {
-            final result = state.collectResult;
-            final stamp = result?.stamp;
-            final progress = result?.progress;
-            final mediaResolver = MediaUrlResolver();
-            final stampImageUrl =
-                mediaResolver.resolve(stamp?.stampDesignUrl);
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.blueTint,
+              AppColors.blueSurface,
+              AppColors.backgroundWhite,
+            ],
+            stops: [0.0, 0.28, 0.55],
+          ),
+        ),
+        child: SafeArea(
+          child: BlocBuilder<ScanFlowCubit, ScanFlowState>(
+            builder: (context, state) {
+              final result = state.collectResult;
+              final stamp = result?.stamp;
+              final progress = result?.progress;
+              final mediaResolver = MediaUrlResolver();
+              final stampImageUrl =
+                  mediaResolver.resolve(stamp?.stampDesignUrl);
 
-            return Padding(
-              padding: const EdgeInsets.all(AppSpacing.xxl),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  _StampSuccessCard(
-                    stationName: stamp?.stationName ?? 'Stamp mới',
-                    lineName: stamp?.lineName,
-                    imageUrl: stampImageUrl,
-                    collectedAt: stamp?.collectedAt,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  Text(
-                    'Nhận stamp thành công!',
-                    style: AppTextStyles.displayMedium.copyWith(
-                      color: AppColors.primaryBlue,
+              return Padding(
+                padding: const EdgeInsets.all(AppSpacing.xxl),
+                child: Column(
+                  children: [
+                    const Spacer(),
+                    _StampSuccessCard(
+                      stationName: stamp?.stationName ?? 'Stamp mới',
+                      lineName: stamp?.lineName,
+                      imageUrl: stampImageUrl,
+                      collectedAt: stamp?.collectedAt,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (progress != null) ...[
                     const SizedBox(height: AppSpacing.xl),
-                    _ProgressCard(progress: progress),
-                  ],
-                  if (result?.nextRewardHint != null) ...[
-                    const SizedBox(height: AppSpacing.lg),
                     Text(
-                      result!.nextRewardHint!,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
+                      'Nhận stamp thành công!',
+                      style: AppTextStyles.displayMedium.copyWith(
+                        color: AppColors.primaryBlue,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                  ],
-                  const Spacer(),
-                  ScanPrimaryButton(
-                    label: 'Xem Stamp Book',
-                    onPressed: () {
-                      context.read<ScanFlowCubit>().resetFlow();
-                      context.go(
-                        StampBookRouteRefresh.locationWithRefresh(
-                          StampBookRouteRefresh.newRefreshToken(),
+                    if (progress != null) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      _ProgressCard(progress: progress),
+                    ],
+                    if (result?.nextRewardHint != null) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        result!.nextRewardHint!,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
                         ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  ScanOutlineButton(
-                    label: 'Chia sẻ',
-                    onPressed: stamp == null
-                        ? null
-                        : () {
-                            Share.share(
-                              'Tôi vừa nhận stamp tại ${stamp.stationName} '
-                              'trên Exotic Stamp!',
-                            );
-                          },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  ScanOutlineButton(
-                    label: 'Quét tiếp',
-                    onPressed: () {
-                      context.read<ScanFlowCubit>().resetFlow();
-                      context.go(RouteNames.scanTapToCollect);
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    // TODO(reward-unlock): When collect response includes a backend-
+                    // confirmed newlyIssuedReward (and isNew), show
+                    // "Bạn vừa mở khóa phần thưởng" + "Xem phần thưởng" CTA that
+                    // pushes RouteNames.scanRewardUnlocked with
+                    // RewardUnlockedSharePayload. Do not fake unlock from progress
+                    // or mock in production. Debug preview: Profile → API Debug.
+                    const Spacer(),
+                    ScanPrimaryButton(
+                      label: 'Xem Stamp Book',
+                      onPressed: () {
+                        context.read<ScanFlowCubit>().resetFlow();
+                        context.go(
+                          StampBookRouteRefresh.locationWithRefresh(
+                            StampBookRouteRefresh.newRefreshToken(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    ScanOutlineButton(
+                      label: 'Chia sẻ',
+                      onPressed: stamp == null
+                          ? null
+                          : () {
+                              Share.share(
+                                'Tôi vừa nhận stamp tại ${stamp.stationName} '
+                                'trên Exotic Stamp!',
+                              );
+                            },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    ScanOutlineButton(
+                      label: 'Quét tiếp',
+                      onPressed: () {
+                        context.read<ScanFlowCubit>().resetFlow();
+                        context.go(RouteNames.scanTapToCollect);
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -138,9 +159,23 @@ class _StampSuccessCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: AppColors.blueTint,
-        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.backgroundWhite,
+            AppColors.blueTint,
+          ],
+        ),
+        borderRadius: AppRadius.xxlAll,
         border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -209,7 +244,7 @@ class _ProgressCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.xlAll,
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
@@ -222,7 +257,7 @@ class _ProgressCard extends StatelessWidget {
             backgroundColor: AppColors.border,
             color: AppColors.primaryBlue,
             minHeight: 8,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppRadius.pillAll,
           ),
           const SizedBox(height: AppSpacing.md),
           Text(

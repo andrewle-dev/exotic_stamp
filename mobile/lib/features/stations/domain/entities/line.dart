@@ -8,6 +8,7 @@ class Line extends Equatable {
     this.colorHex,
     this.status,
     this.totalStations,
+    this.sortOrder,
   });
 
   final String id;
@@ -16,6 +17,7 @@ class Line extends Equatable {
   final String? colorHex;
   final String? status;
   final int? totalStations;
+  final int? sortOrder;
 
   String get label => displayName ?? name;
 
@@ -27,5 +29,6 @@ class Line extends Equatable {
         colorHex,
         status,
         totalStations,
+        sortOrder,
       ];
 }

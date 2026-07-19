@@ -8,6 +8,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../../../../shared/widgets/app_button.dart';
 import '../../../stamp_book/domain/usecases/get_stamp_book_usecase.dart';
 import '../../domain/entities/photo_share_context.dart';
@@ -206,10 +207,9 @@ class _PhotoShareViewState extends State<_PhotoShareView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      appBar: AppBar(
-        backgroundColor: AppColors.backgroundWhite,
-        foregroundColor: AppColors.textPrimary,
-        title: const Text('Chia sẻ kỷ niệm'),
+      appBar: const AppSecondaryAppBar(
+        title: 'Chia sẻ kỷ niệm',
+        showBottomDivider: false,
       ),
       body: BlocBuilder<PhotoShareCubit, PhotoShareState>(
         builder: (context, state) {

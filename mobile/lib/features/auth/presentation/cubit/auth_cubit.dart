@@ -109,7 +109,7 @@ class AuthCubit extends Cubit<AuthState> {
           status: AuthStatus.failure,
           failure: const Failure(
             code: FailureCode.networkError,
-            message: 'Không thể kết nối máy chủ. Kiểm tra backend và mạng.',
+            message: 'Không thể kết nối. Kiểm tra mạng và thử lại.',
           ),
         ),
       );
@@ -141,7 +141,7 @@ class AuthCubit extends Cubit<AuthState> {
           status: AuthStatus.failure,
           failure: const Failure(
             code: FailureCode.networkError,
-            message: 'Không thể kết nối máy chủ. Kiểm tra backend và mạng.',
+            message: 'Không thể kết nối. Kiểm tra mạng và thử lại.',
           ),
         ),
       );
@@ -176,7 +176,7 @@ class AuthCubit extends Cubit<AuthState> {
           status: AuthStatus.failure,
           failure: const Failure(
             code: FailureCode.networkError,
-            message: 'Không thể kết nối máy chủ. Kiểm tra backend và mạng.',
+            message: 'Không thể kết nối. Kiểm tra mạng và thử lại.',
           ),
         ),
       );
@@ -209,7 +209,7 @@ class AuthCubit extends Cubit<AuthState> {
           status: AuthStatus.failure,
           failure: const Failure(
             code: FailureCode.networkError,
-            message: 'Không thể kết nối máy chủ. Kiểm tra backend và mạng.',
+            message: 'Không thể kết nối. Kiểm tra mạng và thử lại.',
           ),
         ),
       );
@@ -241,7 +241,7 @@ class AuthCubit extends Cubit<AuthState> {
           status: AuthStatus.failure,
           failure: const Failure(
             code: FailureCode.networkError,
-            message: 'Không thể kết nối máy chủ. Kiểm tra backend và mạng.',
+            message: 'Không thể kết nối. Kiểm tra mạng và thử lại.',
           ),
         ),
       );

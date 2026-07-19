@@ -1,9 +1,12 @@
 import { apiClient } from './client'
 import { unwrapApiResponse } from './response'
 import type { ApiResponse } from '../../types/api'
-import type { PublicAssetUploadResponse } from '../../types/uploads'
+import type { AssetUploadPurpose, PublicAssetUploadResponse } from '../../types/uploads'
 
-export async function uploadPublicAsset(file: File): Promise<PublicAssetUploadResponse> {
+export async function uploadPublicAsset(
+  file: File,
+  purpose: AssetUploadPurpose = 'GENERIC',
+): Promise<PublicAssetUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -11,6 +14,7 @@ export async function uploadPublicAsset(file: File): Promise<PublicAssetUploadRe
     '/api/v1/admin/uploads/public',
     formData,
     {
+      params: { purpose },
       headers: {
         'Content-Type': 'multipart/form-data',
       },

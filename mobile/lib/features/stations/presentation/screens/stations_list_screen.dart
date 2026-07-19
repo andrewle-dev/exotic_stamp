@@ -16,14 +16,17 @@ import '../../../../shared/widgets/app_error_view.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
 import '../../../../shared/widgets/app_page_scaffold.dart';
 import '../../../../shared/widgets/app_version_footer.dart';
+import '../../domain/entities/station.dart';
 import '../../domain/usecases/get_lines_usecase.dart';
 import '../../domain/usecases/get_stations_usecase.dart';
 import '../cubit/stations_cubit.dart';
 import '../cubit/stations_state.dart';
+import '../utils/station_map_launcher.dart';
 import '../utils/stations_line_filter.dart';
 import '../utils/stations_list_presenter.dart';
 import '../widgets/nearby_station_hero_card.dart';
 import '../widgets/station_directory_row.dart';
+import '../widgets/stations_filter_sheet.dart';
 import '../widgets/stations_gps_banner.dart';
 import '../widgets/stations_header.dart';
 import '../widgets/stations_line_filter_bar.dart';
@@ -123,6 +126,49 @@ class _StationsListViewState extends State<_StationsListView> {
     });
   }
 
+  Future<void> _openFilterSheet() async {
+    final cubit = context.read<StationsCubit>();
+    await showStationsFilterSheet(
+      context: context,
+      state: cubit.state,
+      onApply: ({
+        required sortMode,
+        required selectedLineId,
+        required collectionFilter,
+        required availabilityFilter,
+      }) {
+        cubit.applyFilterSheet(
+          sortMode: sortMode,
+          selectedLineId: selectedLineId,
+          collectionFilter: collectionFilter,
+          availabilityFilter: availabilityFilter,
+        );
+      },
+      onReset: cubit.resetFilters,
+    );
+  }
+
+  Future<void> _openNearestOnMap(Station? nearest) async {
+    if (nearest == null || !nearest.hasCoordinates) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chưa có tọa độ nhà ga')),
+      );
+      return;
+    }
+
+    final opened = await StationMapLauncher.openCoordinates(
+      latitude: nearest.latitude!,
+      longitude: nearest.longitude!,
+      label: nearest.label,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không mở được bản đồ')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,14 +177,14 @@ class _StationsListViewState extends State<_StationsListView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
                 AppSpacing.xl,
                 AppSpacing.md,
                 AppSpacing.xl,
                 AppSpacing.md,
               ),
-              child: StationsHeader(),
+              child: StationsHeader(onFilterTap: _openFilterSheet),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
@@ -177,6 +223,8 @@ class _StationsListViewState extends State<_StationsListView> {
                       return _buildFailure(context, state.failure);
                     case StationsStatus.emptySearch:
                       return _buildEmptySearch(context, state);
+                    case StationsStatus.emptyFilter:
+                      return _buildEmptyFilter(context);
                     case StationsStatus.loaded:
                     case StationsStatus.gpsDisabled:
                       return _buildContent(context, state);
@@ -211,6 +259,16 @@ class _StationsListViewState extends State<_StationsListView> {
     );
   }
 
+  Widget _buildEmptyFilter(BuildContext context) {
+    return AppEmptyState(
+      title: 'Không có ga phù hợp',
+      message: 'Thử đổi bộ lọc hoặc đặt lại để xem lại danh sách.',
+      icon: Icons.filter_alt_off_outlined,
+      actionLabel: 'Đặt lại bộ lọc',
+      onAction: () => context.read<StationsCubit>().resetFilters(),
+    );
+  }
+
   Widget _buildContent(BuildContext context, StationsState state) {
     if (state.stations.isEmpty) {
       return const AppEmptyState(
@@ -220,13 +278,10 @@ class _StationsListViewState extends State<_StationsListView> {
       );
     }
 
-    final sorted = StationsListPresenter.sortedByDistance(
-      stations: state.stations,
-      userLatitude: state.userLatitude,
-      userLongitude: state.userLongitude,
-    );
+    final visible = state.visibleStations;
+    final sorted = state.sortedVisibleStations;
     final nearest = StationsListPresenter.nearestStation(
-      sortedStations: sorted,
+      stations: visible,
       userLatitude: state.userLatitude,
       userLongitude: state.userLongitude,
     );
@@ -262,7 +317,7 @@ class _StationsListViewState extends State<_StationsListView> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () => _openNearestOnMap(nearest),
                   child: const Text('View Map'),
                 ),
               ],
@@ -280,32 +335,9 @@ class _StationsListViewState extends State<_StationsListView> {
             ),
             const SizedBox(height: AppSpacing.xxl),
           ],
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Station Directory',
-                  style: AppTextStyles.titleMedium,
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Sorted by distance',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textSecondary,
-                    size: 18,
-                  ),
-                ],
-              ),
-            ],
+          const Text(
+            'Station Directory',
+            style: AppTextStyles.titleMedium,
           ),
           const SizedBox(height: AppSpacing.lg),
           for (final station in directory) ...[

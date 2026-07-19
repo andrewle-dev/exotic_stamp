@@ -314,13 +314,12 @@ class ScanFlowCubit extends Cubit<ScanFlowState> {
         case CollectStatusOutcome.notFound:
         case CollectStatusOutcome.pending:
           _emitStillUncertain(
-            'Chưa tìm thấy stamp cho lần quét này. Có thể backend vẫn đang xử lý — thử lại sau hoặc mở Sổ stamp.',
+            'Chưa tìm thấy stamp cho lần quét này. Hệ thống có thể vẫn đang '
+            'xử lý — thử lại sau hoặc mở Sổ stamp.',
           );
         case CollectStatusOutcome.failed:
           _emitStillUncertain(
-            statusResult.errorCode == null
-                ? 'Thu thập không thành công. Kiểm tra Sổ stamp hoặc thử lại.'
-                : 'Thu thập không thành công (${statusResult.errorCode}).',
+            'Thu thập không thành công. Kiểm tra Sổ stamp hoặc thử lại.',
           );
         case CollectStatusOutcome.unknown:
           _emitStillUncertain(

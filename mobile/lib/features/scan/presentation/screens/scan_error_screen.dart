@@ -9,6 +9,7 @@ import '../../../../app/theme/app_text_styles.dart';
 import '../cubit/scan_flow_cubit.dart';
 import '../cubit/scan_flow_state.dart';
 import '../../../../shared/widgets/app_loading_view.dart';
+import '../../../../shared/widgets/app_secondary_app_bar.dart';
 import '../utils/scan_error_presentation.dart';
 import '../widgets/scan_action_buttons.dart';
 import '../widgets/scan_flow_listener.dart';
@@ -23,14 +24,10 @@ class ScanErrorScreen extends StatelessWidget {
       child: ScanFlowListener(
         child: Scaffold(
           backgroundColor: AppColors.backgroundWhite,
-          appBar: AppBar(
-            backgroundColor: AppColors.backgroundWhite,
-            foregroundColor: AppColors.textPrimary,
-            title: const Text('Không thể thu stamp'),
-            leading: IconButton(
-              icon: const Icon(Icons.close_rounded),
-              onPressed: () => _returnHome(context),
-            ),
+          appBar: AppSecondaryAppBar(
+            title: 'Không thể thu stamp',
+            showBottomDivider: false,
+            onBack: () => _returnHome(context),
           ),
           body: BlocBuilder<ScanFlowCubit, ScanFlowState>(
             builder: (context, state) {

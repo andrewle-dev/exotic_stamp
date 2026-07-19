@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:metro_stamp_app/app/router/route_names.dart';
+import 'package:metro_stamp_app/app/theme/app_icons.dart';
 import 'package:metro_stamp_app/shared/widgets/app_action_button.dart';
+import 'package:metro_stamp_app/shared/widgets/app_back_button.dart';
 import 'package:metro_stamp_app/shared/widgets/app_logo.dart';
 import 'package:metro_stamp_app/shared/widgets/app_screen_header.dart';
 import 'package:metro_stamp_app/shared/widgets/app_version_footer.dart';
@@ -43,6 +47,76 @@ void main() {
     expect(find.text('Stamp Book'), findsOneWidget);
     expect(find.byType(AppLogo), findsOneWidget);
     expect(find.byType(AppActionButton), findsOneWidget);
+  });
+
+  testWidgets('secondary header shows back + title without logo', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppScreenHeader.secondary(
+            title: 'Rewards',
+            actionIcon: AppIcons.reward,
+            onAction: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Rewards'), findsOneWidget);
+    expect(find.byType(AppBackButton), findsOneWidget);
+    expect(find.byIcon(AppIcons.back), findsOneWidget);
+    expect(find.byType(AppLogo), findsNothing);
+    expect(find.byType(AppActionButton), findsOneWidget);
+  });
+
+  testWidgets('AppBackButton falls back to /home when cannot pop',
+      (tester) async {
+    final router = GoRouter(
+      initialLocation: RouteNames.rewards,
+      routes: [
+        GoRoute(
+          path: RouteNames.home,
+          builder: (context, state) => const Scaffold(
+            body: Text('Home Screen'),
+          ),
+        ),
+        GoRoute(
+          path: RouteNames.rewards,
+          builder: (context, state) => const Scaffold(
+            body: AppBackButton(),
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppBackButton), findsOneWidget);
+    await tester.tap(find.byType(AppBackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home Screen'), findsOneWidget);
+  });
+
+  testWidgets('AppBackButton is icon-only without circular Material plate',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AppBackButton(),
+        ),
+      ),
+    );
+
+    expect(find.byType(AppBackButton), findsOneWidget);
+    expect(find.byType(IconButton), findsOneWidget);
+    expect(find.byIcon(AppIcons.back), findsOneWidget);
+
+    final materials = tester.widgetList<Material>(find.byType(Material));
+    for (final material in materials) {
+      expect(material.shape, isNot(isA<CircleBorder>()));
+    }
   });
 
   testWidgets('version footer is full-width centered', (tester) async {

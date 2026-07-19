@@ -20,6 +20,7 @@ class AppTextField extends StatelessWidget {
     this.autofillHints,
     this.readOnly = false,
     this.enabled = true,
+    this.maxLines = 1,
   });
 
   final TextEditingController controller;
@@ -35,6 +36,7 @@ class AppTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final bool readOnly;
   final bool enabled;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,7 @@ class AppTextField extends StatelessWidget {
           autofillHints: autofillHints,
           readOnly: readOnly,
           enabled: enabled,
+          maxLines: obscureText ? 1 : maxLines,
           style: AppTextStyles.bodyLarge.copyWith(
             color: AppColors.textPrimary,
           ),

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import metro.ExoticStamp.modules.auth.application.AuthCommandService;
+import metro.ExoticStamp.modules.auth.application.command.ChangePasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.LoginCommand;
 import metro.ExoticStamp.modules.auth.application.command.RefreshTokenCommand;
@@ -15,6 +16,7 @@ import metro.ExoticStamp.modules.auth.application.command.VerifyAccountCommand;
 import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
 import metro.ExoticStamp.modules.auth.presentation.mapper.AuthPresentationMapper;
 import metro.ExoticStamp.common.response.ApiResponse;
+import metro.ExoticStamp.modules.auth.presentation.dto.request.ChangePasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ForgotPasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.LoginRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.RegisterRequest;
@@ -182,6 +184,28 @@ public class AuthController {
         commandService.logoutAll(userId);
         clearRefreshTokenCookie(response);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/change-password")
+    @Operation(
+            summary = "Change password for the authenticated user",
+            description = "Requires the current password. On success, all refresh tokens and access tokens "
+                    + "are invalidated (tokenVersion bump). The client must log in again. "
+                    + "Error codes: CURRENT_PASSWORD_INCORRECT, PASSWORD_CONFIRMATION_MISMATCH, "
+                    + "NEW_PASSWORD_SAME_AS_CURRENT, PASSWORD_POLICY_VIOLATION, USER_NOT_FOUND, USER_NOT_ACTIVE.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal UserDetails principal,
+            @Valid @RequestBody ChangePasswordRequest req,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        UUID userId = commandService.resolveUserId(principal);
+        ChangePasswordCommand cmd = presentationMapper.toChangePasswordCommand(req, request.getRemoteAddr());
+        commandService.changePassword(userId, cmd);
+        clearRefreshTokenCookie(response);
+        return ResponseEntity.ok(ApiResponse.ok("Password changed successfully", null));
     }
 
     private void setRefreshTokenCookie(

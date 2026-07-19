@@ -67,6 +67,19 @@ class ProfileRemoteDataSource {
     }
   }
 
+  Future<void> logoutAll() async {
+    try {
+      await _apiClient.post<void>('/auth/logout-all');
+    } on DioException catch (error) {
+      final failure = _toFailure(error);
+      if (failure.code == FailureCode.unauthorized ||
+          failure.code == FailureCode.tokenExpired) {
+        return;
+      }
+      throw failure;
+    }
+  }
+
   /// Best-effort memories count from share history (optional).
   Future<int?> getMemoriesCount() async {
     try {
