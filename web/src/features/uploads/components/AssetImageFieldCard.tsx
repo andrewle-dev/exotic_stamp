@@ -2,21 +2,14 @@ import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 
 import { Check, ImageIcon, Loader2, Upload, X } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { ImageWithFallback } from '../../../components/ui/ImageWithFallback'
-import { FieldHelpTooltip } from '../../../components/ui/InfoTooltip'
 import { InlineFieldError } from '../../../components/ui/InlineFieldError'
 import { getErrorMessage } from '../../../lib/api/errors'
 import { cn } from '../../../lib/utils/cn'
-import type { AssetUploadPurpose } from '../../../types/uploads'
 import { useUploadPublicAsset } from '../hooks'
 
 export type AssetImageObjectFit = 'contain' | 'cover'
 export type AssetImagePreviewSize = 'md' | 'lg'
 export type AssetImagePreviewAspect = 'square' | 'wide'
-
-const SQUARE_HELP =
-  'Recommended: square image 1:1, ideally 2048×2048 or 2560×2560. Minimum: 1024×1024.'
-const WIDE_HELP =
-  'Recommended: landscape banner 16:9, ideally 1920×1080. Minimum: 1280×720.'
 
 export interface AssetImageFieldCardProps {
   id: string
@@ -26,12 +19,8 @@ export interface AssetImageFieldCardProps {
   onChange: (url: string) => void
   error?: string
   required?: boolean
-  /**
-   * @deprecated Prefer `help` — kept for call-site compatibility; rendered as tooltip content when `help` is omitted.
-   */
+  /** Contextual helper under the title */
   hint?: string
-  /** Detailed guidance shown via info tooltip on the far right of the header row. */
-  help?: string
   /** When true and a file was uploaded this session, show unsaved upload hint. */
   formDirty?: boolean
   /**
@@ -45,20 +34,13 @@ export interface AssetImageFieldCardProps {
   previewAspect?: AssetImagePreviewAspect
   /** How the preview fits inside the frame. */
   objectFit?: AssetImageObjectFit
-  /**
-   * @deprecated Aspect guidance now lives in the title tooltip. Kept so call sites do not break.
-   */
+  /** Show recommended square size helper. Defaults to true for square aspect. */
   showSquareHint?: boolean
-  /** Allow clearing the current image URL via overlay remove control. */
+  /** Allow clearing the current image URL. */
   clearable?: boolean
-  /**
-   * Backend validation purpose. When set, dimension / aspect rules are enforced server-side.
-   * Defaults to GENERIC (type + size only).
-   */
-  purpose?: AssetUploadPurpose
 }
 
-const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp'
+const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'
 
 /** Fixed square edge — same size for upload zone + preview so the row never misaligns. */
 const SQUARE_EDGE: Record<AssetImagePreviewSize, string> = {
@@ -73,9 +55,9 @@ const UPLOAD_EDGE: Record<AssetImagePreviewSize, string> = {
 
 /**
  * Stable asset editor for admin drawers.
- * Square: [ upload zone | preview ] with compact X remove on preview top-right.
- * Wide: single 16:9 frame that is both drop target and live preview; Remove at bottom-right.
- * Header: title left, help tooltip right.
+ * Square: [ upload zone | preview ]
+ * Wide: single 16:9 frame that is both drop target and live preview.
+ * Binds uploaded URL into form state without exposing a raw URL field.
  */
 export function AssetImageFieldCard({
   id,
@@ -85,30 +67,29 @@ export function AssetImageFieldCard({
   error,
   required,
   hint,
-  help,
   formDirty = false,
   showUrlInput = false,
   previewSize = 'md',
   previewAspect = 'square',
   objectFit = 'cover',
+  showSquareHint,
   clearable = false,
-  purpose = 'GENERIC',
 }: AssetImageFieldCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragActive, setDragActive] = useState(false)
   const [uploadedThisSession, setUploadedThisSession] = useState(false)
   const uploadMutation = useUploadPublicAsset()
   const isWide = previewAspect === 'wide'
+  const resolveSquareHint = showSquareHint ?? !isWide
   const hasImage = Boolean(value)
-  const tooltipContent = help ?? hint ?? (isWide ? WIDE_HELP : SQUARE_HELP)
 
   const processFile = useCallback(
     async (file: File) => {
-      const result = await uploadMutation.mutateAsync({ file, purpose })
+      const result = await uploadMutation.mutateAsync(file)
       onChange(result.url)
       setUploadedThisSession(true)
     },
-    [onChange, purpose, uploadMutation],
+    [onChange, uploadMutation],
   )
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -130,7 +111,6 @@ export function AssetImageFieldCard({
 
   function handleClear() {
     setUploadedThisSession(false)
-    uploadMutation.reset()
     onChange('')
   }
 
@@ -143,8 +123,6 @@ export function AssetImageFieldCard({
   const uploadEdge = UPLOAD_EDGE[previewSize]
   const objectFitClass = objectFit === 'contain' ? 'object-contain' : 'object-cover'
   const isPending = uploadMutation.isPending
-  const uploadError = uploadMutation.isError ? getErrorMessage(uploadMutation.error) : undefined
-  const displayError = error ?? uploadError
 
   const fileInput = (
     <input
@@ -157,47 +135,39 @@ export function AssetImageFieldCard({
     />
   )
 
-  const squareRemoveControl =
-    clearable && hasImage ? (
-      <button
-        type="button"
-        className={cn(
-          'absolute right-1.5 top-1.5 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full',
-          'border border-border/80 bg-white/95 text-muted-foreground shadow-sm',
-          'transition-colors hover:border-destructive/30 hover:bg-white hover:text-destructive',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
-          'disabled:pointer-events-none disabled:opacity-50',
-        )}
-        disabled={isPending}
-        onClick={(e) => {
-          e.stopPropagation()
-          handleClear()
-        }}
-        aria-label={`Remove ${title}`}
-      >
-        <X className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
-    ) : null
-
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <label
             htmlFor={showUrlInput ? id : `${id}-file`}
-            className="min-w-0 flex items-center gap-1 text-sm font-medium text-foreground"
+            className="flex items-center gap-1 text-sm font-medium text-foreground"
           >
             {title}
             {required ? <span className="text-destructive">*</span> : null}
           </label>
-          <FieldHelpTooltip
-            content={tooltipContent}
-            label={`Help for ${title}`}
-            align="end"
-            className="shrink-0"
-          />
+          {clearable && hasImage && !isWide ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto shrink-0 px-2 py-1 text-xs text-muted-foreground"
+              disabled={isPending}
+              onClick={handleClear}
+              aria-label={`Remove ${title}`}
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              Remove
+            </Button>
+          ) : null}
         </div>
-        <InlineFieldError id={`${id}-error`} message={displayError} />
+        {hint && !error ? <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p> : null}
+        {resolveSquareHint && !error ? (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Recommended square image size for the preview.
+          </p>
+        ) : null}
+        <InlineFieldError id={`${id}-error`} message={error} />
       </div>
 
       {showUrlInput ? (
@@ -229,7 +199,7 @@ export function AssetImageFieldCard({
                   ? 'border-border border-solid bg-secondary/30 hover:border-primary/50'
                   : 'border-border/80 bg-secondary/70 hover:border-primary/45 hover:bg-secondary',
               isPending && 'pointer-events-none opacity-70',
-              displayError && 'border-destructive/50',
+              error && 'border-destructive/50',
             )}
             onDragOver={(e) => {
               e.preventDefault()
@@ -307,7 +277,9 @@ export function AssetImageFieldCard({
                   <p className="text-sm font-medium text-foreground">
                     {isPending ? 'Uploading…' : 'Drop a landscape banner here'}
                   </p>
-                  <p className="text-xs text-muted-foreground">Drop or choose a file</p>
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG, WebP, GIF, or SVG · ≈16:9
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -344,7 +316,7 @@ export function AssetImageFieldCard({
                 ? 'border-primary bg-primary/5'
                 : 'border-border bg-secondary/50 hover:border-primary/40 hover:bg-secondary',
               isPending && 'pointer-events-none opacity-70',
-              displayError && 'border-destructive/40',
+              error && 'border-destructive/40',
             )}
             onDragOver={(e) => {
               e.preventDefault()
@@ -364,7 +336,9 @@ export function AssetImageFieldCard({
               <p className="text-sm font-medium leading-tight text-foreground">
                 {isPending ? 'Uploading…' : 'Drag and drop an image'}
               </p>
-              <p className="text-[11px] leading-tight text-muted-foreground">Drop or choose a file</p>
+              <p className="text-[11px] leading-tight text-muted-foreground">
+                PNG, JPG, WebP, GIF, or SVG
+              </p>
             </div>
             <Button
               type="button"
@@ -401,12 +375,17 @@ export function AssetImageFieldCard({
                 <span className="text-[11px] font-medium">No preview</span>
               </div>
             )}
-            {squareRemoveControl}
           </div>
         </div>
       )}
 
-      {uploadMutation.isSuccess && uploadedThisSession && !isPending && !uploadError ? (
+      {uploadMutation.isError ? (
+        <p className="text-xs text-destructive" role="alert">
+          {getErrorMessage(uploadMutation.error)}
+        </p>
+      ) : null}
+
+      {uploadMutation.isSuccess && uploadedThisSession && !isPending ? (
         <p className="flex items-center gap-1.5 text-xs text-emerald-700">
           <Check className="h-3.5 w-3.5" aria-hidden="true" />
           Upload complete — ready to save
@@ -414,7 +393,9 @@ export function AssetImageFieldCard({
       ) : null}
 
       {showUnsavedHint ? (
-        <p className="text-xs text-amber-700">Uploaded but not saved yet — submit the form to keep it.</p>
+        <p className="text-xs text-amber-700">
+          Uploaded but not saved yet — submit the form to persist this asset.
+        </p>
       ) : null}
     </div>
   )

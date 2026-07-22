@@ -32,5 +32,4 @@ export const NAV_ITEMS = [
   { label: 'Rewards & Vouchers', path: ROUTES.rewards, icon: 'Gift' },
   { label: 'Analytics', path: ROUTES.analytics, icon: 'BarChart2' },
   { label: 'RBAC', path: ROUTES.rbac, icon: 'ShieldCheck' },
-  { label: 'Settings', path: ROUTES.settings, icon: 'Settings' },
 ] as const

@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   MapPin,
   Megaphone,
-  Settings,
   ShieldCheck,
   Stamp,
   Train,
@@ -26,7 +25,6 @@ const iconMap = {
   Gift,
   BarChart2,
   ShieldCheck,
-  Settings,
 } as const
 
 function CaretTriangle({ direction }: { direction: 'left' | 'right' }) {
