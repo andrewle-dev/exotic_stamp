@@ -10,6 +10,12 @@ import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpMaxAttemptsExceededException;
 import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMismatchException;
 import metro.ExoticStamp.modules.auth.domain.exception.PasswordPolicyViolationException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenExpiredException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenRevokedException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenReusedException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshUnavailableException;
+import metro.ExoticStamp.modules.auth.domain.exception.SessionRevokedException;
+import metro.ExoticStamp.modules.auth.domain.exception.ConflictingRefreshCredentialsException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
@@ -648,8 +654,62 @@ public class GlobalExceptionHandler {
             TokenExpiredException ex,
             HttpServletRequest req
     ) {
-        log.warn("[401] Token expired: {}", ex.getMessage());
-        return build(401, "TOKEN_EXPIRED", ex.getMessage(), req);
+        log.warn("[401] Token expired");
+        return build(401, "ACCESS_TOKEN_EXPIRED", "Access token expired", req);
+    }
+
+    @ExceptionHandler(RefreshTokenExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleRefreshTokenExpired(
+            RefreshTokenExpiredException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[401] Refresh token expired");
+        return build(401, "REFRESH_TOKEN_EXPIRED", "Refresh token expired", req);
+    }
+
+    @ExceptionHandler(RefreshTokenRevokedException.class)
+    public ResponseEntity<ErrorResponse> handleRefreshTokenRevoked(
+            RefreshTokenRevokedException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[401] Refresh token revoked");
+        return build(401, "REFRESH_TOKEN_REVOKED", "Refresh token revoked", req);
+    }
+
+    @ExceptionHandler(RefreshTokenReusedException.class)
+    public ResponseEntity<ErrorResponse> handleRefreshTokenReused(
+            RefreshTokenReusedException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[401] Refresh token reused");
+        return build(401, "REFRESH_TOKEN_REUSED", "Refresh token reuse detected", req);
+    }
+
+    @ExceptionHandler(RefreshUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleRefreshUnavailable(
+            RefreshUnavailableException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[503] Refresh unavailable");
+        return build(503, "REFRESH_UNAVAILABLE", "Refresh temporarily unavailable", req);
+    }
+
+    @ExceptionHandler(SessionRevokedException.class)
+    public ResponseEntity<ErrorResponse> handleSessionRevoked(
+            SessionRevokedException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[401] Session revoked");
+        return build(401, "SESSION_REVOKED", "Session revoked", req);
+    }
+
+    @ExceptionHandler(ConflictingRefreshCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleConflictingRefresh(
+            ConflictingRefreshCredentialsException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[400] Conflicting refresh credentials");
+        return build(400, "CONFLICTING_REFRESH_CREDENTIALS", ex.getMessage(), req);
     }
 
     @ExceptionHandler(InvalidTokenException.class)
@@ -657,8 +717,8 @@ public class GlobalExceptionHandler {
             InvalidTokenException ex,
             HttpServletRequest req
     ) {
-        log.warn("[401] Invalid token: {}", ex.getMessage());
-        return build(401, "INVALID_TOKEN", ex.getMessage(), req);
+        log.warn("[401] Invalid token");
+        return build(401, "INVALID_TOKEN", "Invalid token", req);
     }
 
     @ExceptionHandler(OtpExpiredException.class)
@@ -693,8 +753,8 @@ public class GlobalExceptionHandler {
             UserNotActiveException ex,
             HttpServletRequest req
     ) {
-        log.warn("[403] User not active: {}", ex.getMessage());
-        return build(403, "USER_NOT_ACTIVE", ex.getMessage(), req);
+        log.warn("[403] User not active");
+        return build(403, "ACCOUNT_DISABLED", "Account disabled", req);
     }
 
     @ExceptionHandler(SecurityBreachException.class)
@@ -702,8 +762,8 @@ public class GlobalExceptionHandler {
             SecurityBreachException ex,
             HttpServletRequest req
     ) {
-        log.error("[401] Security breach: {}", ex.getMessage());
-        return build(401, "SECURITY_BREACH", ex.getMessage(), req);
+        log.error("[401] Security breach");
+        return build(401, "REFRESH_TOKEN_REUSED", "Refresh token reuse detected", req);
     }
 
     @ExceptionHandler(ResendCooldownException.class)

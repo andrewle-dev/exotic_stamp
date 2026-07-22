@@ -1,3 +1,7 @@
+server:
+  # Trust X-Forwarded-Proto / Host from reverse proxy (prod TLS termination).
+  forward-headers-strategy: framework
+
 spring:
   config:
     activate:
@@ -32,6 +36,13 @@ application:
 
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
+
+  auth:
+    cookie:
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+      secure-always: true
+      path: /api/v1/auth
+      domain: ${AUTH_COOKIE_DOMAIN:}
 
 jwt:
   secret: ${JWT_SECRET}

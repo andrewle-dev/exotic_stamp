@@ -3,10 +3,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
 import '../../features/app_config/domain/entities/app_update_decision.dart';
+import '../../features/auth/presentation/cubit/auth_state.dart';
 import 'route_names.dart';
 
 /// Redirect logic for onboarding, update policy, and authentication guards.
 abstract final class RouteGuards {
+  static bool _isUnauthenticated(Injection injection) {
+    return injection.authCubit.state.status == AuthStatus.unauthenticated;
+  }
+
   static Future<String?> redirect(
     BuildContext context,
     GoRouterState state,
@@ -28,6 +33,9 @@ abstract final class RouteGuards {
       final onboardingDone = injection.localPreferences.onboardingCompleted;
       if (!onboardingDone) {
         return RouteNames.welcome;
+      }
+      if (_isUnauthenticated(injection)) {
+        return RouteNames.login;
       }
       final hasToken = await injection.tokenStorage.hasAccessToken();
       return hasToken ? RouteNames.home : RouteNames.login;
@@ -54,7 +62,7 @@ abstract final class RouteGuards {
       return null;
     }
 
-    if (!hasToken) {
+    if (_isUnauthenticated(injection) || !hasToken) {
       return RouteNames.login;
     }
 

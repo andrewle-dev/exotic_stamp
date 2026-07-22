@@ -13,19 +13,22 @@ import metro.ExoticStamp.modules.auth.application.command.ResetPasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.RegisterCommand;
 import metro.ExoticStamp.modules.auth.application.command.ResendVerificationCommand;
 import metro.ExoticStamp.modules.auth.application.command.VerifyAccountCommand;
-import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
+import metro.ExoticStamp.modules.auth.domain.model.AuthTransport;
+import metro.ExoticStamp.modules.auth.domain.model.ClientPlatform;
 import metro.ExoticStamp.modules.auth.presentation.mapper.AuthPresentationMapper;
+import metro.ExoticStamp.modules.auth.presentation.support.AuthTransportResolver;
+import metro.ExoticStamp.modules.auth.presentation.support.RefreshCookieSupport;
 import metro.ExoticStamp.common.response.ApiResponse;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ChangePasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ForgotPasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.LoginRequest;
+import metro.ExoticStamp.modules.auth.presentation.dto.request.RefreshTokenRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.RegisterRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResetPasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResendOtpRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResendVerificationRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.VerifyAccountRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.response.AuthResponse;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -38,7 +41,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,14 +50,9 @@ import java.util.UUID;
 @Tag(name = "Auth")
 public class AuthController {
 
-    private static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
-    private static final String REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth/refresh";
-
-    private static final int CLEAR_COOKIE_MAX_AGE_SECONDS = 0;
-
     private final AuthCommandService commandService;
     private final AuthPresentationMapper presentationMapper;
-    private final TokenTtlPort tokenTtlPort;
+    private final RefreshCookieSupport refreshCookieSupport;
 
     @PostMapping("/login")
     @Operation(summary = "Login and issue access token")
@@ -64,18 +61,16 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
+        AuthTransport transport = AuthTransportResolver.transportFromRequest(request);
         String userAgent = request.getHeader("User-Agent");
         String ip = request.getRemoteAddr();
 
         LoginCommand cmd = presentationMapper.toLoginCommand(req, ip, userAgent);
-        AuthResponse res = presentationMapper.toAuthResponse(commandService.login(cmd));
+        cmd.setTransport(transport);
+        cmd.setClientPlatform(ClientPlatform.fromTransport(transport));
 
-        setRefreshTokenCookie(
-                response,
-                res.getRefreshToken(),
-                request.isSecure()
-        );
-        res.clearRefreshToken();
+        AuthResponse res = presentationMapper.toAuthResponse(commandService.login(cmd));
+        applyTransportResponse(transport, request, response, res);
         return ResponseEntity.ok(res);
     }
 
@@ -131,25 +126,36 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Single refresh endpoint with unambiguous credential source:
+     * body refreshToken (native) XOR HttpOnly cookie (web).
+     * Conflicting unequal values are rejected.
+     */
     @PostMapping("/refresh")
-    @Operation(summary = "Refresh access token using refresh cookie")
+    @Operation(summary = "Refresh access token (cookie for web, body for native)")
     public ResponseEntity<AuthResponse> refresh(
+            @RequestBody(required = false) RefreshTokenRequest body,
             HttpServletRequest request,
             HttpServletResponse response
     ) {
-        String refreshToken = readCookieValue(request, REFRESH_TOKEN_COOKIE_NAME)
-                .orElse(null);
+        Optional<String> cookieToken = refreshCookieSupport.readRefreshCookie(request);
+        Optional<String> bodyToken = Optional.ofNullable(body)
+                .map(RefreshTokenRequest::getRefreshToken);
+
+        AuthTransportResolver.ResolvedRefresh resolved =
+                AuthTransportResolver.resolveRefreshCredential(cookieToken, bodyToken);
 
         AuthResponse res = presentationMapper.toAuthResponse(commandService.refresh(
-                new RefreshTokenCommand(refreshToken)
+                RefreshTokenCommand.builder()
+                        .refreshToken(resolved.refreshToken())
+                        .transport(resolved.transport())
+                        .clientPlatform(ClientPlatform.fromTransport(resolved.transport()))
+                        .ipAddress(request.getRemoteAddr())
+                        .userAgent(request.getHeader("User-Agent"))
+                        .build()
         ));
 
-        setRefreshTokenCookie(
-                response,
-                res.getRefreshToken(),
-                request.isSecure()
-        );
-        res.clearRefreshToken();
+        applyTransportResponse(resolved.transport(), request, response, res);
         return ResponseEntity.ok(res);
     }
 
@@ -157,6 +163,7 @@ public class AuthController {
     @Operation(summary = "Logout current session", security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<Void> logout(
             @AuthenticationPrincipal UserDetails principal,
+            @RequestBody(required = false) RefreshTokenRequest body,
             HttpServletRequest request,
             HttpServletResponse response
     ) {
@@ -166,11 +173,15 @@ public class AuthController {
                 request.getHeader("Authorization"),
                 userId
         );
-        Optional<String> refreshToken = readCookieValue(request, REFRESH_TOKEN_COOKIE_NAME);
+
+        Optional<String> cookieToken = refreshCookieSupport.readRefreshCookie(request);
+        Optional<String> bodyToken = Optional.ofNullable(body)
+                .map(RefreshTokenRequest::getRefreshToken);
+        Optional<String> refreshToken = bodyToken.filter(t -> t != null && !t.isBlank())
+                .or(() -> cookieToken);
 
         commandService.logout(userId, refreshToken, accessJti);
-
-        clearRefreshTokenCookie(response);
+        refreshCookieSupport.clearRefreshCookie(request, response);
         return ResponseEntity.ok().build();
     }
 
@@ -178,11 +189,12 @@ public class AuthController {
     @Operation(summary = "Logout all sessions", security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<Void> logoutAll(
             @AuthenticationPrincipal UserDetails principal,
+            HttpServletRequest request,
             HttpServletResponse response
     ) {
         UUID userId = commandService.resolveUserId(principal);
         commandService.logoutAll(userId);
-        clearRefreshTokenCookie(response);
+        refreshCookieSupport.clearRefreshCookie(request, response);
         return ResponseEntity.ok().build();
     }
 
@@ -190,9 +202,7 @@ public class AuthController {
     @Operation(
             summary = "Change password for the authenticated user",
             description = "Requires the current password. On success, all refresh tokens and access tokens "
-                    + "are invalidated (tokenVersion bump). The client must log in again. "
-                    + "Error codes: CURRENT_PASSWORD_INCORRECT, PASSWORD_CONFIRMATION_MISMATCH, "
-                    + "NEW_PASSWORD_SAME_AS_CURRENT, PASSWORD_POLICY_VIOLATION, USER_NOT_FOUND, USER_NOT_ACTIVE.",
+                    + "are invalidated (tokenVersion bump). The client must log in again.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<Void>> changePassword(
@@ -204,50 +214,22 @@ public class AuthController {
         UUID userId = commandService.resolveUserId(principal);
         ChangePasswordCommand cmd = presentationMapper.toChangePasswordCommand(req, request.getRemoteAddr());
         commandService.changePassword(userId, cmd);
-        clearRefreshTokenCookie(response);
+        refreshCookieSupport.clearRefreshCookie(request, response);
         return ResponseEntity.ok(ApiResponse.ok("Password changed successfully", null));
     }
 
-    private void setRefreshTokenCookie(
-            HttpServletResponse response,
-            String refreshToken,
-            boolean secure
-    ) {
-        Cookie cookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(secure);
-        cookie.setPath(REFRESH_TOKEN_COOKIE_PATH);
-        cookie.setMaxAge(refreshTokenCookieMaxAgeSeconds());
-        response.addCookie(cookie);
-    }
-
-    private void clearRefreshTokenCookie(HttpServletResponse response) {
-        Cookie cookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath(REFRESH_TOKEN_COOKIE_PATH);
-        cookie.setMaxAge(CLEAR_COOKIE_MAX_AGE_SECONDS);
-        response.addCookie(cookie);
-    }
-
-    private int refreshTokenCookieMaxAgeSeconds() {
-        long seconds = Math.max(0L, tokenTtlPort.getRefreshTokenTtl().getSeconds());
-        return seconds > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) seconds;
-    }
-
-    private Optional<String> readCookieValue(
+    private void applyTransportResponse(
+            AuthTransport transport,
             HttpServletRequest request,
-            String cookieName
+            HttpServletResponse response,
+            AuthResponse res
     ) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return Optional.empty();
+        if (transport == AuthTransport.BODY) {
+            // Native: refresh stays in JSON; clear any prior web cookie.
+            refreshCookieSupport.clearRefreshCookie(request, response);
+            return;
         }
-        for (Cookie cookie : cookies) {
-            if (Objects.equals(cookie.getName(), cookieName)) {
-                return Optional.ofNullable(cookie.getValue());
-            }
-        }
-        return Optional.empty();
+        refreshCookieSupport.setRefreshCookie(request, response, res.getRefreshToken());
+        res.clearRefreshToken();
     }
 }

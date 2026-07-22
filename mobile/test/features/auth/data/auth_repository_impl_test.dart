@@ -44,9 +44,10 @@ void main() {
     when(() => apiClient.clearSession()).thenAnswer((_) async {});
   });
 
-  test('login stores access token on success', () async {
+  test('login stores access in memory and refresh in secure storage', () async {
     const response = AuthResponseModel(
       accessToken: 'token-abc',
+      refreshToken: 'refresh-abc',
       tokenType: 'Bearer',
       user: UserModel(
         id: 'user-1',
@@ -68,15 +69,16 @@ void main() {
     );
 
     expect(session.accessToken, 'token-abc');
+    expect(tokenStorage.readAccessToken(), 'token-abc');
     verify(
       () => secureStorage.write(
-        key: 'access_token',
-        value: 'token-abc',
+        key: 'refresh_token',
+        value: 'refresh-abc',
       ),
     ).called(1);
   });
 
-  test('logout clears token and cookies via api client', () async {
+  test('logout clears session via api client', () async {
     when(() => remoteDataSource.logout()).thenAnswer((_) async {});
 
     await repository.logout();
@@ -99,16 +101,9 @@ void main() {
     verify(() => apiClient.clearSession()).called(1);
   });
 
-  test('restoreSession clears token when refresh fails after expired token',
-      () async {
-    when(() => secureStorage.read(key: 'access_token'))
-        .thenAnswer((_) async => 'expired-token');
-    when(() => remoteDataSource.getMe()).thenThrow(
-      const Failure(
-        code: FailureCode.tokenExpired,
-        message: 'Access token expired',
-      ),
-    );
+  test('restoreSession clears tokens when refresh fails', () async {
+    when(() => secureStorage.read(key: 'refresh_token'))
+        .thenAnswer((_) async => 'refresh-old');
     when(() => remoteDataSource.refresh()).thenThrow(
       const Failure(
         code: FailureCode.tokenExpired,
@@ -119,6 +114,83 @@ void main() {
     final session = await repository.restoreSession();
 
     expect(session, isNull);
-    verify(() => secureStorage.delete(key: 'access_token')).called(1);
+    verify(() => secureStorage.delete(key: 'refresh_token')).called(1);
+  });
+
+  test('login fails closed when refresh token cannot be persisted', () async {
+    const response = AuthResponseModel(
+      accessToken: 'token-abc',
+      refreshToken: 'refresh-abc',
+      tokenType: 'Bearer',
+      user: UserModel(
+        id: 'user-1',
+        email: 'an@example.com',
+        username: 'an.nguyen',
+      ),
+    );
+
+    when(
+      () => remoteDataSource.login(
+        identifier: any(named: 'identifier'),
+        password: any(named: 'password'),
+      ),
+    ).thenAnswer((_) async => response);
+    when(
+      () => secureStorage.write(
+        key: 'refresh_token',
+        value: any(named: 'value'),
+      ),
+    ).thenThrow(Exception('secure storage unavailable'));
+
+    await expectLater(
+      () => repository.login(
+        identifier: 'an@example.com',
+        password: 'secret',
+      ),
+      throwsA(
+        isA<Failure>().having(
+          (f) => f.code,
+          'code',
+          FailureCode.unauthorized,
+        ),
+      ),
+    );
+
+    expect(tokenStorage.readAccessToken(), isNull);
+    verify(() => secureStorage.delete(key: 'refresh_token')).called(1);
+  });
+
+  test('refreshSession fails closed when rotated refresh cannot be persisted', () async {
+    const response = AuthResponseModel(
+      accessToken: 'token-new',
+      refreshToken: 'refresh-new',
+      tokenType: 'Bearer',
+      user: UserModel(
+        id: 'user-1',
+        email: 'an@example.com',
+        username: 'an.nguyen',
+      ),
+    );
+
+    when(() => remoteDataSource.refresh()).thenAnswer((_) async => response);
+    when(
+      () => secureStorage.write(
+        key: 'refresh_token',
+        value: any(named: 'value'),
+      ),
+    ).thenThrow(Exception('secure storage unavailable'));
+
+    await expectLater(
+      repository.refreshSession,
+      throwsA(
+        isA<Failure>().having(
+          (f) => f.code,
+          'code',
+          FailureCode.unauthorized,
+        ),
+      ),
+    );
+
+    expect(tokenStorage.readAccessToken(), isNull);
   });
 }

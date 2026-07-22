@@ -20,6 +20,15 @@ import java.time.Duration;
 @Setter
 public class AuthSecurityProperties {
 
+    /**
+     * Short window where a rotated refresh token may be presented again
+     * (legitimate concurrent refresh / network retry). Outside this window,
+     * reuse triggers family revocation.
+     */
+    @NotNull
+    @DurationMin(seconds = 1)
+    private Duration refreshReuseGrace = Duration.ofSeconds(30);
+
     @Valid
     @NotNull
     private Otp otp = new Otp();

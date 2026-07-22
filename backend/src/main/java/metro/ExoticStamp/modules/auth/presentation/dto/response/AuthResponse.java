@@ -1,17 +1,20 @@
 package metro.ExoticStamp.modules.auth.presentation.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Auth response. Refresh token is included in JSON only for native (BODY) transport;
+ * web clears it so Jackson omits the field ({@link JsonInclude.Include#NON_NULL}).
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AuthResponse {
 
     private String accessToken;
     private String tokenType = "Bearer";
     private UserInfo userInfo;
-
-    @JsonIgnore
     private String refreshToken;
 
     public String getAccessToken() {

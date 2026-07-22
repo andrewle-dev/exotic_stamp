@@ -177,6 +177,19 @@ void main() {
 
     expect(redirect, isNull);
   });
+
+  test('unauthenticated auth state overrides stale token on protected route',
+      () async {
+    when(() => tokenStorage.hasAccessToken()).thenAnswer((_) async => true);
+    Injection.instance.authCubit.markUnauthenticated();
+
+    final redirect = await RouteGuards.redirect(
+      _FakeBuildContext(),
+      FakeGoRouterState(RouteNames.home),
+    );
+
+    expect(redirect, RouteNames.login);
+  });
 }
 
 class _FakeBuildContext extends Fake implements BuildContext {}

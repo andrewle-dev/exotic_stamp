@@ -27,7 +27,10 @@ import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
 import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMismatchException;
 import metro.ExoticStamp.modules.auth.domain.exception.PasswordPolicyViolationException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenReusedException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshUnavailableException;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
+import metro.ExoticStamp.modules.auth.domain.exception.SessionRevokedException;
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
 import metro.ExoticStamp.modules.auth.domain.model.AccessToken;
 import metro.ExoticStamp.modules.auth.domain.model.OtpType;
@@ -62,7 +65,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class AuthCommandServiceTest {
@@ -104,6 +109,8 @@ class AuthCommandServiceTest {
         activeUser.setId(USER_ID);
         otpProperties = new AuthSecurityProperties.Otp();
         lenient().when(authSecurityProperties.getOtp()).thenReturn(otpProperties);
+        lenient().when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
+        lenient().when(refreshTokenStore.findGraceCredentials(any())).thenReturn(Optional.empty());
     }
 
     @AfterEach
@@ -292,18 +299,24 @@ class AuthCommandServiceTest {
     void refresh_success_rotatesTokens() {
         String oldRefresh = "old-refresh";
         String hash = "old-hash";
+        UUID sessionId = UUID.randomUUID();
         AccessToken record = AccessToken.builder()
-                .id(UUID.randomUUID())
+                .id(sessionId)
                 .userId(USER_ID)
                 .tokenHash(hash)
+                .tokenFamilyId(sessionId)
                 .deviceFingerprint("fp")
+                .ipAddress("127.0.0.1")
+                .userAgent("ua")
                 .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now())
+                .version(0L)
                 .build();
         when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
-        when(refreshTokenStore.isRevoked(hash)).thenReturn(false);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
         when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
-        when(accessTokenRepository.findByTokenHash(hash)).thenReturn(Optional.of(record));
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
         when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
         when(accessTokenRevocation.getDeviceAccessJti(USER_ID, "fp")).thenReturn(Optional.of("old-jti"));
@@ -313,26 +326,213 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken("new-refresh")).thenReturn("new-hash");
         when(tokenTtlPort.getRefreshTokenTtl()).thenReturn(Duration.ofDays(7));
         when(tokenTtlPort.getAccessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+        when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
 
-        AuthView view = authCommandService.refresh(new RefreshTokenCommand(oldRefresh));
+        AuthView view = authCommandService.refresh(RefreshTokenCommand.builder()
+                .refreshToken(oldRefresh)
+                .build());
 
         assertEquals("new-access", view.accessToken());
-        verify(accessTokenRepository).revokeByTokenHash(hash, AccessToken.REASON_ROTATED);
-        verify(refreshTokenStore).revoke(USER_ID, "fp", hash);
+        assertEquals(AccessToken.REASON_ROTATED, record.getRevokedReason());
+        assertNotNull(record.getReplacedByTokenId());
+        verify(accessTokenRepository, atLeastOnce()).save(any(AccessToken.class));
+        verify(refreshTokenStore).putGraceCredentials(eq(hash), eq("new-access"), eq("new-refresh"), any());
     }
 
     @Test
-    void refresh_reuseAttack_throwsAndRevokesAll() {
+    void refresh_reuseOutsideGrace_revokesAllSessions() {
         String token = "reused";
         String hash = "h";
+        UUID familyId = UUID.randomUUID();
+        AccessToken record = AccessToken.builder()
+                .id(UUID.randomUUID())
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(familyId)
+                .deviceFingerprint("fp")
+                .ipAddress("127.0.0.1")
+                .userAgent("ua")
+                .revokedAt(LocalDateTime.now().minusMinutes(5))
+                .revokedReason(AccessToken.REASON_ROTATED)
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now().minusDays(1))
+                .version(0L)
+                .build();
         when(accessTokenPort.hashToken(token)).thenReturn(hash);
-        when(refreshTokenStore.isRevoked(hash)).thenReturn(true);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
+        when(accessTokenPort.isTokenValid(token)).thenReturn(true);
         when(accessTokenPort.extractUserId(token)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+        when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
+        when(userAccountPort.findTokenVersionById(USER_ID)).thenReturn(Optional.of(2L));
 
-        assertThrows(SecurityBreachException.class,
-                () -> authCommandService.refresh(new RefreshTokenCommand(token)));
+        assertThrows(RefreshTokenReusedException.class,
+                () -> authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(token).build()));
         verify(accessTokenRepository).revokeAllByUserId(USER_ID, AccessToken.REASON_REUSE_ATTACK);
-        verify(refreshTokenStore).revokeAllForUser(USER_ID);
+        verify(auditLogService).log(
+                eq(USER_ID),
+                anyString(),
+                anyString(),
+                isNull(),
+                argThat(newValue -> {
+                    if (!(newValue instanceof java.util.Map<?, ?> map)) {
+                        return false;
+                    }
+                    return "ALL_SESSIONS".equals(map.get("scope"))
+                            && Boolean.TRUE.equals(map.get("tokenVersionBumped"));
+                }),
+                isNull()
+        );
+    }
+
+    @Test
+    void refresh_graceWithoutCache_throwsUnavailableNotReuse() {
+        String token = "rotated-retry";
+        String hash = "h2";
+        UUID familyId = UUID.randomUUID();
+        AccessToken record = AccessToken.builder()
+                .id(UUID.randomUUID())
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(familyId)
+                .deviceFingerprint("fp")
+                .ipAddress("127.0.0.1")
+                .userAgent("ua")
+                .revokedAt(LocalDateTime.now().minusSeconds(5))
+                .revokedReason(AccessToken.REASON_ROTATED)
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now().minusDays(1))
+                .version(0L)
+                .build();
+        when(accessTokenPort.hashToken(token)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
+        when(accessTokenPort.isTokenValid(token)).thenReturn(true);
+        when(accessTokenPort.extractUserId(token)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+        when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
+
+        assertThrows(RefreshUnavailableException.class,
+                () -> authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(token).build()));
+        verify(accessTokenRepository, never()).revokeAllByUserId(any(), any());
+    }
+
+    @Test
+    void refresh_tokenVersionChangedDuringRefresh_throwsSessionRevoked() {
+        String oldRefresh = "old-refresh";
+        String hash = "old-hash";
+        UUID sessionId = UUID.randomUUID();
+        AccessToken record = AccessToken.builder()
+                .id(sessionId)
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(sessionId)
+                .deviceFingerprint("fp")
+                .ipAddress("127.0.0.1")
+                .userAgent("ua")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now())
+                .version(0L)
+                .build();
+        activeUser.setTokenVersion(1L);
+        User bumped = User.builder()
+                .email(activeUser.getEmail())
+                .username(activeUser.getUsername())
+                .phoneNumber(activeUser.getPhoneNumber())
+                .password(activeUser.getPassword())
+                .status(UserStatus.ACTIVE)
+                .build();
+        bumped.setId(USER_ID);
+        bumped.setTokenVersion(2L);
+
+        when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
+        when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
+        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+        when(userAccountPort.findById(USER_ID))
+                .thenReturn(Optional.of(activeUser))
+                .thenReturn(Optional.of(bumped));
+        when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
+        when(accessTokenRevocation.getDeviceAccessJti(USER_ID, "fp")).thenReturn(Optional.empty());
+
+        assertThrows(SessionRevokedException.class,
+                () -> authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(oldRefresh).build()));
+        verify(accessTokenPort, never()).issueAccessToken(any(), any());
+    }
+
+    @Test
+    void refresh_accountDisabledDuringRefresh_throwsUserNotActive() {
+        String oldRefresh = "old-refresh";
+        String hash = "old-hash";
+        UUID sessionId = UUID.randomUUID();
+        AccessToken record = AccessToken.builder()
+                .id(sessionId)
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(sessionId)
+                .deviceFingerprint("fp")
+                .ipAddress("127.0.0.1")
+                .userAgent("ua")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now())
+                .version(0L)
+                .build();
+        activeUser.setStatus(UserStatus.INACTIVE);
+        when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
+        when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
+        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+
+        assertThrows(UserNotActiveException.class,
+                () -> authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(oldRefresh).build()));
+        verify(accessTokenPort, never()).issueAccessToken(any(), any());
+    }
+
+    @Test
+    void refresh_disabledAfterInitialActiveCheck_throwsUserNotActive() {
+        String oldRefresh = "old-refresh-race";
+        String hash = "old-hash-race";
+        UUID sessionId = UUID.randomUUID();
+        AccessToken record = AccessToken.builder()
+                .id(sessionId)
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(sessionId)
+                .deviceFingerprint("fp")
+                .ipAddress("127.0.0.1")
+                .userAgent("ua")
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now())
+                .version(0L)
+                .build();
+        activeUser.setTokenVersion(1L);
+        User disabled = User.builder()
+                .email(activeUser.getEmail())
+                .username(activeUser.getUsername())
+                .phoneNumber(activeUser.getPhoneNumber())
+                .password(activeUser.getPassword())
+                .status(UserStatus.INACTIVE)
+                .build();
+        disabled.setId(USER_ID);
+        disabled.setTokenVersion(1L);
+
+        when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
+        when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
+        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+        when(userAccountPort.findById(USER_ID))
+                .thenReturn(Optional.of(activeUser))
+                .thenReturn(Optional.of(disabled));
+        when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
+        when(accessTokenRevocation.getDeviceAccessJti(USER_ID, "fp")).thenReturn(Optional.empty());
+
+        assertThrows(UserNotActiveException.class,
+                () -> authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(oldRefresh).build()));
+        verify(accessTokenPort, never()).issueAccessToken(any(), any());
     }
 
     @Test
@@ -352,7 +552,6 @@ class AuthCommandServiceTest {
 
         verify(accessTokenRevocation).addToDenylist("jti-1", Duration.ofMinutes(15));
         verify(accessTokenRepository).revokeByTokenHash(hash, AccessToken.REASON_LOGOUT);
-        verify(refreshTokenStore).revoke(USER_ID, "fp", hash);
     }
 
     @Test

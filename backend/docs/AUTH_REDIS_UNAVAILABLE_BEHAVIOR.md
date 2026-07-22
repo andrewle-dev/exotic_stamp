@@ -8,8 +8,9 @@ This document describes runtime behavior when Redis is unreachable for auth-rela
 
 | Flow | Redis operation | Redis down behavior | User-visible effect |
 |------|-----------------|---------------------|---------------------|
-| **Refresh** | `RefreshTokenRedisRepository.isRevoked` | **Fail-safe** (`hasKey` fallback `true`) | Refresh rejected — token treated as revoked |
-| **Refresh** | `save` / `revoke` | Write fails silently (logged) | DB `access_tokens` remains source of truth for hash lookup |
+| **Refresh** | `RefreshTokenRedisRepository.isKnownRevoked` | **Fail-open** (`false` on error) | DB session lock remains source of truth; **does not** trigger reuse-attack |
+| **Refresh** | Grace credentials cache | Write/read may miss on Redis down | Concurrent retry may fail closed as reuse outside grace if DB shows ROTATED without grace payload |
+| **Refresh** | `save` / `revoke` (after commit) | Write fails silently (logged) | DB `access_tokens` remains source of truth |
 | **Logout** | `addToDenylist` (access jti) | Write fails silently | Access token may remain valid until JWT expiry if DB `token_version` unchanged |
 | **Logout** | `refreshTokenStore.revoke` | Write fails silently | DB refresh row still revoked via `AccessTokenRepository` |
 | **OTP** | `isOnCooldown` | **Fail-open** (`hasKey` fallback `false`) | Cooldown not enforced |
@@ -24,12 +25,12 @@ This document describes runtime behavior when Redis is unreachable for auth-rela
 
 ## Refresh (`POST /api/v1/auth/refresh`)
 
-1. `RefreshTokenRedisRepository.isRevoked(tokenHash)` uses `hasKey(..., fallbackOnError=true)`.
-2. When Redis is down, **every refresh token is treated as revoked** → `InvalidTokenException` / reuse-handling path.
-3. This is **fail-safe** for session security (prevents reuse when revocation state cannot be read).
-4. Redis `save`/`revoke` failures do not roll back the DB transaction; `access_tokens` table still records rotation/revocation.
+1. `RefreshTokenRedisRepository.isKnownRevoked(tokenHash)` returns **false** on Redis errors (fail-open).
+2. Session validity and rotation use a **DB pessimistic lock** on `access_tokens`; Redis is not the reuse-attack trigger.
+3. A short-lived **grace credentials** cache (`auth:refresh_token:grace:{oldHash}`) supports concurrent/retry refresh within `application.auth.refresh-reuse-grace` (default 30s).
+4. Redis `save`/`revoke` run after DB commit when a transaction is active; failures do not roll back the DB row.
 
-**Config:** refresh Redis TTL from `cache.refresh-token-ttl` (via `CacheProperties`).
+**Config:** refresh Redis TTL from `cache.refresh-token-ttl` (via `CacheProperties`); grace TTL from `application.auth.refresh-reuse-grace`.
 
 ## Logout (`POST /api/v1/auth/logout`, `/logout-all`)
 

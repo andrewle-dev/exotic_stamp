@@ -48,7 +48,7 @@ class GlobalExceptionHandlerTest {
     void userNotActive_returns403() {
         var response = handler.handleUserNotActive(new UserNotActiveException(), request);
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        assertEquals("USER_NOT_ACTIVE", response.getBody().code());
+        assertEquals("ACCOUNT_DISABLED", response.getBody().code());
     }
 
     @Test
@@ -59,10 +59,10 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void securityBreach_returns401() {
+    void securityBreach_returns401MappedToRefreshReuse() {
         var response = handler.handleSecurityBreach(new SecurityBreachException("uid"), request);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
-        assertEquals("SECURITY_BREACH", response.getBody().code());
+        assertEquals("REFRESH_TOKEN_REUSED", response.getBody().code());
     }
 
     @Test

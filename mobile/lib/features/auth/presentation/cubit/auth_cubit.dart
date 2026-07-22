@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/errors/failure.dart';
@@ -20,6 +19,7 @@ class AuthCubit extends Cubit<AuthState> {
     required ResendVerificationOtpUseCase resendVerificationOtpUseCase,
     required RefreshSessionUseCase refreshSessionUseCase,
     required LogoutUseCase logoutUseCase,
+    Duration restoreSessionTimeout = const Duration(seconds: 20),
   })  : _loginUseCase = loginUseCase,
         _registerUseCase = registerUseCase,
         _forgotPasswordUseCase = forgotPasswordUseCase,
@@ -27,6 +27,7 @@ class AuthCubit extends Cubit<AuthState> {
         _resendVerificationOtpUseCase = resendVerificationOtpUseCase,
         _refreshSessionUseCase = refreshSessionUseCase,
         _logoutUseCase = logoutUseCase,
+        _restoreSessionTimeout = restoreSessionTimeout,
         super(const AuthState());
 
   final LoginUseCase _loginUseCase;
@@ -36,16 +37,15 @@ class AuthCubit extends Cubit<AuthState> {
   final ResendVerificationOtpUseCase _resendVerificationOtpUseCase;
   final RefreshSessionUseCase _refreshSessionUseCase;
   final LogoutUseCase _logoutUseCase;
+  final Duration _restoreSessionTimeout;
 
   Future<void> restoreSession() async {
     emit(state.copyWith(status: AuthStatus.loading, clearFailure: true));
-    // TODO(debug-bug2): remove
-    debugPrint('[auth-startup] restoreSession begin');
     try {
-      final session = await _refreshSessionUseCase.restore();
+      final session = await _refreshSessionUseCase
+          .restore()
+          .timeout(_restoreSessionTimeout);
       if (session == null) {
-        // TODO(debug-bug2): remove
-        debugPrint('[auth-startup] restoreSession: no session');
         emit(
           state.copyWith(
             status: AuthStatus.unauthenticated,
@@ -56,8 +56,6 @@ class AuthCubit extends Cubit<AuthState> {
         return;
       }
 
-      // TODO(debug-bug2): remove
-      debugPrint('[auth-startup] restoreSession: authenticated');
       emit(
         state.copyWith(
           status: AuthStatus.authenticated,
@@ -66,9 +64,7 @@ class AuthCubit extends Cubit<AuthState> {
           clearMessage: true,
         ),
       );
-    } catch (error) {
-      // TODO(debug-bug2): remove
-      debugPrint('[auth-startup] restoreSession failed: $error');
+    } catch (_) {
       emit(
         state.copyWith(
           status: AuthStatus.unauthenticated,

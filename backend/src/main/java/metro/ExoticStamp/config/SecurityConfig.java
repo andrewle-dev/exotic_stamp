@@ -1,10 +1,13 @@
 package metro.ExoticStamp.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import metro.ExoticStamp.modules.auth.config.AuthCookieProperties;
+import metro.ExoticStamp.modules.auth.infrastructure.filter.CookieAuthOriginFilter;
 import metro.ExoticStamp.modules.auth.infrastructure.filter.JwtAuthFilter;
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAccessDeniedHandler;
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAuthEntryPoint;
 import metro.ExoticStamp.modules.auth.infrastructure.security.UserDetailsServiceImpl;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -56,9 +59,23 @@ public class SecurityConfig {
     private final CustomAuthEntryPoint authEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
     private final CorsProperties corsProperties;
+    private final AuthCookieProperties authCookieProperties;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Registered only via SecurityFilterChain — not as a servlet Filter {@code @Component},
+     * so {@code @WebMvcTest} slices do not require cookie/CORS beans.
+     */
+    @Bean
+    public CookieAuthOriginFilter cookieAuthOriginFilter() {
+        return new CookieAuthOriginFilter(corsProperties, authCookieProperties, objectMapper);
+    }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            CookieAuthOriginFilter cookieAuthOriginFilter
+    ) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -79,6 +96,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(cookieAuthOriginFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -112,6 +130,7 @@ public class SecurityConfig {
         corsProperties.allowedOriginsList().forEach(config::addAllowedOrigin);
         corsProperties.allowedHeadersList().forEach(config::addAllowedHeader);
         corsProperties.allowedMethodsList().forEach(config::addAllowedMethod);
+        config.setMaxAge(corsProperties.getMaxAgeSeconds());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

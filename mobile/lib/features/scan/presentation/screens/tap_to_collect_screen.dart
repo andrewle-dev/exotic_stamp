@@ -18,20 +18,9 @@ class TapToCollectScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
-      appBar: AppSecondaryAppBar(
+      appBar: const AppSecondaryAppBar(
         title: 'Thu stamp',
         showBottomDivider: false,
-        actions: [
-          TextButton(
-            onPressed: () => context.go(RouteNames.home),
-            child: Text(
-              'Bỏ qua',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),

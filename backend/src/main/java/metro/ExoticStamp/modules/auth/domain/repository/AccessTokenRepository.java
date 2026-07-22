@@ -11,12 +11,18 @@ public interface AccessTokenRepository {
 
     Optional<AccessToken> findByTokenHash(String hash);
 
+    /** Pessimistic write lock for atomic rotation. */
+    Optional<AccessToken> findByTokenHashForUpdate(String hash);
+
+    Optional<AccessToken> findById(UUID id);
+
     List<AccessToken> findAllActiveByUserId(UUID userId);
 
     void revokeByTokenHash(String hash, String reason);
 
     void revokeAllByUserId(UUID userId, String reason);
 
+    void revokeAllByFamilyId(UUID familyId, String reason);
+
     boolean existsByTokenHash(String hash);
 }
-

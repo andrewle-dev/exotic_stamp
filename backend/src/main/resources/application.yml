@@ -75,12 +75,23 @@ application:
     allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
     allowed-headers: ${CORS_ALLOWED_HEADERS:*}
     allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+    max-age-seconds: ${CORS_MAX_AGE_SECONDS:3600}
 
   security:
     token-revocation:
       fail-open-on-db-error: false
 
   auth:
+    refresh-reuse-grace: 30s
+    cookie:
+      name: refresh_token
+      path: /api/v1/auth
+      domain:
+      same-site: Lax
+      # When false, Secure follows request.isSecure(); set secure-always in prod.
+      secure: false
+      secure-always: false
+      http-only: true
     otp:
       length: 6
       forgot-password:

@@ -17,6 +17,8 @@ import metro.ExoticStamp.modules.auth.domain.exception.CurrentPasswordIncorrectE
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ChangePasswordRequest;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.LoginRequest;
+import metro.ExoticStamp.modules.auth.config.AuthCookieProperties;
+import metro.ExoticStamp.modules.auth.presentation.support.RefreshCookieSupport;
 import metro.ExoticStamp.modules.auth.presentation.mapper.AuthPresentationMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +45,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
-@Import({AuthWebMvcTestSecurityConfig.class, AuthPresentationMapper.class, GlobalExceptionHandler.class})
+@Import({
+        AuthWebMvcTestSecurityConfig.class,
+        AuthPresentationMapper.class,
+        GlobalExceptionHandler.class,
+        RefreshCookieSupport.class,
+        AuthCookieProperties.class
+})
 class AuthControllerTest {
 
     private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -99,7 +107,31 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.refreshToken").doesNotExist())
                 .andExpect(cookie().exists("refresh_token"))
+                .andExpect(cookie().path("refresh_token", "/api/v1/auth"))
+                .andExpect(cookie().httpOnly("refresh_token", true))
                 .andExpect(cookie().maxAge("refresh_token", 3600));
+    }
+
+    @Test
+    void login_nativeTransport_includesRefreshInBody() throws Exception {
+        when(tokenTtlPort.getRefreshTokenTtl()).thenReturn(Duration.ofHours(1));
+        when(commandService.login(any())).thenReturn(new AuthView(
+                "access-token",
+                "refresh-token-value",
+                new AuthUserView(java.util.UUID.randomUUID(), "u@test.com", "user1", List.of("USER"))
+        ));
+
+        LoginRequest req = new LoginRequest();
+        req.setIdentifier("u@test.com");
+        req.setPassword("secret");
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .header("X-Client-Transport", "body")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("refresh-token-value"));
     }
 
     @Test

@@ -1,31 +1,23 @@
-import 'dart:io';
+import 'package:uuid/uuid.dart';
 
-import 'package:device_info_plus/device_info_plus.dart';
+import '../storage/secure_token_storage.dart';
 
+/// App-generated device id for session metadata (not an auth factor).
 class DeviceFingerprintService {
-  DeviceFingerprintService({DeviceInfoPlugin? deviceInfo})
-      : _deviceInfo = deviceInfo ?? DeviceInfoPlugin();
+  DeviceFingerprintService({SecureTokenStorage? tokenStorage})
+      : _tokenStorage = tokenStorage ?? SecureTokenStorage();
 
-  final DeviceInfoPlugin _deviceInfo;
-  String? _cachedFingerprint;
+  final SecureTokenStorage _tokenStorage;
+  String? _cached;
 
   Future<String> getFingerprint() async {
-    if (_cachedFingerprint != null) {
-      return _cachedFingerprint!;
+    if (_cached != null) {
+      return _cached!;
     }
-
-    if (Platform.isAndroid) {
-      final info = await _deviceInfo.androidInfo;
-      _cachedFingerprint = info.id.isNotEmpty
-          ? info.id
-          : '${info.brand}-${info.model}-${info.device}';
-    } else if (Platform.isIOS) {
-      final info = await _deviceInfo.iosInfo;
-      _cachedFingerprint = info.identifierForVendor ?? 'ios-${info.model}';
-    } else {
-      _cachedFingerprint = 'unknown-device';
-    }
-
-    return _cachedFingerprint!;
+    _cached = await _tokenStorage.getOrCreateDeviceId();
+    return _cached!;
   }
+
+  /// Testing helper — generates a non-persisted id.
+  static String generateEphemeral() => const Uuid().v4();
 }

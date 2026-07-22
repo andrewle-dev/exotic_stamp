@@ -5,6 +5,7 @@ import { ImageWithFallback } from '../../../components/ui/ImageWithFallback'
 import { InlineFieldError } from '../../../components/ui/InlineFieldError'
 import { getErrorMessage } from '../../../lib/api/errors'
 import { cn } from '../../../lib/utils/cn'
+import type { AssetUploadPurpose } from '../../../types/uploads'
 import { useUploadPublicAsset } from '../hooks'
 
 export type AssetImageObjectFit = 'contain' | 'cover'
@@ -21,6 +22,10 @@ export interface AssetImageFieldCardProps {
   required?: boolean
   /** Contextual helper under the title */
   hint?: string
+  /** Alias used by form drawers; same display as hint. */
+  help?: string
+  /** Upload purpose sent to the public asset API. */
+  purpose?: AssetUploadPurpose
   /** When true and a file was uploaded this session, show unsaved upload hint. */
   formDirty?: boolean
   /**
@@ -67,6 +72,8 @@ export function AssetImageFieldCard({
   error,
   required,
   hint,
+  help,
+  purpose = 'GENERIC',
   formDirty = false,
   showUrlInput = false,
   previewSize = 'md',
@@ -82,14 +89,15 @@ export function AssetImageFieldCard({
   const isWide = previewAspect === 'wide'
   const resolveSquareHint = showSquareHint ?? !isWide
   const hasImage = Boolean(value)
+  const helperText = help ?? hint
 
   const processFile = useCallback(
     async (file: File) => {
-      const result = await uploadMutation.mutateAsync(file)
+      const result = await uploadMutation.mutateAsync({ file, purpose })
       onChange(result.url)
       setUploadedThisSession(true)
     },
-    [onChange, uploadMutation],
+    [onChange, purpose, uploadMutation],
   )
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -161,7 +169,7 @@ export function AssetImageFieldCard({
             </Button>
           ) : null}
         </div>
-        {hint && !error ? <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p> : null}
+        {helperText && !error ? <p className="text-xs leading-relaxed text-muted-foreground">{helperText}</p> : null}
         {resolveSquareHint && !error ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Recommended square image size for the preview.

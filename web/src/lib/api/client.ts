@@ -1,45 +1,113 @@
-import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  type AxiosInstance,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { tokenStore } from '../auth/tokenStore'
 import { parseApiError } from './errors'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 
-let refreshPromise: Promise<string | null> | null = null
+type Deferred = {
+  promise: Promise<void>
+  resolve: () => void
+}
 
-async function refreshAccessToken(client: AxiosInstance): Promise<string | null> {
-  try {
-    const response = await client.post<AuthResponsePayload>(
-      '/api/v1/auth/refresh',
-      undefined,
-      { withCredentials: true },
-    )
-    const token = response.data.accessToken
-    if (token) {
-      tokenStore.set(token)
-      return token
-    }
-    return null
-  } catch {
-    tokenStore.clear()
-    return null
+function createDeferred(): Deferred {
+  let resolve!: () => void
+  const promise = new Promise<void>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+let refreshPromise: Promise<AuthResponsePayload | null> | null = null
+let onSessionInvalidated: (() => void) | null = null
+let bootstrapReady = false
+let bootstrapDeferred = createDeferred()
+
+export function setSessionInvalidatedHandler(handler: (() => void) | null): void {
+  onSessionInvalidated = handler
+}
+
+/** Call when silent bootstrap completes so queued protected requests may proceed. */
+export function markAuthBootstrapComplete(): void {
+  if (bootstrapReady) {
+    return
   }
+  bootstrapReady = true
+  bootstrapDeferred.resolve()
+}
+
+export function waitForAuthBootstrap(): Promise<void> {
+  return bootstrapReady ? Promise.resolve() : bootstrapDeferred.promise
+}
+
+/** Test-only reset between vitest cases. */
+export function resetAuthClientCoordinationForTests(): void {
+  refreshPromise = null
+  onSessionInvalidated = null
+  bootstrapReady = false
+  bootstrapDeferred = createDeferred()
 }
 
 interface AuthResponsePayload {
   accessToken: string
   tokenType?: string
   userInfo?: unknown
+  refreshToken?: string
+}
+
+/** Single-flight silent refresh shared by bootstrap and 401 interceptor. */
+export function refreshAccessTokenOnce(
+  client: AxiosInstance = apiClient,
+): Promise<AuthResponsePayload | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await client.post<AuthResponsePayload>(
+          '/api/v1/auth/refresh',
+          undefined,
+          { withCredentials: true },
+        )
+        const token = response.data.accessToken
+        if (token) {
+          tokenStore.set(token)
+          return response.data
+        }
+        return null
+      } catch {
+        tokenStore.clear()
+        return null
+      }
+    })().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
 }
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     Accept: 'application/json',
+    'X-Client-Transport': 'cookie',
   },
   withCredentials: true,
 })
 
-apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const url = config.url ?? ''
+  const isAuthBootstrapExempt =
+    url.includes('/api/v1/auth/refresh') ||
+    url.includes('/api/v1/auth/login') ||
+    url.includes('/api/v1/auth/register') ||
+    url.includes('/api/v1/auth/forgot-password') ||
+    url.includes('/api/v1/auth/reset-password')
+
+  if (!isAuthBootstrapExempt) {
+    await waitForAuthBootstrap()
+  }
+
   const token = tokenStore.get()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -54,8 +122,9 @@ apiClient.interceptors.response.use(
       _retry?: boolean
     }
 
-    const isRefreshRequest = originalRequest?.url?.includes('/api/v1/auth/refresh')
-    const isLoginRequest = originalRequest?.url?.includes('/api/v1/auth/login')
+    const url = originalRequest?.url ?? ''
+    const isRefreshRequest = url.includes('/api/v1/auth/refresh')
+    const isLoginRequest = url.includes('/api/v1/auth/login')
 
     if (
       error.response?.status === 401 &&
@@ -66,17 +135,13 @@ apiClient.interceptors.response.use(
     ) {
       originalRequest._retry = true
 
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken(apiClient).finally(() => {
-          refreshPromise = null
-        })
-      }
-
-      const newToken = await refreshPromise
-      if (newToken) {
-        originalRequest.headers.Authorization = `Bearer ${newToken}`
+      const refreshed = await refreshAccessTokenOnce(apiClient)
+      if (refreshed?.accessToken) {
+        originalRequest.headers.Authorization = `Bearer ${refreshed.accessToken}`
         return apiClient(originalRequest)
       }
+
+      onSessionInvalidated?.()
     }
 
     return Promise.reject(parseApiError(error))

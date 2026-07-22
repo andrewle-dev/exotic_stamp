@@ -12,6 +12,7 @@ import metro.ExoticStamp.modules.auth.application.port.AccessTokenRevocationPort
 import metro.ExoticStamp.modules.auth.application.port.OtpStorePort;
 import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort;
 import metro.ExoticStamp.modules.auth.application.port.TokenTtlPort;
+import metro.ExoticStamp.modules.auth.config.AuthCookieProperties;
 import metro.ExoticStamp.modules.auth.config.AuthSecurityProperties;
 import metro.ExoticStamp.modules.auth.infrastructure.jwt.JwtProvider;
 import metro.ExoticStamp.modules.auth.infrastructure.security.AccessTokenRevocationValidator;
@@ -20,6 +21,7 @@ import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAuthEntryPoi
 import metro.ExoticStamp.modules.auth.infrastructure.security.UserDetailsServiceImpl;
 import metro.ExoticStamp.modules.auth.presentation.dto.request.ResendVerificationRequest;
 import metro.ExoticStamp.modules.auth.presentation.mapper.AuthPresentationMapper;
+import metro.ExoticStamp.modules.auth.presentation.support.RefreshCookieSupport;
 import metro.ExoticStamp.modules.auth.domain.repository.AccessTokenRepository;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
 import metro.ExoticStamp.modules.user.application.port.UserAccountPort;
@@ -58,7 +60,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         AuthWebMvcTestSecurityConfig.class,
         AuthPresentationMapper.class,
         GlobalExceptionHandler.class,
-        AuthCommandService.class
+        AuthCommandService.class,
+        RefreshCookieSupport.class,
+        AuthCookieProperties.class
 })
 class AuthResendVerificationControllerTest {
 

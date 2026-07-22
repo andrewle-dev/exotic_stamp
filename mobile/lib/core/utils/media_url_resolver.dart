@@ -12,10 +12,29 @@ class MediaUrlResolver {
       return null;
     }
     if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-      return pathOrUrl;
+      return _rewriteLoopbackUrl(pathOrUrl);
     }
     final normalizedPath =
         pathOrUrl.startsWith('/') ? pathOrUrl : '/$pathOrUrl';
     return '$_mediaOrigin$normalizedPath';
+  }
+
+  String _rewriteLoopbackUrl(String absoluteUrl) {
+    final sourceUri = Uri.tryParse(absoluteUrl);
+    final originUri = Uri.tryParse(_mediaOrigin);
+    if (sourceUri == null || originUri == null) {
+      return absoluteUrl;
+    }
+
+    final host = sourceUri.host.toLowerCase();
+    if (host != 'localhost' && host != '127.0.0.1') {
+      return absoluteUrl;
+    }
+
+    return sourceUri.replace(
+      scheme: originUri.scheme,
+      host: originUri.host,
+      port: originUri.hasPort ? originUri.port : null,
+    ).toString();
   }
 }

@@ -40,7 +40,9 @@ void main() {
 
     tokenStorage = MockSecureTokenStorage();
     when(() => tokenStorage.hasAccessToken()).thenAnswer((_) async => true);
-    when(() => tokenStorage.readAccessToken()).thenAnswer((_) async => 'token');
+    when(() => tokenStorage.readAccessToken()).thenReturn('token');
+    when(() => tokenStorage.readRefreshToken())
+        .thenAnswer((_) async => 'refresh');
 
     router = createAppRouter();
 
@@ -117,9 +119,10 @@ void main() {
     await pumpShell(tester);
 
     router.go(RouteNames.settings);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(router.state.matchedLocation, RouteNames.settings);
+    // Legacy settings path redirects to personal information.
+    expect(router.state.matchedLocation, RouteNames.personalInformation);
     expect(RouteNames.shellRoutes.contains(RouteNames.settings), isFalse);
   });
 

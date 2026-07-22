@@ -1,63 +1,43 @@
-import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../config/api_config.dart';
 import '../storage/secure_token_storage.dart';
 import 'auth_interceptor.dart';
 
-/// Handles a single refresh attempt on 401 using the HttpOnly refresh cookie.
-class CookieRefreshInterceptor extends QueuedInterceptor {
-  CookieRefreshInterceptor({
+/// Single-flight refresh using native body refresh contract (no cookies).
+class NativeRefreshInterceptor extends QueuedInterceptor {
+  NativeRefreshInterceptor({
     required Dio dio,
     required SecureTokenStorage tokenStorage,
-    required CookieJar cookieJar,
     Future<void> Function()? onSessionInvalidated,
   })  : _dio = dio,
         _tokenStorage = tokenStorage,
-        _cookieJar = cookieJar,
         _onSessionInvalidated = onSessionInvalidated;
 
   final Dio _dio;
   final SecureTokenStorage _tokenStorage;
-  final CookieJar _cookieJar;
   final Future<void> Function()? _onSessionInvalidated;
 
   static const _retriedExtraKey = 'retried_after_refresh';
 
   Future<void>? _refreshFuture;
+  bool _clearing = false;
 
   @override
   Future<void> onError(
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    if (err.response?.statusCode == 401) {
-      // TODO(debug-bug2): remove
-      debugPrint(
-        '[refresh] 401 on ${err.requestOptions.path} '
-        'attemptRefresh=${_shouldAttemptRefresh(err)}',
-      );
-    }
-
     if (!_shouldAttemptRefresh(err)) {
       return handler.next(err);
     }
 
-    // TODO(debug-bug2): remove
-    debugPrint('[refresh] starting refresh for ${err.requestOptions.path}');
     try {
       await _refreshAccessTokenOnce();
       final response = await _retryRequest(err.requestOptions);
-      // TODO(debug-bug2): remove
-      debugPrint('[refresh] success, retry resolved ${err.requestOptions.path}');
       return handler.resolve(response);
-    } catch (error) {
-      // TODO(debug-bug2): remove
-      debugPrint('[refresh] failed: $error');
-      await _tokenStorage.clear();
-      await _cookieJar.deleteAll();
-      await _onSessionInvalidated?.call();
+    } catch (_) {
+      await _invalidateOnce();
       return handler.next(err);
     }
   }
@@ -88,29 +68,52 @@ class CookieRefreshInterceptor extends QueuedInterceptor {
   }
 
   Future<void> _performRefresh() async {
+    final refreshToken = await _tokenStorage.readRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      throw DioException(
+        requestOptions: RequestOptions(path: ApiConfig.refreshPath),
+        message: 'Missing refresh token',
+      );
+    }
+
     final response = await _dio.post<Map<String, dynamic>>(
       ApiConfig.refreshPath,
+      data: {'refreshToken': refreshToken},
       options: Options(
+        headers: const {'X-Client-Transport': 'body'},
         extra: {AuthInterceptor.skipAuthKey: true},
       ),
     );
 
     final data = response.data;
-    final token = data?['accessToken'] as String?;
-    if (token == null || token.isEmpty) {
+    final access = data?['accessToken'] as String?;
+    final nextRefresh = data?['refreshToken'] as String?;
+    if (access == null || access.isEmpty || nextRefresh == null || nextRefresh.isEmpty) {
       throw DioException(
         requestOptions: response.requestOptions,
-        message: 'Refresh response missing accessToken',
+        message: 'Refresh response missing tokens',
       );
     }
 
-    await _tokenStorage.writeAccessToken(token);
-    // TODO(debug-bug2): remove
-    debugPrint('[refresh] new access token length=${token.length}');
+    try {
+      await _tokenStorage.writeRefreshToken(nextRefresh);
+      await _tokenStorage.writeAccessToken(access);
+    } catch (_) {
+      await _tokenStorage.clearSessionTokens();
+      throw DioException(
+        requestOptions: response.requestOptions,
+        message: 'Failed to persist rotated refresh token',
+        type: DioExceptionType.unknown,
+      );
+    }
   }
 
   Future<Response<dynamic>> _retryRequest(RequestOptions requestOptions) {
     final headers = Map<String, dynamic>.from(requestOptions.headers);
+    final token = _tokenStorage.readAccessToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
     return _dio.request<dynamic>(
       requestOptions.path,
       data: requestOptions.data,
@@ -118,17 +121,24 @@ class CookieRefreshInterceptor extends QueuedInterceptor {
       options: Options(
         method: requestOptions.method,
         headers: headers,
-        contentType: requestOptions.contentType,
-        responseType: requestOptions.responseType,
-        followRedirects: requestOptions.followRedirects,
-        validateStatus: requestOptions.validateStatus,
-        receiveTimeout: requestOptions.receiveTimeout,
-        sendTimeout: requestOptions.sendTimeout,
         extra: {
           ...requestOptions.extra,
           _retriedExtraKey: true,
         },
       ),
     );
+  }
+
+  Future<void> _invalidateOnce() async {
+    if (_clearing) {
+      return;
+    }
+    _clearing = true;
+    try {
+      await _tokenStorage.clearSessionTokens();
+      await _onSessionInvalidated?.call();
+    } finally {
+      _clearing = false;
+    }
   }
 }

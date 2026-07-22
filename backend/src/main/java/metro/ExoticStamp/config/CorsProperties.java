@@ -19,6 +19,8 @@ public class CorsProperties {
     private String allowedMethods = "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD";
     private String allowedHeaders = "*";
     private boolean allowCredentials = true;
+    /** Preflight cache duration in seconds. */
+    private long maxAgeSeconds = 3600;
 
     @PostConstruct
     void rejectWildcardOriginsWithCredentials() {

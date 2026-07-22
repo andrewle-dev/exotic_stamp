@@ -27,13 +27,23 @@ public class AccessTokenRepositoryAdapter implements AccessTokenRepository {
     }
 
     @Override
+    public Optional<AccessToken> findByTokenHashForUpdate(String hash) {
+        return jpa.findByTokenHashForUpdate(hash);
+    }
+
+    @Override
+    public Optional<AccessToken> findById(UUID id) {
+        return jpa.findById(id);
+    }
+
+    @Override
     public List<AccessToken> findAllActiveByUserId(UUID userId) {
         return jpa.findAllActiveByUserId(userId, LocalDateTime.now());
     }
 
     @Override
     public void revokeByTokenHash(String hash, String reason) {
-        jpa.revokeByTokenHash(hash, reason, LocalDateTime.now());
+        jpa.revokeByTokenHashIfActive(hash, reason, LocalDateTime.now());
     }
 
     @Override
@@ -42,8 +52,12 @@ public class AccessTokenRepositoryAdapter implements AccessTokenRepository {
     }
 
     @Override
+    public void revokeAllByFamilyId(UUID familyId, String reason) {
+        jpa.revokeAllByFamilyId(familyId, reason, LocalDateTime.now());
+    }
+
+    @Override
     public boolean existsByTokenHash(String hash) {
         return jpa.findByTokenHash(hash).isPresent();
     }
 }
-

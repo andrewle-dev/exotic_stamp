@@ -1,5 +1,7 @@
 package metro.ExoticStamp.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import metro.ExoticStamp.modules.auth.config.AuthCookieProperties;
 import metro.ExoticStamp.modules.auth.infrastructure.filter.JwtAuthFilter;
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAccessDeniedHandler;
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAuthEntryPoint;
@@ -24,9 +26,7 @@ class CorsConfigurationTest {
 
     @Test
     void cors_allowsPatchMethod() {
-        CorsProperties corsProperties = devCorsProperties();
-        SecurityConfig config = new SecurityConfig(
-                jwtAuthFilter, userDetailsService, authEntryPoint, accessDeniedHandler, corsProperties);
+        SecurityConfig config = newSecurityConfig(devCorsProperties());
         CorsConfiguration cors = config.corsConfigurationSource().getCorsConfiguration(
                 new org.springframework.mock.web.MockHttpServletRequest("OPTIONS", "/api/v1/users/me"));
         assertNotNull(cors);
@@ -35,9 +35,7 @@ class CorsConfigurationTest {
 
     @Test
     void cors_includesConfiguredOrigin() {
-        CorsProperties corsProperties = devCorsProperties();
-        SecurityConfig config = new SecurityConfig(
-                jwtAuthFilter, userDetailsService, authEntryPoint, accessDeniedHandler, corsProperties);
+        SecurityConfig config = newSecurityConfig(devCorsProperties());
         CorsConfiguration cors = config.corsConfigurationSource().getCorsConfiguration(
                 new org.springframework.mock.web.MockHttpServletRequest("OPTIONS", "/api/v1/users/me"));
         assertNotNull(cors);
@@ -46,9 +44,7 @@ class CorsConfigurationTest {
 
     @Test
     void cors_excludesUnknownOrigin() {
-        CorsProperties corsProperties = devCorsProperties();
-        SecurityConfig config = new SecurityConfig(
-                jwtAuthFilter, userDetailsService, authEntryPoint, accessDeniedHandler, corsProperties);
+        SecurityConfig config = newSecurityConfig(devCorsProperties());
         CorsConfiguration cors = config.corsConfigurationSource().getCorsConfiguration(
                 new org.springframework.mock.web.MockHttpServletRequest("OPTIONS", "/api/v1/users/me"));
         assertNotNull(cors);
@@ -63,13 +59,23 @@ class CorsConfigurationTest {
         corsProperties.setAllowedHeaders("Authorization,Content-Type");
         corsProperties.setAllowCredentials(true);
 
-        SecurityConfig config = new SecurityConfig(
-                jwtAuthFilter, userDetailsService, authEntryPoint, accessDeniedHandler, corsProperties);
+        SecurityConfig config = newSecurityConfig(corsProperties);
         CorsConfiguration cors = config.corsConfigurationSource().getCorsConfiguration(
                 new org.springframework.mock.web.MockHttpServletRequest("OPTIONS", "/api/v1/users/me"));
         assertNotNull(cors);
         assertTrue(cors.getAllowedOrigins().contains("https://app.exoticstamp.example"));
         assertTrue(cors.getAllowedMethods().contains("PATCH"));
+    }
+
+    private SecurityConfig newSecurityConfig(CorsProperties corsProperties) {
+        return new SecurityConfig(
+                jwtAuthFilter,
+                userDetailsService,
+                authEntryPoint,
+                accessDeniedHandler,
+                corsProperties,
+                new AuthCookieProperties(),
+                new ObjectMapper());
     }
 
     private static CorsProperties devCorsProperties() {

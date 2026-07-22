@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metro_stamp_app/core/errors/failure.dart';
 import 'package:metro_stamp_app/core/network/api_client.dart';
-import 'package:metro_stamp_app/core/services/device_fingerprint_service.dart';
+import 'package:metro_stamp_app/core/storage/secure_token_storage.dart';
 import 'package:metro_stamp_app/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:metro_stamp_app/features/auth/data/models/auth_response_model.dart';
 import 'package:metro_stamp_app/features/auth/data/models/register_request.dart';
@@ -10,20 +10,28 @@ import 'package:mocktail/mocktail.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 
+class MockSecureTokenStorage extends Mock implements SecureTokenStorage {}
+
 void main() {
   late MockApiClient apiClient;
+  late MockSecureTokenStorage tokenStorage;
   late AuthRemoteDataSource dataSource;
 
   setUp(() {
     apiClient = MockApiClient();
+    tokenStorage = MockSecureTokenStorage();
+    when(() => tokenStorage.getOrCreateDeviceId())
+        .thenAnswer((_) async => 'test-device');
+    when(() => tokenStorage.readRefreshToken())
+        .thenAnswer((_) async => 'refresh-1');
     dataSource = AuthRemoteDataSource(
       apiClient: apiClient,
-      deviceFingerprintService: _FixedFingerprintService(),
+      tokenStorage: tokenStorage,
     );
   });
 
   group('AuthRemoteDataSource', () {
-    test('login parses auth response', () async {
+    test('login parses auth response including refresh token', () async {
       when(
         () => apiClient.post<Map<String, dynamic>>(
           '/auth/login',
@@ -34,6 +42,7 @@ void main() {
         (_) async => Response<Map<String, dynamic>>(
           data: {
             'accessToken': 'token-123',
+            'refreshToken': 'refresh-xyz',
             'tokenType': 'Bearer',
             'userInfo': {
               'id': 'user-1',
@@ -53,6 +62,7 @@ void main() {
       );
 
       expect(result.accessToken, 'token-123');
+      expect(result.refreshToken, 'refresh-xyz');
       expect(result.user.email, 'an@example.com');
     });
 
@@ -128,6 +138,7 @@ void main() {
     test('fromJson maps session fields', () {
       final model = AuthResponseModel.fromJson({
         'accessToken': 'abc',
+        'refreshToken': 'r1',
         'tokenType': 'Bearer',
         'userInfo': {
           'id': 'id-1',
@@ -139,12 +150,8 @@ void main() {
 
       final session = model.toSession();
       expect(session.accessToken, 'abc');
+      expect(model.refreshToken, 'r1');
       expect(session.user.username, 'tester');
     });
   });
-}
-
-class _FixedFingerprintService extends DeviceFingerprintService {
-  @override
-  Future<String> getFingerprint() async => 'test-device';
 }

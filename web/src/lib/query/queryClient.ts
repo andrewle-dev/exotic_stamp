@@ -19,3 +19,7 @@ export function createQueryClient(): QueryClient {
     },
   })
 }
+
+/** Singleton used by AppProviders (kept out of component modules for Fast Refresh). */
+export const appQueryClient = createQueryClient()
+

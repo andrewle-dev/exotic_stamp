@@ -120,7 +120,7 @@ public abstract class RedisKeyValueSupport {
         meterRegistry.counter("cache.miss", "domain", domain).increment();
     }
 
-    private void markError(String domain) {
+    protected void markError(String domain) {
         meterRegistry.counter("cache.error", "domain", domain).increment();
     }
 }

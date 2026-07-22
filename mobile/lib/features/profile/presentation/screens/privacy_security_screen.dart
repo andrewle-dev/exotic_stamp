@@ -267,22 +267,18 @@ class _InfoTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.enabled = true,
     this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool enabled;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final titleColor =
-        enabled ? AppColors.textPrimary : AppColors.textSecondary;
-    final iconColor =
-        enabled ? AppColors.primaryBlue : AppColors.textSecondary;
+    const titleColor = AppColors.textPrimary;
+    const iconColor = AppColors.primaryBlue;
 
     final content = Container(
       width: double.infinity,
@@ -322,7 +318,7 @@ class _InfoTile extends StatelessWidget {
               ],
             ),
           ),
-          if (onTap != null && enabled)
+          if (onTap != null)
             const Icon(
               Icons.chevron_right_rounded,
               color: AppColors.textSecondary,
@@ -331,7 +327,7 @@ class _InfoTile extends StatelessWidget {
       ),
     );
 
-    if (onTap == null || !enabled) {
+    if (onTap == null) {
       return content;
     }
 

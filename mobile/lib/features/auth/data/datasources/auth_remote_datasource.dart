@@ -5,7 +5,7 @@ import '../../../../core/errors/failure.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/auth_interceptor.dart';
 import '../../../../core/network/error_interceptor.dart';
-import '../../../../core/services/device_fingerprint_service.dart';
+import '../../../../core/storage/secure_token_storage.dart';
 import '../models/auth_response_model.dart';
 import '../models/change_password_request.dart';
 import '../models/forgot_password_request.dart';
@@ -18,26 +18,25 @@ import '../models/user_model.dart';
 class AuthRemoteDataSource {
   AuthRemoteDataSource({
     required ApiClient apiClient,
-    DeviceFingerprintService? deviceFingerprintService,
+    required SecureTokenStorage tokenStorage,
     ErrorMapper? errorMapper,
   })  : _apiClient = apiClient,
-        _deviceFingerprintService =
-            deviceFingerprintService ?? DeviceFingerprintService(),
+        _tokenStorage = tokenStorage,
         _errorMapper = errorMapper ?? const ErrorMapper();
 
   final ApiClient _apiClient;
-  final DeviceFingerprintService _deviceFingerprintService;
+  final SecureTokenStorage _tokenStorage;
   final ErrorMapper _errorMapper;
 
   Future<AuthResponseModel> login({
     required String identifier,
     required String password,
   }) async {
-    final fingerprint = await _deviceFingerprintService.getFingerprint();
+    final deviceId = await _tokenStorage.getOrCreateDeviceId();
     final request = LoginRequest(
       identifier: identifier,
       password: password,
-      deviceFingerprint: fingerprint,
+      deviceFingerprint: deviceId,
     );
 
     return _postAuthResponse(
@@ -104,16 +103,28 @@ class AuthRemoteDataSource {
     }
   }
 
-  Future<AuthResponseModel> refresh() {
+  Future<AuthResponseModel> refresh() async {
+    final refreshToken = await _tokenStorage.readRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      throw const Failure(
+        code: FailureCode.unauthorized,
+        message: 'Bạn cần đăng nhập để tiếp tục.',
+      );
+    }
     return _postAuthResponse(
       '/auth/refresh',
+      data: {'refreshToken': refreshToken},
       skipAuth: true,
     );
   }
 
   Future<void> logout() async {
     try {
-      await _apiClient.post<void>('/auth/logout');
+      final refreshToken = await _tokenStorage.readRefreshToken();
+      await _apiClient.post<void>(
+        '/auth/logout',
+        data: refreshToken == null ? null : {'refreshToken': refreshToken},
+      );
     } on DioException catch (error) {
       final failure = _toFailure(error);
       if (failure.code == FailureCode.unauthorized ||
@@ -161,6 +172,7 @@ class AuthRemoteDataSource {
         path,
         data: data,
         options: Options(
+          headers: const {'X-Client-Transport': 'body'},
           extra: skipAuth ? {AuthInterceptor.skipAuthKey: true} : null,
         ),
       );

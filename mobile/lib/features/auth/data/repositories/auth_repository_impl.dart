@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import '../../../../core/errors/failure.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/storage/secure_token_storage.dart';
@@ -32,7 +30,7 @@ class AuthRepositoryImpl implements AuthRepository {
       identifier: identifier,
       password: password,
     );
-    await _tokenStorage.writeAccessToken(response.accessToken);
+    await _persistTokens(response.accessToken, response.refreshToken);
     return response.toSession();
   }
 
@@ -78,7 +76,7 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Session> refreshSession() async {
     final response = await _remoteDataSource.refresh();
-    await _tokenStorage.writeAccessToken(response.accessToken);
+    await _persistTokens(response.accessToken, response.refreshToken);
     return response.toSession();
   }
 
@@ -115,41 +113,45 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<bool> hasStoredSession() {
-    return _tokenStorage.hasAccessToken();
+  Future<bool> hasStoredSession() async {
+    final refresh = await _tokenStorage.readRefreshToken();
+    return refresh != null && refresh.isNotEmpty;
   }
 
   @override
   Future<Session?> restoreSession() async {
-    final hasToken = await _tokenStorage.hasAccessToken();
-    // TODO(debug-bug2): remove
-    debugPrint('[auth-startup] hasStoredAccessToken=$hasToken');
-    if (!hasToken) {
-      return _tryRefreshSession();
-    }
-
-    try {
-      return await _sessionFromCurrentUser();
-    } on Failure catch (failure) {
-      if (_shouldAttemptRefresh(failure)) {
-        return _tryRefreshSession();
-      }
-      await _tokenStorage.clear();
+    final refresh = await _tokenStorage.readRefreshToken();
+    if (refresh == null || refresh.isEmpty) {
       return null;
     }
+
+    final hasAccess = await _tokenStorage.hasAccessToken();
+    if (hasAccess) {
+      try {
+        return await _sessionFromCurrentUser();
+      } on Failure catch (failure) {
+        if (_shouldAttemptRefresh(failure)) {
+          return _tryRefreshSession();
+        }
+        await _tokenStorage.clearSessionTokens();
+        return null;
+      }
+    }
+
+    return _tryRefreshSession();
   }
 
   Future<Session?> _tryRefreshSession() async {
     try {
       return await refreshSession();
     } on Failure {
-      await _tokenStorage.clear();
+      await _tokenStorage.clearSessionTokens();
       return null;
     }
   }
 
   Future<Session> _sessionFromCurrentUser() async {
-    final token = await _tokenStorage.readAccessToken();
+    final token = _tokenStorage.readAccessToken();
     if (token == null || token.isEmpty) {
       throw const Failure(
         code: FailureCode.unauthorized,
@@ -159,6 +161,26 @@ class AuthRepositoryImpl implements AuthRepository {
 
     final user = await getCurrentUser();
     return Session(accessToken: token, user: user);
+  }
+
+  Future<void> _persistTokens(String accessToken, String? refreshToken) async {
+    if (refreshToken == null || refreshToken.isEmpty) {
+      await _tokenStorage.clearSessionTokens();
+      throw const Failure(
+        code: FailureCode.unauthorized,
+        message: 'Bạn cần đăng nhập lại.',
+      );
+    }
+    try {
+      await _tokenStorage.writeRefreshToken(refreshToken);
+      await _tokenStorage.writeAccessToken(accessToken);
+    } catch (_) {
+      await _tokenStorage.clearSessionTokens();
+      throw const Failure(
+        code: FailureCode.unauthorized,
+        message: 'Bạn cần đăng nhập lại.',
+      );
+    }
   }
 
   bool _shouldAttemptRefresh(Failure failure) {

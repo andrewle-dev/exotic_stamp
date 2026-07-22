@@ -5,16 +5,43 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { getCurrentUser, login as loginApi, logout as logoutApi, refreshSession } from './api'
-import { AuthContext, type AuthContextValue } from './hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  getCurrentUser,
+  login as loginApi,
+  logout as logoutApi,
+  logoutAll as logoutAllApi,
+  refreshSession,
+} from './api'
+import { AuthContext, type AuthContextValue, type AuthStatus } from './hooks'
 import type { AuthUserInfo, UserResponse } from './types'
-import { tokenStore } from '../../lib/auth/tokenStore'
+import {
+  clearLegacyPersistedAccessToken,
+  tokenStore,
+} from '../../lib/auth/tokenStore'
 import { parseApiError } from '../../lib/api/errors'
+import {
+  markAuthBootstrapComplete,
+  setSessionInvalidatedHandler,
+} from '../../lib/api/client'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<AuthUserInfo | null>(null)
   const [profile, setProfile] = useState<UserResponse | null>(null)
-  const [isInitializing, setIsInitializing] = useState(true)
+  const [status, setStatus] = useState<AuthStatus>('restoring')
+
+  const clearUserScopedCache = useCallback(() => {
+    queryClient.clear()
+  }, [queryClient])
+
+  const markUnauthenticated = useCallback(() => {
+    tokenStore.clear()
+    setUser(null)
+    setProfile(null)
+    setStatus('unauthenticated')
+    clearUserScopedCache()
+  }, [clearUserScopedCache])
 
   const refreshUser = useCallback(async () => {
     const profileData = await getCurrentUser()
@@ -30,33 +57,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    clearLegacyPersistedAccessToken()
+  }, [])
+
+  useEffect(() => {
+    setSessionInvalidatedHandler(() => {
+      markUnauthenticated()
+    })
+    return () => setSessionInvalidatedHandler(null)
+  }, [markUnauthenticated])
+
+  useEffect(() => {
     let cancelled = false
 
     async function bootstrap() {
+      setStatus('restoring')
       try {
-        const existingToken = tokenStore.get()
-        if (!existingToken) {
-          const refreshed = await refreshSession()
-          if (!refreshed) {
-            return
-          }
+        // Always silent-refresh first so access stays memory-only across reloads.
+        const refreshed = await refreshSession()
+        // Unlock the API client before any authenticated follow-up calls (e.g. /users/me).
+        markAuthBootstrapComplete()
+        if (!refreshed) {
           if (!cancelled) {
-            setUser(refreshed.userInfo)
+            markUnauthenticated()
           }
+          return
         }
-
+        if (!cancelled) {
+          setUser(refreshed.userInfo)
+        }
         if (!cancelled) {
           await refreshUser()
+          setStatus('authenticated')
         }
       } catch {
-        tokenStore.clear()
+        markAuthBootstrapComplete()
         if (!cancelled) {
-          setUser(null)
-          setProfile(null)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsInitializing(false)
+          markUnauthenticated()
         }
       }
     }
@@ -66,13 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [refreshUser])
+  }, [refreshUser, markUnauthenticated])
 
-  const login = useCallback(async (request: Parameters<AuthContextValue['login']>[0]) => {
-    const response = await loginApi(request)
-    setUser(response.userInfo)
-    await refreshUser()
-  }, [refreshUser])
+  const login = useCallback(
+    async (request: Parameters<AuthContextValue['login']>[0]) => {
+      const response = await loginApi(request)
+      clearUserScopedCache()
+      setUser(response.userInfo)
+      await refreshUser()
+      setStatus('authenticated')
+    },
+    [refreshUser, clearUserScopedCache],
+  )
 
   const logout = useCallback(async () => {
     try {
@@ -80,23 +122,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       parseApiError(error)
     } finally {
-      setUser(null)
-      setProfile(null)
-      tokenStore.clear()
+      markUnauthenticated()
     }
-  }, [])
+  }, [markUnauthenticated])
+
+  const logoutAll = useCallback(async () => {
+    try {
+      await logoutAllApi()
+    } catch (error) {
+      parseApiError(error)
+    } finally {
+      markUnauthenticated()
+    }
+  }, [markUnauthenticated])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       profile,
-      isAuthenticated: Boolean(user && tokenStore.get()),
-      isInitializing,
+      status,
+      isAuthenticated: status === 'authenticated' && Boolean(user && tokenStore.get()),
+      isInitializing: status === 'restoring',
       login,
       logout,
+      logoutAll,
       refreshUser,
     }),
-    [user, profile, isInitializing, login, logout, refreshUser],
+    [user, profile, status, login, logout, logoutAll, refreshUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

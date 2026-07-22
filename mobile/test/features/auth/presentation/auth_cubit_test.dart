@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metro_stamp_app/core/errors/failure.dart';
@@ -97,6 +99,32 @@ void main() {
             'code',
             FailureCode.invalidCredentials,
           ),
+    ],
+  );
+
+  blocTest<AuthCubit, AuthState>(
+    'restoreSession falls back to unauthenticated when restore hangs',
+    build: () {
+      when(
+        () => repository.restoreSession(),
+      ).thenAnswer((_) => Completer<Session?>().future);
+      return AuthCubit(
+        loginUseCase: LoginUseCase(repository),
+        registerUseCase: RegisterUseCase(repository),
+        forgotPasswordUseCase: ForgotPasswordUseCase(repository),
+        verifyAccountUseCase: VerifyAccountUseCase(repository),
+        resendVerificationOtpUseCase: ResendVerificationOtpUseCase(repository),
+        refreshSessionUseCase: RefreshSessionUseCase(repository),
+        logoutUseCase: LogoutUseCase(repository),
+        restoreSessionTimeout: const Duration(milliseconds: 50),
+      );
+    },
+    act: (cubit) => cubit.restoreSession(),
+    wait: const Duration(milliseconds: 100),
+    expect: () => [
+      isA<AuthState>().having((s) => s.status, 'status', AuthStatus.loading),
+      isA<AuthState>()
+          .having((s) => s.status, 'status', AuthStatus.unauthenticated),
     ],
   );
 }

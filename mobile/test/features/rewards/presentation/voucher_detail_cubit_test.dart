@@ -85,7 +85,7 @@ void main() {
   );
 
   blocTest<VoucherDetailCubit, VoucherDetailState>(
-    'redeem confirms via repository response',
+    'redeem is no-op while online redeem is disabled',
     build: () {
       when(() => repository.getVoucherDetail(id: 'reward-1')).thenAnswer(
         (_) async => const VoucherDetail(
@@ -116,8 +116,8 @@ void main() {
     ),
     act: (cubit) => cubit.redeem(),
     verify: (_) {
-      expect(cubit.state.detail?.status, UserRewardStatus.used);
-      verify(() => repository.redeemVoucher(id: 'reward-1')).called(1);
+      expect(cubit.state.detail?.status, UserRewardStatus.available);
+      verifyNever(() => repository.redeemVoucher(id: 'reward-1'));
     },
   );
 }

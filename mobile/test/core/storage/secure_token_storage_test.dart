@@ -15,18 +15,16 @@ void main() {
   });
 
   group('SecureTokenStorage', () {
-    test('reads access token from secure storage', () async {
-      when(
-        () => mockStorage.read(key: any(named: 'key')),
-      ).thenAnswer((_) async => 'token-123');
-
-      final token = await tokenStorage.readAccessToken();
-
-      expect(token, 'token-123');
-      verify(() => mockStorage.read(key: 'access_token')).called(1);
+    test('keeps access token in memory only', () async {
+      await tokenStorage.writeAccessToken('token-123');
+      expect(tokenStorage.readAccessToken(), 'token-123');
+      verifyNever(() => mockStorage.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
+          ));
     });
 
-    test('writes access token to secure storage', () async {
+    test('stores refresh token in secure storage', () async {
       when(
         () => mockStorage.write(
           key: any(named: 'key'),
@@ -34,32 +32,40 @@ void main() {
         ),
       ).thenAnswer((_) async {});
 
-      await tokenStorage.writeAccessToken('token-abc');
+      await tokenStorage.writeRefreshToken('refresh-abc');
 
       verify(
         () => mockStorage.write(
-          key: 'access_token',
-          value: 'token-abc',
+          key: 'refresh_token',
+          value: 'refresh-abc',
         ),
       ).called(1);
     });
 
-    test('hasAccessToken returns false when token missing', () async {
-      when(
-        () => mockStorage.read(key: any(named: 'key')),
-      ).thenAnswer((_) async => null);
-
+    test('hasAccessToken returns false when memory empty', () async {
       expect(await tokenStorage.hasAccessToken(), isFalse);
     });
 
-    test('clear removes access token', () async {
+    test('clear removes refresh token and memory access', () async {
       when(
         () => mockStorage.delete(key: any(named: 'key')),
       ).thenAnswer((_) async {});
 
+      await tokenStorage.writeAccessToken('a');
       await tokenStorage.clear();
 
-      verify(() => mockStorage.delete(key: 'access_token')).called(1);
+      expect(tokenStorage.readAccessToken(), isNull);
+      verify(() => mockStorage.delete(key: 'refresh_token')).called(1);
+    });
+
+    test('device id is stable across reads', () async {
+      when(() => mockStorage.read(key: 'device_id'))
+          .thenAnswer((_) async => 'device-1');
+
+      final first = await tokenStorage.getOrCreateDeviceId();
+      final second = await tokenStorage.getOrCreateDeviceId();
+      expect(first, 'device-1');
+      expect(second, 'device-1');
     });
   });
 }

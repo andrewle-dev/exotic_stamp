@@ -29,12 +29,18 @@ import metro.ExoticStamp.modules.auth.domain.exception.OtpMaxAttemptsExceededExc
 import metro.ExoticStamp.modules.auth.domain.exception.OtpExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.OtpInvalidException;
 import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMismatchException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenExpiredException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenRevokedException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenReusedException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshUnavailableException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
-import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
 import metro.ExoticStamp.modules.auth.domain.model.AccessToken;
+import metro.ExoticStamp.modules.auth.domain.model.ClientPlatform;
 import metro.ExoticStamp.modules.auth.domain.model.OtpType;
+import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort.GraceCredentials;
+import metro.ExoticStamp.modules.auth.domain.exception.SessionRevokedException;
 import metro.ExoticStamp.modules.auth.domain.repository.AccessTokenRepository;
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
 import metro.ExoticStamp.modules.rbac.application.support.RbacTransactionCallbacks;
@@ -56,6 +62,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +82,10 @@ public class AuthCommandService {
     private static final String AUDIT_TABLE_USERS = "users";
     private static final String AUDIT_ACTION_LOGIN = "LOGIN";
     private static final String AUDIT_ACTION_PASSWORD_CHANGED = "PASSWORD_CHANGED";
+    private static final String AUDIT_ACTION_REFRESH = "REFRESH";
+    private static final String AUDIT_ACTION_LOGOUT = "LOGOUT";
+    private static final String AUDIT_ACTION_LOGOUT_ALL = "LOGOUT_ALL";
+    private static final String AUDIT_ACTION_REFRESH_REUSE = "REFRESH_REUSE";
 
     private static final String OTP_CHARS = "0123456789";
     private static final SecureRandom RNG = new SecureRandom();
@@ -123,29 +134,44 @@ public class AuthCommandService {
         LocalDateTime now = LocalDateTime.now();
         String deviceFingerprint = normalizeDeviceFingerprint(cmd);
         LocalDateTime expiresAt = now.plus(tokenTtlPort.getRefreshTokenTtl());
+        UUID sessionId = UUID.randomUUID();
+        ClientPlatform platform = cmd.getClientPlatform() != null
+                ? cmd.getClientPlatform()
+                : ClientPlatform.UNKNOWN;
 
         AccessToken record = AccessToken.builder()
-                .id(UUID.randomUUID())
+                .id(sessionId)
                 .userId(user.getId())
                 .tokenHash(tokenHash)
                 .tokenType(TOKEN_TYPE_REFRESH)
                 .tokenPrefix(TOKEN_PREFIX_BEARER)
+                .tokenFamilyId(sessionId)
                 .expiresAt(expiresAt)
-                .ipAddress(cmd.getIpAddress())
-                .userAgent(cmd.getUserAgent())
+                .ipAddress(nullToEmpty(cmd.getIpAddress()))
+                .userAgent(nullToEmpty(cmd.getUserAgent()))
                 .deviceFingerprint(deviceFingerprint)
+                .clientPlatform(platform.name())
+                .userAgentHash(hashNullable(cmd.getUserAgent()))
+                .ipHash(hashNullable(cmd.getIpAddress()))
                 .createdAt(now)
+                .version(0L)
                 .build();
 
         accessTokenRepository.save(record);
-        refreshTokenStore.save(user.getId(), deviceFingerprint, tokenHash);
-        accessTokenRevocation.setDeviceAccessJti(user.getId(), deviceFingerprint, issued.jti());
+        runAfterCommit(() -> {
+            refreshTokenStore.save(user.getId(), deviceFingerprint, tokenHash);
+            accessTokenRevocation.setDeviceAccessJti(user.getId(), deviceFingerprint, issued.jti());
+        });
         auditLogService.log(
                 user.getId(),
                 AUDIT_TABLE_ACCESS_TOKENS,
                 AUDIT_ACTION_LOGIN,
                 null,
-                record,
+                Map.of(
+                        "sessionId", sessionId.toString(),
+                        "familyId", sessionId.toString(),
+                        "platform", platform.name()
+                ),
                 cmd.getIpAddress()
         );
 
@@ -346,8 +372,8 @@ public class AuthCommandService {
         userAccountPort.save(user);
 
         accessTokenRepository.revokeAllByUserId(user.getId(), AccessToken.REASON_PASSWORD_RESET);
-        refreshTokenStore.revokeAllForUser(user.getId());
         bumpTokenVersionAndSyncRedis(user.getId());
+        runAfterCommit(() -> refreshTokenStore.revokeAllForUser(user.getId()));
         otpStore.delete(cmd.getEmail(), OtpType.FORGOT_PASSWORD);
     }
 
@@ -389,8 +415,8 @@ public class AuthCommandService {
 
         // Same invalidation path as resetPassword / logoutAll — do not invent a second mechanism.
         accessTokenRepository.revokeAllByUserId(user.getId(), AccessToken.REASON_PASSWORD_CHANGED);
-        refreshTokenStore.revokeAllForUser(user.getId());
         bumpTokenVersionAndSyncRedis(user.getId());
+        runAfterCommit(() -> refreshTokenStore.revokeAllForUser(user.getId()));
 
         auditLogService.log(
                 user.getId(),
@@ -410,25 +436,48 @@ public class AuthCommandService {
         }
         String tokenHash = accessTokenPort.hashToken(token);
 
-        if (refreshTokenStore.isRevoked(tokenHash)) {
-            UUID userId = accessTokenPort.extractUserId(token);
-            handleReuseAttack(userId);
+        Optional<GraceCredentials> graceHit = refreshTokenStore.findGraceCredentials(tokenHash);
+        if (graceHit.isPresent()) {
+            GraceCredentials grace = graceHit.get();
+            UUID userId = accessTokenPort.extractUserId(grace.refreshToken());
+            User user = userAccountPort.findById(userId)
+                    .orElseThrow(() -> new InvalidTokenException("User not found"));
+            if (user.getStatus() != UserStatus.ACTIVE) {
+                throw new UserNotActiveException();
+            }
+            List<String> roles = roleQueryService.getRoleNamesByUserId(userId);
+            return toAuthView(grace.accessToken(), grace.refreshToken(), user, roles);
         }
 
         if (!accessTokenPort.isTokenValid(token)) {
+            // Distinguish expiry when possible
+            try {
+                accessTokenPort.extractUserId(token);
+            } catch (TokenExpiredException e) {
+                throw new RefreshTokenExpiredException();
+            } catch (RuntimeException ignored) {
+                // fall through
+            }
             throw new InvalidTokenException("Invalid token");
         }
 
         UUID userId = accessTokenPort.extractUserId(token);
-        AccessToken record = accessTokenRepository.findByTokenHash(tokenHash)
+        AccessToken record = accessTokenRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
 
-        if (!record.isValid()) {
-            throw new InvalidTokenException("Refresh token is not valid");
+        if (record.isRevoked()) {
+            return handleRevokedRefreshPresentation(tokenHash, record);
+        }
+        if (record.isExpired()) {
+            throw new RefreshTokenExpiredException();
         }
 
         User user = userAccountPort.findById(userId)
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new UserNotActiveException();
+        }
+        long tokenVersionAtStart = user.getTokenVersion();
 
         List<String> roles = roleQueryService.getRoleNamesByUserId(userId);
 
@@ -438,35 +487,132 @@ public class AuthCommandService {
                         tokenTtlPort.getAccessTokenTtl()
                 ));
 
-        IssuedAccessTokenView issued = accessTokenPort.issueAccessToken(user, roles);
+        // Re-check after lock work / before issuing — refresh vs logout-all / disable races.
+        User latest = userAccountPort.findById(userId)
+                .orElseThrow(() -> new InvalidTokenException("User not found"));
+        if (latest.getStatus() != UserStatus.ACTIVE) {
+            throw new UserNotActiveException();
+        }
+        if (latest.getTokenVersion() != tokenVersionAtStart) {
+            throw new SessionRevokedException();
+        }
+
+        IssuedAccessTokenView issued = accessTokenPort.issueAccessToken(latest, roles);
         String newAccessToken = issued.token();
         String newRefreshToken = accessTokenPort.generateRefreshToken(userId);
         String newTokenHash = accessTokenPort.hashToken(newRefreshToken);
 
-        accessTokenRepository.revokeByTokenHash(tokenHash, AccessToken.REASON_ROTATED);
-        refreshTokenStore.revoke(userId, record.getDeviceFingerprint(), tokenHash);
-
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiresAt = now.plus(tokenTtlPort.getRefreshTokenTtl());
+        UUID newSessionId = UUID.randomUUID();
+        UUID familyId = record.getTokenFamilyId() != null ? record.getTokenFamilyId() : record.getId();
+
+        record.setRevokedAt(now);
+        record.setRevokedReason(AccessToken.REASON_ROTATED);
+        record.setUsedAt(now);
+        record.setReplacedByTokenId(newSessionId);
+        accessTokenRepository.save(record);
+
+        String platform = cmd.getClientPlatform() != null
+                ? cmd.getClientPlatform().name()
+                : (record.getClientPlatform() != null ? record.getClientPlatform() : ClientPlatform.UNKNOWN.name());
 
         AccessToken newRecord = AccessToken.builder()
-                .id(UUID.randomUUID())
+                .id(newSessionId)
                 .userId(userId)
                 .tokenHash(newTokenHash)
                 .tokenType(TOKEN_TYPE_REFRESH)
                 .tokenPrefix(TOKEN_PREFIX_BEARER)
-                .expiresAt(expiresAt)
-                .ipAddress(record.getIpAddress())
-                .userAgent(record.getUserAgent())
+                .tokenFamilyId(familyId)
+                .parentTokenId(record.getId())
+                .expiresAt(now.plus(tokenTtlPort.getRefreshTokenTtl()))
+                .ipAddress(nullToEmpty(cmd.getIpAddress() != null ? cmd.getIpAddress() : record.getIpAddress()))
+                .userAgent(nullToEmpty(cmd.getUserAgent() != null ? cmd.getUserAgent() : record.getUserAgent()))
                 .deviceFingerprint(record.getDeviceFingerprint())
+                .clientPlatform(platform)
+                .userAgentHash(hashNullable(cmd.getUserAgent() != null ? cmd.getUserAgent() : record.getUserAgent()))
+                .ipHash(hashNullable(cmd.getIpAddress() != null ? cmd.getIpAddress() : record.getIpAddress()))
                 .createdAt(now)
+                .version(0L)
                 .build();
 
         accessTokenRepository.save(newRecord);
-        refreshTokenStore.save(userId, record.getDeviceFingerprint(), newTokenHash);
-        accessTokenRevocation.setDeviceAccessJti(userId, record.getDeviceFingerprint(), issued.jti());
 
-        return toAuthView(newAccessToken, newRefreshToken, user, roles);
+        Duration grace = authSecurityProperties.getRefreshReuseGrace();
+        refreshTokenStore.putGraceCredentials(tokenHash, newAccessToken, newRefreshToken, grace);
+
+        String deviceFp = record.getDeviceFingerprint();
+        runAfterCommit(() -> {
+            refreshTokenStore.revoke(userId, deviceFp, tokenHash);
+            refreshTokenStore.save(userId, deviceFp, newTokenHash);
+            accessTokenRevocation.setDeviceAccessJti(userId, deviceFp, issued.jti());
+        });
+
+        auditLogService.log(
+                userId,
+                AUDIT_TABLE_ACCESS_TOKENS,
+                AUDIT_ACTION_REFRESH,
+                null,
+                Map.of(
+                        "sessionId", newSessionId.toString(),
+                        "familyId", familyId.toString(),
+                        "parentSessionId", record.getId().toString()
+                ),
+                cmd.getIpAddress()
+        );
+
+        return toAuthView(newAccessToken, newRefreshToken, latest, roles);
+    }
+
+    private AuthView handleRevokedRefreshPresentation(String tokenHash, AccessToken record) {
+        if (AccessToken.REASON_ROTATED.equals(record.getRevokedReason())) {
+            LocalDateTime revokedAt = record.getRevokedAt();
+            Duration grace = authSecurityProperties.getRefreshReuseGrace();
+            boolean withinGrace = revokedAt != null
+                    && revokedAt.isAfter(LocalDateTime.now().minus(grace));
+
+            if (withinGrace) {
+                Optional<GraceCredentials> graceCreds = refreshTokenStore.findGraceCredentials(tokenHash);
+                if (graceCreds.isPresent()) {
+                    GraceCredentials cached = graceCreds.get();
+                    UUID userId = record.getUserId();
+                    User user = userAccountPort.findById(userId)
+                            .orElseThrow(() -> new InvalidTokenException("User not found"));
+                    if (user.getStatus() != UserStatus.ACTIVE) {
+                        throw new UserNotActiveException();
+                    }
+                    List<String> roles = roleQueryService.getRoleNamesByUserId(userId);
+                    return toAuthView(cached.accessToken(), cached.refreshToken(), user, roles);
+                }
+                // DB rotated within grace but Redis grace payload missing → infrastructure uncertainty.
+                // Do not classify as reuse/compromise; require safe retry/re-login.
+                throw new RefreshUnavailableException();
+            }
+            handleConfirmedReuse(record);
+        }
+        throw new RefreshTokenRevokedException();
+    }
+
+    private void handleConfirmedReuse(AccessToken record) {
+        // Policy B: confirmed reuse outside grace → revoke ALL user sessions + bump tokenVersion.
+        UUID familyId = record.getTokenFamilyId() != null ? record.getTokenFamilyId() : record.getId();
+        accessTokenRepository.revokeAllByUserId(record.getUserId(), AccessToken.REASON_REUSE_ATTACK);
+        runAfterCommit(() -> refreshTokenStore.revokeAllForUser(record.getUserId()));
+        bumpTokenVersionAndSyncRedis(record.getUserId());
+        auditLogService.log(
+                record.getUserId(),
+                AUDIT_TABLE_ACCESS_TOKENS,
+                AUDIT_ACTION_REFRESH_REUSE,
+                null,
+                Map.of(
+                        "scope", "ALL_SESSIONS",
+                        "familyId", familyId.toString(),
+                        "tokenVersionBumped", true
+                ),
+                null
+        );
+        log.warn("[Auth] refresh reuse outside grace — global revocation userId={} familyId={}",
+                record.getUserId(), familyId);
+        throw new RefreshTokenReusedException();
     }
 
     public UUID resolveUserId(UserDetails principal) {
@@ -504,6 +650,14 @@ public class AuthCommandService {
         ));
 
         if (refreshTokenOpt.isEmpty()) {
+            auditLogService.log(
+                    userId,
+                    AUDIT_TABLE_ACCESS_TOKENS,
+                    AUDIT_ACTION_LOGOUT,
+                    null,
+                    Map.of("refreshPresented", false),
+                    null
+            );
             return;
         }
 
@@ -512,28 +666,38 @@ public class AuthCommandService {
         accessTokenRepository.revokeByTokenHash(hash, AccessToken.REASON_LOGOUT);
 
         Optional<AccessToken> recordOpt = accessTokenRepository.findByTokenHash(hash);
-        if (recordOpt.isEmpty()) {
-            return;
+        if (recordOpt.isPresent()) {
+            AccessToken record = recordOpt.get();
+            String deviceFp = record.getDeviceFingerprint();
+            runAfterCommit(() -> {
+                refreshTokenStore.revoke(userId, deviceFp, hash);
+                accessTokenRevocation.deleteDeviceAccessJti(userId, deviceFp);
+            });
         }
 
-        AccessToken record = recordOpt.get();
-        refreshTokenStore.revoke(userId, record.getDeviceFingerprint(), hash);
-        accessTokenRevocation.deleteDeviceAccessJti(userId, record.getDeviceFingerprint());
+        auditLogService.log(
+                userId,
+                AUDIT_TABLE_ACCESS_TOKENS,
+                AUDIT_ACTION_LOGOUT,
+                null,
+                Map.of("refreshPresented", true),
+                null
+        );
     }
 
     @Transactional
     public void logoutAll(UUID userId) {
         accessTokenRepository.revokeAllByUserId(userId, AccessToken.REASON_LOGOUT_ALL);
-        refreshTokenStore.revokeAllForUser(userId);
         bumpTokenVersionAndSyncRedis(userId);
-    }
-
-    private void handleReuseAttack(UUID userId) {
-        accessTokenRepository.revokeAllByUserId(userId, AccessToken.REASON_REUSE_ATTACK);
-        refreshTokenStore.revokeAllForUser(userId);
-        bumpTokenVersionAndSyncRedis(userId);
-        log.error("[Auth] REUSE ATTACK detected userId={}", userId);
-        throw new SecurityBreachException(userId.toString());
+        runAfterCommit(() -> refreshTokenStore.revokeAllForUser(userId));
+        auditLogService.log(
+                userId,
+                AUDIT_TABLE_ACCESS_TOKENS,
+                AUDIT_ACTION_LOGOUT_ALL,
+                null,
+                Map.of("sessionsRevoked", true),
+                null
+        );
     }
 
     private void bumpTokenVersionAndSyncRedis(UUID userId) {
@@ -543,6 +707,19 @@ public class AuthCommandService {
         }
         userAccountPort.findTokenVersionById(userId)
                 .ifPresent(v -> accessTokenRevocation.setCachedTokenVersion(userId, v));
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            action.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     private String generateOtp() {
@@ -559,7 +736,18 @@ public class AuthCommandService {
         if (fp != null && !fp.isBlank()) {
             return fp;
         }
-        return accessTokenPort.hashToken(cmd.getUserAgent() + cmd.getIpAddress());
+        return accessTokenPort.hashToken(nullToEmpty(cmd.getUserAgent()) + nullToEmpty(cmd.getIpAddress()));
+    }
+
+    private String hashNullable(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return accessTokenPort.hashToken(value);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private static AuthView toAuthView(String accessToken, String refreshToken, User user, List<String> roles) {

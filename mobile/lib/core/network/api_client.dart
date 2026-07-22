@@ -1,29 +1,23 @@
-import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
-import 'package:dio_cookie_manager/dio_cookie_manager.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../config/api_config.dart';
 import '../storage/secure_token_storage.dart';
 import 'auth_interceptor.dart';
-import 'cookie_refresh_interceptor.dart';
 import 'error_interceptor.dart';
+import 'native_refresh_interceptor.dart';
 import 'retry_policy.dart';
 
-/// Dio-based HTTP client with auth, cookies, refresh, and retry support.
+/// Dio-based HTTP client with memory access token + secure refresh (no cookies).
 class ApiClient {
   ApiClient._({
     required Dio dio,
-    required CookieJar cookieJar,
     required SecureTokenStorage tokenStorage,
     RetryPolicy? retryPolicy,
   })  : _dio = dio,
-        _cookieJar = cookieJar,
         _tokenStorage = tokenStorage,
         _retryPolicy = retryPolicy ?? const RetryPolicy();
 
   final Dio _dio;
-  final CookieJar _cookieJar;
   final SecureTokenStorage _tokenStorage;
   final RetryPolicy _retryPolicy;
 
@@ -32,11 +26,9 @@ class ApiClient {
   static Future<ApiClient> create({
     SecureTokenStorage? tokenStorage,
     RetryPolicy? retryPolicy,
-    CookieJar? cookieJar,
     Future<void> Function()? onSessionInvalidated,
   }) async {
     final resolvedTokenStorage = tokenStorage ?? SecureTokenStorage();
-    final resolvedCookieJar = cookieJar ?? await _createPersistCookieJar();
 
     final dio = Dio(
       BaseOptions(
@@ -47,17 +39,16 @@ class ApiClient {
         headers: const {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'X-Client-Transport': 'body',
         },
       ),
     );
 
-    dio.interceptors.add(CookieManager(resolvedCookieJar));
     dio.interceptors.add(AuthInterceptor(tokenStorage: resolvedTokenStorage));
     dio.interceptors.add(
-      CookieRefreshInterceptor(
+      NativeRefreshInterceptor(
         dio: dio,
         tokenStorage: resolvedTokenStorage,
-        cookieJar: resolvedCookieJar,
         onSessionInvalidated: onSessionInvalidated,
       ),
     );
@@ -65,16 +56,8 @@ class ApiClient {
 
     return ApiClient._(
       dio: dio,
-      cookieJar: resolvedCookieJar,
       tokenStorage: resolvedTokenStorage,
       retryPolicy: retryPolicy,
-    );
-  }
-
-  static Future<CookieJar> _createPersistCookieJar() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    return PersistCookieJar(
-      storage: FileStorage('${appDir.path}/.cookies/'),
     );
   }
 
@@ -161,12 +144,7 @@ class ApiClient {
   }
 
   Future<void> clearSession() async {
-    await _tokenStorage.clear();
-    await _cookieJar.deleteAll();
-  }
-
-  Future<void> clearCookies() {
-    return _cookieJar.deleteAll();
+    await _tokenStorage.clearSessionTokens();
   }
 
   Future<Response<T>> _withRetry<T>(

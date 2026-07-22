@@ -4,6 +4,8 @@ import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -28,7 +30,23 @@ public class RefreshTokenStorePortAdapter implements RefreshTokenStorePort {
     }
 
     @Override
-    public boolean isRevoked(String tokenHash) {
-        return repository.isRevoked(tokenHash);
+    public boolean isKnownRevoked(String tokenHash) {
+        return repository.isKnownRevoked(tokenHash);
+    }
+
+    @Override
+    public boolean isHealthy() {
+        return repository.isHealthy();
+    }
+
+    @Override
+    public void putGraceCredentials(String oldTokenHash, String accessToken, String refreshToken, Duration ttl) {
+        repository.putGraceCredentials(oldTokenHash, accessToken, refreshToken, ttl);
+    }
+
+    @Override
+    public Optional<GraceCredentials> findGraceCredentials(String oldTokenHash) {
+        return repository.findGraceCredentials(oldTokenHash)
+                .map(p -> new GraceCredentials(p.accessToken(), p.refreshToken()));
     }
 }

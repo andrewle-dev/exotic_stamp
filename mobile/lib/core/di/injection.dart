@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
@@ -50,6 +52,7 @@ import '../../features/auth/domain/usecases/register_usecase.dart';
 import '../../features/auth/domain/usecases/resend_verification_otp_usecase.dart';
 import '../../features/auth/domain/usecases/verify_account_usecase.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
+import '../../features/auth/presentation/cubit/auth_state.dart';
 import '../../features/profile/data/datasources/profile_remote_datasource.dart';
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
 import '../../features/profile/domain/repositories/profile_repository.dart';
@@ -122,7 +125,10 @@ class Injection {
 
     authRepository = authRepositoryOverride ??
         AuthRepositoryImpl(
-          remoteDataSource: AuthRemoteDataSource(apiClient: apiClient),
+          remoteDataSource: AuthRemoteDataSource(
+            apiClient: apiClient,
+            tokenStorage: tokenStorage,
+          ),
           tokenStorage: tokenStorage,
           apiClient: apiClient,
         );
@@ -212,8 +218,7 @@ class Injection {
     _initialized = true;
 
     if (restoreSession) {
-      await authCubit.restoreSession();
-      notifySessionChanged();
+      unawaited(_restoreSessionInBackground());
     }
   }
 
@@ -246,6 +251,17 @@ class Injection {
   Future<void> logout() async {
     await authCubit.logout();
     notifySessionChanged();
+  }
+
+  Future<void> _restoreSessionInBackground() async {
+    try {
+      await authCubit.restoreSession();
+      if (authCubit.state.status == AuthStatus.unauthenticated) {
+        await apiClient.clearSession();
+      }
+    } finally {
+      notifySessionChanged();
+    }
   }
 
   @visibleForTesting

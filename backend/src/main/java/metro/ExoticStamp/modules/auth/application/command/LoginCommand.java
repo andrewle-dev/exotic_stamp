@@ -4,16 +4,20 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import metro.ExoticStamp.modules.auth.domain.model.AuthTransport;
+import metro.ExoticStamp.modules.auth.domain.model.ClientPlatform;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoginCommand {
-    private String identifier;           // email or username
+    private String identifier;
     private String password;
-    private String ipAddress;           // from HttpServletRequest.getRemoteAddr()
-    private String userAgent;           // from request header "User-Agent"
-    private String deviceFingerprint; // optional, for multi-device tracking
+    private String ipAddress;
+    private String userAgent;
+    /** App-generated device id (metadata). */
+    private String deviceFingerprint;
+    private AuthTransport transport;
+    private ClientPlatform clientPlatform;
 }
-

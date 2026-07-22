@@ -1,4 +1,3 @@
-import 'package:cookie_jar/cookie_jar.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metro_stamp_app/app/app.dart';
@@ -40,7 +39,6 @@ void main() {
     final tokenStorage = SecureTokenStorage(storage: mockStorage);
     final apiClient = await ApiClient.create(
       tokenStorage: tokenStorage,
-      cookieJar: CookieJar(),
     );
 
     await Injection.instance.init(

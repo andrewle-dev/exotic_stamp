@@ -52,10 +52,11 @@ class AccessTokenRevocationValidatorTest {
     }
 
     @Test
-    void cachedVersionMismatch_returnsRevoked() {
+    void cachedVersionMismatch_afterGlobalRevocation_rejectsAccessFromLosingRace() {
         when(redis.isDenylisted(jti)).thenReturn(false);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.of(5L));
 
+        // Access JWT still carries tokenVersion=4 after logout-all / reuse bumped version to 5.
         assertEquals(AccessTokenRevocationStatus.REVOKED, validator.validate(userId, jti, 4L));
     }
 
