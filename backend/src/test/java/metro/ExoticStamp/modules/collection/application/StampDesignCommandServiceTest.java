@@ -6,10 +6,12 @@ import metro.ExoticStamp.common.reorder.ReorderResultView;
 import metro.ExoticStamp.modules.auth.application.AuditLogService;
 import metro.ExoticStamp.modules.collection.application.command.CreateStampDesignCommand;
 import metro.ExoticStamp.modules.collection.application.command.ReorderStampDesignsCommand;
+import metro.ExoticStamp.modules.collection.application.command.UpdateStampDesignCommand;
 import metro.ExoticStamp.modules.collection.application.mapper.CampaignAppMapper;
 import metro.ExoticStamp.modules.collection.application.service.CampaignStationCommandService;
 import metro.ExoticStamp.modules.collection.application.service.StampDesignCommandService;
 import metro.ExoticStamp.modules.collection.application.support.CampaignAuditHelper;
+import metro.ExoticStamp.modules.collection.domain.exception.CampaignNotFoundException;
 import metro.ExoticStamp.modules.collection.domain.exception.DuplicateActiveStampDesignException;
 import metro.ExoticStamp.modules.collection.domain.exception.InvalidRequestException;
 import metro.ExoticStamp.modules.collection.domain.model.Campaign;
@@ -41,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class StampDesignCommandServiceTest {
@@ -50,6 +53,7 @@ class StampDesignCommandServiceTest {
     @Mock private CampaignStationCommandService campaignStationCommandService;
     @Mock private AuditLogService auditLogService;
     @Mock private RbacSecurityContextHelper securityContextHelper;
+    @Mock private CampaignAuditHelper campaignAuditHelper;
 
     private StampDesignCommandService service;
     private final UUID campaignId = UUID.randomUUID();
@@ -63,7 +67,7 @@ class StampDesignCommandServiceTest {
                 campaignRepository,
                 campaignStationCommandService,
                 new CampaignAppMapper(),
-                new CampaignAuditHelper(auditLogService, securityContextHelper),
+                campaignAuditHelper,
                 clock
         );
     }
@@ -155,6 +159,162 @@ class StampDesignCommandServiceTest {
         UUID aId = UUID.randomUUID();
         assertThrows(InvalidReorderException.class, () ->
                 service.reorder(new ReorderStampDesignsCommand(campaignId, List.of(aId, aId))));
+    }
+
+    @Test
+    void create_campaignMissing_throws() {
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.empty());
+
+        assertThrows(CampaignNotFoundException.class, () -> service.create(new CreateStampDesignCommand(
+                campaignId, stationId, "Stamp", null, "https://img", null,
+                StampRarity.COMMON.name(), StampDesignStatus.DRAFT.name(), 0)));
+    }
+
+    @Test
+    void create_negativeSortOrder_throws() {
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+
+        assertThrows(InvalidRequestException.class, () -> service.create(new CreateStampDesignCommand(
+                campaignId, stationId, "Stamp", null, "https://img", null,
+                StampRarity.COMMON.name(), StampDesignStatus.DRAFT.name(), -1)));
+    }
+
+    @Test
+    void create_nullStatus_defaultsDraft() {
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+        when(stampDesignRepository.save(any())).thenAnswer(inv -> {
+            StampDesign sd = inv.getArgument(0);
+            sd.setId(UUID.randomUUID());
+            return sd;
+        });
+
+        var view = service.create(new CreateStampDesignCommand(
+                campaignId, stationId, "Stamp", null, "https://img", null,
+                null, null, 0));
+
+        assertEquals(StampDesignStatus.DRAFT.name(), view.status());
+    }
+
+    @Test
+    void update_toInactive_schedulesDisabledAudit() {
+        UUID id = UUID.randomUUID();
+        StampDesign sd = design(id, 0);
+        sd.setStatus(StampDesignStatus.ACTIVE);
+        when(stampDesignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(sd));
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+        when(stampDesignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.update(new UpdateStampDesignCommand(
+                id, null, null, null, null, null, null, null,
+                StampDesignStatus.INACTIVE.name(), null));
+
+        verify(campaignAuditHelper).scheduleStampDesignDisabled(id);
+    }
+
+    @Test
+    void update_negativeSortOrder_throws() {
+        UUID id = UUID.randomUUID();
+        StampDesign sd = design(id, 0);
+        when(stampDesignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(sd));
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+
+        assertThrows(InvalidRequestException.class, () -> service.update(new UpdateStampDesignCommand(
+                id, null, null, null, null, null, null, null, null, -1)));
+    }
+
+    @Test
+    void reorder_nullCampaignId_throws() {
+        assertThrows(InvalidReorderException.class, () ->
+                service.reorder(new ReorderStampDesignsCommand(null, List.of(UUID.randomUUID()))));
+    }
+
+    @Test
+    void reorder_campaignMissing_throws() {
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.empty());
+        assertThrows(CampaignNotFoundException.class, () ->
+                service.reorder(new ReorderStampDesignsCommand(campaignId, List.of(UUID.randomUUID()))));
+    }
+
+    @Test
+    void update_success_schedulesUpdatedAudit() {
+        UUID id = UUID.randomUUID();
+        StampDesign sd = design(id, 0);
+        when(stampDesignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(sd));
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+        when(stampDesignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.update(new UpdateStampDesignCommand(
+                id, null, null, "New Name", null, null, null, null, null, null));
+
+        verify(campaignAuditHelper).scheduleStampDesignUpdated(any());
+        verify(campaignAuditHelper, never()).scheduleStampDesignDisabled(any());
+    }
+
+    @Test
+    void update_notFound_throws() {
+        UUID id = UUID.randomUUID();
+        when(stampDesignRepository.findByIdNotDeleted(id)).thenReturn(Optional.empty());
+        assertThrows(InvalidRequestException.class, () -> service.update(new UpdateStampDesignCommand(
+                id, null, null, null, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void update_changeCampaignAndStation() {
+        UUID id = UUID.randomUUID();
+        UUID newCampaignId = UUID.randomUUID();
+        UUID newStationId = UUID.randomUUID();
+        StampDesign sd = design(id, 0);
+        when(stampDesignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(sd));
+        when(campaignRepository.findByIdNotDeleted(newCampaignId)).thenReturn(Optional.of(
+                Campaign.builder()
+                        .id(newCampaignId).code("C2").name("Other").campaignType(CampaignType.STANDARD)
+                        .status(CampaignStatus.ACTIVE).priority(0).createdAt(LocalDateTime.now(clock)).build()));
+        when(stampDesignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.update(new UpdateStampDesignCommand(
+                id, newCampaignId, newStationId, null, null, null, null, null,
+                StampDesignStatus.DRAFT.name(), null));
+
+        verify(campaignStationCommandService).ensureAssigned(newCampaignId, newStationId);
+    }
+
+    @Test
+    void create_invalidRarity_throws() {
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+
+        assertThrows(InvalidRequestException.class, () -> service.create(new CreateStampDesignCommand(
+                campaignId, stationId, "Stamp", null, "https://img", null,
+                "MYTHIC", StampDesignStatus.DRAFT.name(), 0)));
+    }
+
+    @Test
+    void update_duplicateActiveOnOtherDesign_throws() {
+        UUID id = UUID.randomUUID();
+        StampDesign sd = design(id, 0);
+        sd.setStatus(StampDesignStatus.DRAFT);
+        when(stampDesignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(sd));
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+        when(stampDesignRepository.existsActiveByCampaignIdAndStationIdAndIdNot(campaignId, stationId, id))
+                .thenReturn(true);
+
+        assertThrows(DuplicateActiveStampDesignException.class, () -> service.update(new UpdateStampDesignCommand(
+                id, null, null, null, null, null, null, null, StampDesignStatus.ACTIVE.name(), null)));
+    }
+
+    @Test
+    void create_nullRarity_defaultsCommon() {
+        when(campaignRepository.findByIdNotDeleted(campaignId)).thenReturn(Optional.of(campaign()));
+        when(stampDesignRepository.save(any())).thenAnswer(inv -> {
+            StampDesign saved = inv.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        var view = service.create(new CreateStampDesignCommand(
+                campaignId, stationId, "Stamp", null, "https://img", null,
+                null, StampDesignStatus.DRAFT.name(), 0));
+
+        assertEquals(StampRarity.COMMON.name(), view.rarity());
     }
 
     private StampDesign design(UUID id, int sortOrder) {

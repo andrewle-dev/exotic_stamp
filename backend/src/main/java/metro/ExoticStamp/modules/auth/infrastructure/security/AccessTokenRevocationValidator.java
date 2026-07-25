@@ -1,6 +1,7 @@
 package metro.ExoticStamp.modules.auth.infrastructure.security;
 
 import metro.ExoticStamp.modules.auth.infrastructure.redis.AccessTokenRevocationRedisRepository;
+import metro.ExoticStamp.modules.auth.infrastructure.redis.AccessTokenRevocationRedisRepository.DenylistCheck;
 import metro.ExoticStamp.modules.user.domain.repository.UserRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import java.util.UUID;
 /**
  * Server-side access token revocation: Redis (denylist + version cache) with DB fallback.
  * On DB read failure, behavior is controlled by {@link TokenRevocationProperties#isFailOpenOnDbError()}.
+ * Denylist Redis unavailability is fail-closed ({@link AccessTokenRevocationStatus#DEPENDENCY_UNAVAILABLE}).
  */
 @Component
 @RequiredArgsConstructor
@@ -25,10 +27,17 @@ public class AccessTokenRevocationValidator {
     private final TokenRevocationProperties tokenRevocationProperties;
 
     public AccessTokenRevocationStatus validate(UUID userId, String jti, long jwtTokenVersion) {
-        if (redis.isDenylisted(jti)) {
+        DenylistCheck denylist = redis.isDenylistedCheck(jti);
+        if (denylist == DenylistCheck.DENYLISTED) {
             return AccessTokenRevocationStatus.REVOKED;
         }
+        if (denylist == DenylistCheck.UNAVAILABLE) {
+            meterRegistry.counter("auth.revocation.dependency_unavailable", "reason", "denylist").increment();
+            log.warn("[Auth] denylist Redis unavailable userId={}", userId);
+            return AccessTokenRevocationStatus.DEPENDENCY_UNAVAILABLE;
+        }
 
+        // Soft cache: Redis get errors already map to empty (miss) → DB
         Optional<Long> cached = redis.getCachedTokenVersion(userId);
         if (cached.isPresent()) {
             if (cached.get() != jwtTokenVersion) {

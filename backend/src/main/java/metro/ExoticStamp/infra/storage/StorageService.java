@@ -2,20 +2,51 @@ package metro.ExoticStamp.infra.storage;
 
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * Object storage port. Implementations: local filesystem (dev/test) and Amazon S3 (prod).
+ */
 public interface StorageService {
 
     /**
-     * Upload a file and return its public-accessible URL.
-     *
-     * @param file   the multipart file to upload
-     * @param folder logical folder/prefix, e.g. "metro/stations/42"
-     * @return full URL to access the file
+     * Upload using a generated versioned object key. Validation must already have completed.
      */
-    String upload(MultipartFile file, String folder);
+    StorageUploadResult upload(StorageUploadRequest request);
 
     /**
-     * Delete a file by its URL or storage key.
-     * Implementations must handle "file not found" gracefully (log, no throw).
+     * Legacy folder upload — maps to temporary/public keys. Prefer {@link #upload(StorageUploadRequest)}.
+     *
+     * @param file   multipart file
+     * @param folder logical folder hint (not embedded as raw user path)
+     * @return public URL
      */
-    void delete(String fileUrl);
+    default String upload(MultipartFile file, String folder) {
+        String contentType = file.getContentType();
+        String ext = ObjectKeyFactory.extensionForContentType(contentType);
+        StorageUploadRequest request = StorageUploadRequest.of(
+                file,
+                StorageObjectCategory.LEGACY_PUBLIC,
+                StorageVisibility.PUBLIC,
+                (String) null,
+                contentType,
+                ext
+        );
+        return upload(request).publicUrl();
+    }
+
+    /**
+     * Hard-delete by object key or public URL. Missing objects are ignored.
+     * Prefer orphan marking for business replace flows.
+     */
+    void delete(String fileUrlOrObjectKey);
+
+    /**
+     * Head/metadata existence check (bounded). Returns false when object is missing.
+     */
+    boolean exists(String objectKey);
+
+    /**
+     * Create a short-lived presigned GET URL for a private object key.
+     * Callers must authorize ownership before invoking.
+     */
+    String createPresignedGetUrl(String objectKey);
 }

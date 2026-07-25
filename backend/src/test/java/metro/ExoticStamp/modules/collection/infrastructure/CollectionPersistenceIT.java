@@ -6,10 +6,12 @@ import metro.ExoticStamp.modules.collection.domain.model.UserStamp;
 import metro.ExoticStamp.modules.collection.domain.repository.CampaignRepository;
 import metro.ExoticStamp.modules.collection.domain.repository.UserStampRepository;
 import metro.ExoticStamp.modules.collection.infrastructure.repository.CampaignRepositoryAdapter;
+import metro.ExoticStamp.modules.collection.infrastructure.repository.CampaignStationEntity;
 import metro.ExoticStamp.modules.collection.infrastructure.repository.JpaCampaignRepository;
 import metro.ExoticStamp.modules.collection.infrastructure.repository.JpaUserStampRepository;
 import metro.ExoticStamp.modules.collection.infrastructure.repository.UserStampRepositoryAdapter;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,19 +35,40 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@EntityScan(basePackages = "metro.ExoticStamp.modules.collection.domain.model")
-@EnableJpaRepositories(basePackageClasses = {JpaUserStampRepository.class, JpaCampaignRepository.class})
-@Import({UserStampRepositoryAdapter.class, CampaignRepositoryAdapter.class})
+@Import({
+        CollectionPersistenceIT.PersistenceTestConfig.class,
+        UserStampRepositoryAdapter.class,
+        CampaignRepositoryAdapter.class
+})
 class CollectionPersistenceIT {
+
+    @TestConfiguration
+    @EntityScan(basePackageClasses = {
+            Campaign.class,
+            UserStamp.class,
+            metro.ExoticStamp.modules.collection.domain.model.StampDesign.class,
+            CampaignStationEntity.class
+    })
+    @EnableJpaRepositories(basePackageClasses = {
+            JpaUserStampRepository.class,
+            JpaCampaignRepository.class
+    })
+    static class PersistenceTestConfig {
+    }
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @DynamicPropertySource
     static void registerPg(DynamicPropertyRegistry r) {
-        r.add("spring.datasource.url", postgres::getJdbcUrl);
+        r.add("spring.datasource.url", () -> {
+            String url = postgres.getJdbcUrl();
+            String sep = url.contains("?") ? "&" : "?";
+            // Allow VARCHAR binds to PG native enums without production @JdbcType changes
+            return url + sep + "stringtype=unspecified";
+        });
         r.add("spring.datasource.username", postgres::getUsername);
         r.add("spring.datasource.password", postgres::getPassword);
         r.add("spring.flyway.enabled", () -> "true");
@@ -81,21 +104,51 @@ class CollectionPersistenceIT {
         LocalDateTime now = LocalDateTime.now();
 
         jdbcTemplate.update(
-                "INSERT INTO lines (id, code, name, total_stations, is_active) VALUES (?,?,?,?,?)",
-                lineId, "L" + lineId.toString().substring(0, 4), "Test Line", 1, true);
+                """
+                INSERT INTO users (id, username, email, phone_number, password, status, token_version, created_at)
+                VALUES (?,?,?,?,?,?,?,?)
+                """,
+                userId,
+                "u-" + userId.toString().substring(0, 8),
+                "u-" + userId.toString().substring(0, 8) + "@example.com",
+                "+1555" + userId.toString().replace("-", "").substring(0, 7),
+                "hashed-password-not-used",
+                "ACTIVE",
+                0L,
+                now);
 
         jdbcTemplate.update(
-                "INSERT INTO stations (id, line_id, code, name, sequence, is_active, collector_count) VALUES (?,?,?,?,?,?,?)",
-                stationId, lineId, "S1", "Station 1", 1, true, 0);
+                """
+                INSERT INTO lines (id, code, name, display_name, total_stations, status, sort_order)
+                VALUES (?,?,?,?,?,?,?)
+                """,
+                lineId, "L" + lineId.toString().substring(0, 4), "Test Line", "Test Line", 1, "ACTIVE", 0);
 
         jdbcTemplate.update(
-                "INSERT INTO campaigns (id, code, name, description, start_date, end_date, is_active, line_id, is_default) VALUES (?,?,?,?,?,?,?,?,?)",
-                campaignId, "CMP-" + campaignId.toString().substring(0, 8), "Camp", "d",
-                now, now.plusYears(1), true, lineId, true);
+                """
+                INSERT INTO stations (id, line_id, code, name, display_name, sort_order, status, collector_count)
+                VALUES (?,?,?,?,?,?,?,?)
+                """,
+                stationId, lineId, "S1", "Station 1", "Station 1", 1, "ACTIVE", 0);
 
         jdbcTemplate.update(
-                "INSERT INTO stamp_designs (id, station_id, campaign_id, name, artwork_url, is_limited, is_active) VALUES (?,?,?,?,?,?,?)",
-                stampDesignId, stationId, campaignId, "Design", "https://example.com/a.png", false, true);
+                """
+                INSERT INTO campaigns (
+                    id, code, name, display_name, description, campaign_type, status,
+                    start_at, end_at, priority, line_id, is_default
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                campaignId, "CMP-" + campaignId.toString().substring(0, 8), "Camp", "Camp", "d",
+                "STANDARD", "ACTIVE", now, now.plusYears(1), 0, lineId, true);
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO stamp_designs (
+                    id, station_id, campaign_id, name, image_url, rarity, status, sort_order, is_limited
+                ) VALUES (?,?,?,?,?,?,?,?,?)
+                """,
+                stampDesignId, stationId, campaignId, "Design", "https://example.com/a.png",
+                "COMMON", "ACTIVE", 0, false);
     }
 
     @Test
@@ -146,6 +199,7 @@ class CollectionPersistenceIT {
                 .createdAt(LocalDateTime.now())
                 .build();
         userStampRepository.save(base);
+        jpaUserStampRepository.flush();
 
         UserStamp dup = UserStamp.builder()
                 .userId(userId)
@@ -161,6 +215,9 @@ class CollectionPersistenceIT {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        assertThrows(DataIntegrityViolationException.class, () -> userStampRepository.save(dup));
+        assertThrows(DataIntegrityViolationException.class, () -> {
+            userStampRepository.save(dup);
+            jpaUserStampRepository.flush();
+        });
     }
 }

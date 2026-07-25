@@ -1,5 +1,9 @@
 package metro.ExoticStamp.infra.storage.local;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import metro.ExoticStamp.infra.storage.ObjectKeyFactory;
+import metro.ExoticStamp.infra.storage.PublicUrlResolver;
+import metro.ExoticStamp.infra.storage.StorageMetrics;
 import metro.ExoticStamp.infra.storage.StorageProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,9 +32,15 @@ class StaticFileControllerTest {
     @BeforeEach
     void setUp() {
         StorageProperties props = new StorageProperties();
+        props.setProvider("local");
         props.getLocal().setBasePath(tempDir.toString());
         props.getLocal().setBaseUrl(BASE_URL);
-        storageService = new LocalStorageService(props);
+        props.setPublicBaseUrl(BASE_URL);
+        storageService = new LocalStorageService(
+                props,
+                new ObjectKeyFactory(),
+                new PublicUrlResolver(props),
+                new StorageMetrics(new SimpleMeterRegistry()));
         controller = new StaticFileController(storageService);
     }
 
@@ -39,10 +49,10 @@ class StaticFileControllerTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "a.png", "image/png", new byte[] {10, 20, 30});
         String url = storageService.upload(file, "public");
-        String filename = url.substring(url.lastIndexOf('/') + 1);
+        String relative = url.substring(BASE_URL.length() + 1);
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/uploads/public/" + filename);
-        request.setRequestURI("/uploads/public/" + filename);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/uploads/" + relative);
+        request.setRequestURI("/uploads/" + relative);
 
         var response = controller.serve(request);
 

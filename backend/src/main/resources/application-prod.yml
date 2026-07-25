@@ -1,6 +1,9 @@
 server:
   # Trust X-Forwarded-Proto / Host from reverse proxy (prod TLS termination).
   forward-headers-strategy: framework
+  shutdown: graceful
+  lifecycle:
+    timeout-per-shutdown-phase: ${SERVER_SHUTDOWN_TIMEOUT:30s}
 
 spring:
   config:
@@ -28,6 +31,9 @@ spring:
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
 
+  lifecycle:
+    timeout-per-shutdown-phase: ${SERVER_SHUTDOWN_TIMEOUT:30s}
+
 application:
   frontend:
     current: ${FRONTEND_URL}
@@ -44,6 +50,22 @@ application:
       path: /api/v1/auth
       domain: ${AUTH_COOKIE_DOMAIN:}
 
+  security:
+    rate-limit:
+      backend: redis
+      key-pepper: ${RATE_LIMIT_KEY_PEPPER}
+
+storage:
+  provider: ${STORAGE_PROVIDER:s3}
+  public-base-url: ${STORAGE_PUBLIC_BASE_URL}
+
+management:
+  endpoint:
+    health:
+      group:
+        storage:
+          include: s3Storage
+
 jwt:
   secret: ${JWT_SECRET}
 
@@ -57,3 +79,10 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+# JTE Spring Boot starter requires one of developmentMode or usePrecompiledTemplates.
+# Production Docker images ship without on-the-fly template compilation.
+gg:
+  jte:
+    use-precompiled-templates: true
+    development-mode: false

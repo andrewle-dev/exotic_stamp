@@ -76,4 +76,8 @@ public class UserStamp extends BaseEntity {
 
     @Column(name = "idempotency_key", nullable = false, length = 255)
     private String idempotencyKey;
+
+    /** SHA-256 hex of logical collect fingerprint; null for legacy rows (V23). */
+    @Column(name = "idempotency_fingerprint", length = 64)
+    private String idempotencyFingerprint;
 }

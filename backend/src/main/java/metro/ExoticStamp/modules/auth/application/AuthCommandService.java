@@ -220,10 +220,17 @@ public class AuthCommandService {
 
     @Transactional
     public void verifyAccount(VerifyAccountCommand cmd) {
+        if (otpStore.isMaxAttemptsExceeded(cmd.getEmail(), OtpType.EMAIL_VERIFY)) {
+            throw new OtpMaxAttemptsExceededException(
+                    authSecurityProperties.getOtp().forType(OtpType.EMAIL_VERIFY).getMaxAttempts()
+            );
+        }
+
         String otp = otpStore.find(cmd.getEmail(), OtpType.EMAIL_VERIFY)
                 .orElseThrow(OtpExpiredException::new);
 
         if (!otp.equals(cmd.getOtp())) {
+            otpStore.incrementAttempts(cmd.getEmail(), OtpType.EMAIL_VERIFY);
             throw new OtpInvalidException();
         }
 
@@ -356,10 +363,17 @@ public class AuthCommandService {
 
     @Transactional
     public void resetPassword(ResetPasswordCommand cmd) {
+        if (otpStore.isMaxAttemptsExceeded(cmd.getEmail(), OtpType.FORGOT_PASSWORD)) {
+            throw new OtpMaxAttemptsExceededException(
+                    authSecurityProperties.getOtp().forType(OtpType.FORGOT_PASSWORD).getMaxAttempts()
+            );
+        }
+
         String otp = otpStore.find(cmd.getEmail(), OtpType.FORGOT_PASSWORD)
                 .orElseThrow(OtpExpiredException::new);
 
         if (!otp.equals(cmd.getOtp())) {
+            otpStore.incrementAttempts(cmd.getEmail(), OtpType.FORGOT_PASSWORD);
             throw new OtpInvalidException();
         }
 
@@ -439,7 +453,7 @@ public class AuthCommandService {
         Optional<GraceCredentials> graceHit = refreshTokenStore.findGraceCredentials(tokenHash);
         if (graceHit.isPresent()) {
             GraceCredentials grace = graceHit.get();
-            UUID userId = accessTokenPort.extractUserId(grace.refreshToken());
+            UUID userId = accessTokenPort.parseRefreshUserId(grace.refreshToken());
             User user = userAccountPort.findById(userId)
                     .orElseThrow(() -> new InvalidTokenException("User not found"));
             if (user.getStatus() != UserStatus.ACTIVE) {
@@ -452,7 +466,7 @@ public class AuthCommandService {
         if (!accessTokenPort.isTokenValid(token)) {
             // Distinguish expiry when possible
             try {
-                accessTokenPort.extractUserId(token);
+                accessTokenPort.parseRefreshUserId(token);
             } catch (TokenExpiredException e) {
                 throw new RefreshTokenExpiredException();
             } catch (RuntimeException ignored) {
@@ -461,7 +475,7 @@ public class AuthCommandService {
             throw new InvalidTokenException("Invalid token");
         }
 
-        UUID userId = accessTokenPort.extractUserId(token);
+        UUID userId = accessTokenPort.parseRefreshUserId(token);
         AccessToken record = accessTokenRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
 
@@ -705,8 +719,13 @@ public class AuthCommandService {
         if (updated == 0) {
             return;
         }
-        userAccountPort.findTokenVersionById(userId)
-                .ifPresent(v -> accessTokenRevocation.setCachedTokenVersion(userId, v));
+        userAccountPort.findTokenVersionById(userId).ifPresent(v -> {
+            try {
+                accessTokenRevocation.setCachedTokenVersion(userId, v);
+            } catch (Exception e) {
+                log.warn("[Auth] tokenVersion Redis cache set failed userId={}: {}", userId, e.getMessage());
+            }
+        });
     }
 
     private void runAfterCommit(Runnable action) {

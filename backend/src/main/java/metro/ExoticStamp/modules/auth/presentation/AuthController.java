@@ -3,6 +3,7 @@ package metro.ExoticStamp.modules.auth.presentation;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import metro.ExoticStamp.infra.security.ClientIpResolver;
 import metro.ExoticStamp.modules.auth.application.AuthCommandService;
 import metro.ExoticStamp.modules.auth.application.command.ChangePasswordCommand;
 import metro.ExoticStamp.modules.auth.application.command.ForgotPasswordCommand;
@@ -53,6 +54,7 @@ public class AuthController {
     private final AuthCommandService commandService;
     private final AuthPresentationMapper presentationMapper;
     private final RefreshCookieSupport refreshCookieSupport;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/login")
     @Operation(summary = "Login and issue access token")
@@ -63,7 +65,7 @@ public class AuthController {
     ) {
         AuthTransport transport = AuthTransportResolver.transportFromRequest(request);
         String userAgent = request.getHeader("User-Agent");
-        String ip = request.getRemoteAddr();
+        String ip = clientIpResolver.resolve(request);
 
         LoginCommand cmd = presentationMapper.toLoginCommand(req, ip, userAgent);
         cmd.setTransport(transport);
@@ -150,7 +152,7 @@ public class AuthController {
                         .refreshToken(resolved.refreshToken())
                         .transport(resolved.transport())
                         .clientPlatform(ClientPlatform.fromTransport(resolved.transport()))
-                        .ipAddress(request.getRemoteAddr())
+                        .ipAddress(clientIpResolver.resolve(request))
                         .userAgent(request.getHeader("User-Agent"))
                         .build()
         ));
@@ -212,7 +214,7 @@ public class AuthController {
             HttpServletResponse response
     ) {
         UUID userId = commandService.resolveUserId(principal);
-        ChangePasswordCommand cmd = presentationMapper.toChangePasswordCommand(req, request.getRemoteAddr());
+        ChangePasswordCommand cmd = presentationMapper.toChangePasswordCommand(req, clientIpResolver.resolve(request));
         commandService.changePassword(userId, cmd);
         refreshCookieSupport.clearRefreshCookie(request, response);
         return ResponseEntity.ok(ApiResponse.ok("Password changed successfully", null));

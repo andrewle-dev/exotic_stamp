@@ -5,6 +5,7 @@ import metro.ExoticStamp.modules.collection.application.mapper.UserStampAppMappe
 import metro.ExoticStamp.modules.collection.application.port.UserStampCachePort;
 import metro.ExoticStamp.modules.collection.application.service.CollectionQueryService;
 import metro.ExoticStamp.modules.collection.application.support.DefaultCampaignResolver;
+import metro.ExoticStamp.modules.collection.domain.exception.InvalidRequestException;
 import metro.ExoticStamp.modules.collection.application.view.CollectOutcomeStatus;
 import metro.ExoticStamp.modules.collection.application.view.CollectStatusView;
 import metro.ExoticStamp.modules.collection.application.view.ProgressView;
@@ -251,6 +252,18 @@ class CollectionQueryServiceTest {
     }
 
     @Test
+    void collectStatus_missingUserId_throws() {
+        assertThrows(InvalidRequestException.class,
+                () -> service.getCollectStatus(null, UUID.randomUUID()));
+    }
+
+    @Test
+    void collectStatus_missingIdempotencyKey_throws() {
+        assertThrows(InvalidRequestException.class,
+                () -> service.getCollectStatus(USER_ID, null));
+    }
+
+    @Test
     void collectStatus_notFound_whenNoStampForKey() {
         UUID key = UUID.fromString("550e8400-e29b-41d4-a716-446655440099");
         when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(USER_ID, key.toString()))
@@ -333,6 +346,24 @@ class CollectionQueryServiceTest {
         CollectStatusView res = service.getCollectStatus(USER_ID, key);
         assertEquals(CollectOutcomeStatus.DUPLICATE, res.status());
         assertNotNull(res.stamp());
+    }
+
+    @Test
+    void progressQuery_cacheHit_skipsRepository() {
+        Campaign c = defaultCampaign();
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(c);
+        ProgressView cached = ProgressView.builder()
+                .lineId(LINE_ID)
+                .collected(7)
+                .total(14)
+                .percentage(50)
+                .build();
+        when(cachePort.getUserProgress(USER_ID, LINE_ID)).thenReturn(Optional.of(cached));
+
+        ProgressView res = service.getMyProgress(USER_ID, LINE_ID, null);
+
+        assertEquals(7L, res.collected());
+        assertEquals(50, res.percentage());
     }
 
     private Campaign defaultCampaign() {

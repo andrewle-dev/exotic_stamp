@@ -2,9 +2,17 @@ package metro.ExoticStamp.modules.metro.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import metro.ExoticStamp.common.exceptions.storage.ConcurrentAssetReplaceException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
+import metro.ExoticStamp.infra.storage.AssetUploadPurpose;
 import metro.ExoticStamp.infra.storage.FileValidator;
+import metro.ExoticStamp.infra.storage.StorageObjectCategory;
 import metro.ExoticStamp.infra.storage.StorageService;
+import metro.ExoticStamp.infra.storage.StorageUploadRequest;
+import metro.ExoticStamp.infra.storage.StorageUploadResult;
+import metro.ExoticStamp.infra.storage.StorageVisibility;
+import metro.ExoticStamp.infra.storage.asset.AssetLifecycleService;
+import metro.ExoticStamp.infra.storage.asset.StoredAsset;
 import metro.ExoticStamp.modules.metro.application.command.CreateStationCommand;
 import metro.ExoticStamp.modules.metro.application.command.ReorderStationsCommand;
 import metro.ExoticStamp.modules.metro.application.command.RotateStationQrCommand;
@@ -67,6 +75,8 @@ public class StationCommandService {
     private final MetroAppMapper mapper;
     private final StorageService storageService;
     private final FileValidator fileValidator;
+    private final AssetLifecycleService assetLifecycleService;
+    private final StationImagePointerService stationImagePointerService;
     private final ApplicationEventPublisher eventPublisher;
     private final MetroAuditHelper metroAuditHelper;
 
@@ -347,28 +357,39 @@ public class StationCommandService {
         evictAllStationCaches(station);
     }
 
-    @Transactional
+    /**
+     * Replace station cover image. Upload uses a unique versioned key; previous object is
+     * marked ORPHANED (not deleted immediately). Concurrent pointer changes raise 409.
+     */
     public StationImageUploadView uploadStationImage(UUID stationId, MultipartFile file) {
         if (file == null) {
             throw new InvalidFileException("File is required");
         }
-        fileValidator.validate(file);
-        Station station = stationRepository.findById(stationId).orElseThrow(() -> new StationNotFoundException(stationId));
-        String oldUrl = station.getImageUrl();
-        if (oldUrl != null && !oldUrl.isBlank()) {
-            try {
-                storageService.delete(oldUrl);
-            } catch (Exception e) {
-                log.warn("[StationCommand] best-effort delete of old image failed stationId={} err={}", stationId, e.getMessage());
-            }
+        FileValidator.DetectedUpload detected =
+                fileValidator.validateAndDetect(file, AssetUploadPurpose.STATION_COVER);
+        Station station = stationRepository.findById(stationId)
+                .orElseThrow(() -> new StationNotFoundException(stationId));
+        String expectedOldUrl = station.getImageUrl();
+
+        StorageUploadRequest request = StorageUploadRequest.of(
+                file,
+                StorageObjectCategory.STATION_COVER,
+                StorageVisibility.PUBLIC,
+                stationId,
+                detected.contentType(),
+                detected.extension()
+        );
+        StorageUploadResult result = storageService.upload(request);
+        StoredAsset pending = assetLifecycleService.recordPending(result, "station", stationId);
+
+        try {
+            stationImagePointerService.applyPointer(stationId, expectedOldUrl, result, pending.getId());
+        } catch (ConcurrentAssetReplaceException ex) {
+            // Keep the uploaded object recoverable as orphan; do not leave silent untracked media.
+            assetLifecycleService.orphanPrevious(result.publicUrl(), null);
+            throw ex;
         }
-        String folder = "metro/stations/" + stationId;
-        String url = storageService.upload(file, folder);
-        station.setImageUrl(url);
-        station.setUpdatedAt(LocalDateTime.now());
-        stationRepository.save(station);
-        evictAllStationCaches(station);
-        return new StationImageUploadView(url);
+        return new StationImageUploadView(result.publicUrl());
     }
 
     private String generateUniqueQrValue(UUID stationId) {

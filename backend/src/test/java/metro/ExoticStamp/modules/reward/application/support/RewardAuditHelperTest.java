@@ -48,4 +48,40 @@ class RewardAuditHelperTest {
         assertFalse(newValue.getValue().contains("SECRET"));
         assertFalse(newValue.getValue().contains("CODE"));
     }
+
+    @Test
+    void milestoneCreated_schedulesAuditAfterCommit() {
+        UUID actorId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        when(securityContextHelper.currentUserId()).thenReturn(Optional.of(actorId));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            rewardAuditHelper.scheduleMilestoneCreated(milestoneId);
+            TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(auditLogService).log(eq(actorId), eq(RewardAuditConstants.TABLE_MILESTONES),
+                eq(RewardAuditConstants.MILESTONE_CREATED), eq(null), eq(milestoneId.toString()), any());
+    }
+
+    @Test
+    void voucherDisabled_recordsOldValueOnly() {
+        UUID actorId = UUID.randomUUID();
+        UUID voucherId = UUID.randomUUID();
+        when(securityContextHelper.currentUserId()).thenReturn(Optional.of(actorId));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            rewardAuditHelper.scheduleVoucherDisabled(voucherId);
+            TransactionSynchronizationManager.getSynchronizations().forEach(s -> s.afterCommit());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(auditLogService).log(eq(actorId), eq(RewardAuditConstants.TABLE_VOUCHER_POOL),
+                eq(RewardAuditConstants.VOUCHER_DISABLED), eq(voucherId.toString()), eq(null), any());
+    }
 }

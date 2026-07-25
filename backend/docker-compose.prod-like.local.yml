@@ -1,0 +1,6 @@
+﻿services:
+  caddy:
+    volumes:
+      - ./infra/caddy/Caddyfile.local.example:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config

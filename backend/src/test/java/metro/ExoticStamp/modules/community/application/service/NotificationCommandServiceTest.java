@@ -36,11 +36,13 @@ class NotificationCommandServiceTest {
 
     @BeforeEach
     void setUp() {
+        metro.ExoticStamp.modules.community.config.CommunityProperties props = new metro.ExoticStamp.modules.community.config.CommunityProperties();
+        props.setMaxMetadataBytes(2048);
         service = new NotificationCommandService(
                 notificationRepository,
-                null,
+                new metro.ExoticStamp.modules.community.application.support.MetadataSanitizer(new com.fasterxml.jackson.databind.ObjectMapper(), props),
                 new CommunityAppMapper(),
-                null,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
                 clock
         );
     }
@@ -91,4 +93,43 @@ class NotificationCommandServiceTest {
         assertEquals(3, service.markAllRead(userId));
         verify(notificationRepository).markAllReadByUserId(userId);
     }
+
+    @Test
+    void create_rewardWithReferenceId_persists() {
+        UUID userId = UUID.randomUUID();
+        UUID rewardId = UUID.randomUUID();
+        when(notificationRepository.save(any())).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            n.setId(UUID.randomUUID());
+            return n;
+        });
+        var view = service.create(new metro.ExoticStamp.modules.community.application.command.CreateNotificationCommand(
+                userId,
+                NotificationType.REWARD,
+                "New reward earned",
+                "body",
+                rewardId.toString(),
+                "/rewards/" + rewardId,
+                java.util.Map.of()));
+        assertEquals(rewardId.toString(), view.referenceId());
+        verify(notificationRepository).save(any());
+    }
+
+    @Test
+    void create_duplicateUnique_isIdempotentSuccess() {
+        UUID userId = UUID.randomUUID();
+        UUID rewardId = UUID.randomUUID();
+        when(notificationRepository.save(any())).thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException("uq_notifications_user_type_ref"));
+        var view = service.create(new metro.ExoticStamp.modules.community.application.command.CreateNotificationCommand(
+                userId,
+                NotificationType.REWARD,
+                "New reward earned",
+                "body",
+                rewardId.toString(),
+                "/rewards/" + rewardId,
+                java.util.Map.of()));
+        assertEquals(rewardId.toString(), view.referenceId());
+    }
+
 }

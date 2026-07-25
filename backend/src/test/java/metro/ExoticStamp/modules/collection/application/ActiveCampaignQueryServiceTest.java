@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -102,6 +103,55 @@ class ActiveCampaignQueryServiceTest {
     void listActiveByStationId_emptyWhenNone() {
         when(campaignRepository.findActiveByStationId(eq(stationId), any())).thenReturn(List.of());
         assertTrue(service.listActiveByStationId(stationId).isEmpty());
+    }
+
+    @Test
+    void getActiveById_notFoundWhenMissing() {
+        UUID missing = UUID.randomUUID();
+        when(campaignRepository.findByIdNotDeleted(missing)).thenReturn(java.util.Optional.empty());
+        assertThrows(metro.ExoticStamp.modules.collection.domain.exception.CampaignNotFoundException.class,
+                () -> service.getActiveById(missing));
+    }
+
+    @Test
+    void getActiveById_notFoundWhenDraft() {
+        Campaign draft = campaign(campaignHighId, CampaignStatus.DRAFT, 5,
+                LocalDateTime.now(clock).minusDays(1), LocalDateTime.now(clock).plusDays(1));
+        when(campaignRepository.findByIdNotDeleted(campaignHighId)).thenReturn(java.util.Optional.of(draft));
+        assertThrows(metro.ExoticStamp.modules.collection.domain.exception.CampaignNotFoundException.class,
+                () -> service.getActiveById(campaignHighId));
+    }
+
+    @Test
+    void getActiveById_success() {
+        Campaign active = campaign(campaignHighId, CampaignStatus.ACTIVE, 5,
+                LocalDateTime.now(clock).minusDays(1), LocalDateTime.now(clock).plusDays(1));
+        when(campaignRepository.findByIdNotDeleted(campaignHighId)).thenReturn(java.util.Optional.of(active));
+        when(campaignStationRepository.findStationIdsByCampaignId(campaignHighId)).thenReturn(List.of());
+        when(stationReadPort.listStationViewsByIds(any())).thenReturn(List.of());
+        when(stampDesignRepository.findActiveByCampaignIdAndStationIdIn(any(), any())).thenReturn(List.of());
+
+        var view = service.getActiveById(campaignHighId);
+        assertEquals(campaignHighId, view.id());
+    }
+
+    @Test
+    void listActive_skipsInactiveStationAndLine() {
+        Campaign active = campaign(campaignHighId, CampaignStatus.ACTIVE, 5,
+                LocalDateTime.now(clock).minusDays(1), LocalDateTime.now(clock).plusDays(1));
+        when(campaignRepository.findActiveInWindow(any())).thenReturn(List.of(active));
+        when(campaignStationRepository.findStationIdsByCampaignId(campaignHighId)).thenReturn(List.of(stationId));
+        when(stationReadPort.listStationViewsByIds(any())).thenReturn(List.of(
+                MetroStationView.builder().id(stationId).lineId(lineId).name("Inactive").sequence(1).active(false).build(),
+                MetroStationView.builder().id(UUID.randomUUID()).lineId(lineId).name("BadLine").sequence(2).active(true).build()
+        ));
+        when(lineReadPort.getLineById(lineId)).thenReturn(
+                MetroLineView.builder().id(lineId).code("L").name("L").active(false).build());
+        when(stampDesignRepository.findActiveByCampaignIdAndStationIdIn(any(), any())).thenReturn(List.of());
+
+        var result = service.listActive();
+        assertEquals(1, result.size());
+        assertTrue(result.get(0).stations().isEmpty());
     }
 
     private Campaign campaign(UUID id, CampaignStatus status, int priority, LocalDateTime start, LocalDateTime end) {

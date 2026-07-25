@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
 import org.springframework.web.cors.CorsConfiguration;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,6 +24,7 @@ class CorsConfigurationTest {
     @Mock private UserDetailsServiceImpl userDetailsService;
     @Mock private CustomAuthEntryPoint authEntryPoint;
     @Mock private CustomAccessDeniedHandler accessDeniedHandler;
+    @Mock private Environment environment;
 
     @Test
     void cors_allowsPatchMethod() {
@@ -75,7 +77,8 @@ class CorsConfigurationTest {
                 accessDeniedHandler,
                 corsProperties,
                 new AuthCookieProperties(),
-                new ObjectMapper());
+                new ObjectMapper(),
+                environment);
     }
 
     private static CorsProperties devCorsProperties() {

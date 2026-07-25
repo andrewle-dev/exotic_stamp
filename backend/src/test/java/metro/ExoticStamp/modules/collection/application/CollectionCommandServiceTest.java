@@ -5,6 +5,7 @@ import metro.ExoticStamp.modules.collection.application.port.StationScanResolver
 import metro.ExoticStamp.modules.collection.application.port.UserStampCachePort;
 import metro.ExoticStamp.modules.collection.application.service.CollectionCommandService;
 import metro.ExoticStamp.modules.collection.application.service.CollectionQueryService;
+import metro.ExoticStamp.modules.collection.application.support.CollectIdempotencyFingerprint;
 import metro.ExoticStamp.modules.collection.application.support.CollectionPolicyService;
 import metro.ExoticStamp.modules.collection.application.support.CollectionRuntimeAuditHelper;
 import metro.ExoticStamp.modules.collection.application.support.DefaultCampaignResolver;
@@ -17,6 +18,8 @@ import metro.ExoticStamp.modules.collection.domain.event.StampCollectedEvent;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignStationNotEligibleException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsOutOfRangeException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsRequiredException;
+import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyConflictException;
+import metro.ExoticStamp.modules.collection.domain.exception.InvalidRequestException;
 import metro.ExoticStamp.modules.collection.domain.exception.StampAlreadyCollectedException;
 import metro.ExoticStamp.modules.collection.domain.model.Campaign;
 import metro.ExoticStamp.modules.collection.domain.model.CampaignStatus;
@@ -56,6 +59,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.lenient;
@@ -122,7 +126,7 @@ class CollectionCommandServiceTest {
         Campaign campaign = defaultCampaign();
         StampDesign design = defaultDesign();
 
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(station);
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(campaign);
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
@@ -155,7 +159,7 @@ class CollectionCommandServiceTest {
     @Test
     void collect_duplicate_throwsConflict() {
         UUID idempotencyKey = UUID.randomUUID();
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("QR_STATIC", "QR1")).thenReturn(defaultStation());
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
@@ -177,7 +181,7 @@ class CollectionCommandServiceTest {
 
     @Test
     void collect_campaignStationIneligible_rejected() {
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(false);
@@ -191,7 +195,6 @@ class CollectionCommandServiceTest {
     @Test
     void collect_inactiveStation_rejected() {
         UUID idempotencyKey = UUID.randomUUID();
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve(eq("NFC"), eq("NFC1")))
                 .thenThrow(new StationInactiveException(STATION_ID));
 
@@ -217,7 +220,9 @@ class CollectionCommandServiceTest {
                 .build();
         existing.setId(STAMP_ID);
 
-        when(collectionPolicyService.resolveIdempotentReplay(idempotencyKey.toString(), USER_ID)).thenReturn(Optional.of(existing));
+        when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
+        when(collectionPolicyService.resolveIdempotentReplay(eq(idempotencyKey.toString()), eq(USER_ID), any(), eq(STATION_ID), eq(CAMPAIGN_ID))).thenReturn(Optional.of(existing));
         when(stationReadPort.getStationViewById(STATION_ID))
                 .thenReturn(MetroStationView.builder().id(STATION_ID).lineId(LINE_ID).name("Central").sequence(1).active(true).build());
         when(lineReadPort.getLineById(LINE_ID))
@@ -236,8 +241,55 @@ class CollectionCommandServiceTest {
     }
 
     @Test
+    void collect_idempotencyUniqueRace_returnsExistingStamp() {
+        UUID idempotencyKey = UUID.randomUUID();
+        UserStamp existing = UserStamp.builder()
+                .userId(USER_ID)
+                .stationId(STATION_ID)
+                .campaignId(CAMPAIGN_ID)
+                .stampDesignId(DESIGN_ID)
+                .collectedAt(LocalDateTime.now(clock).minusSeconds(1))
+                .gpsVerified(true)
+                .collectMethod(CollectMethod.NFC)
+                .sourceScanType("NFC")
+                .deviceFingerprint("device-fingerprint-123")
+                .idempotencyKey(idempotencyKey.toString())
+                .collectionPolicy("MVP_ONCE_PER_STATION_CAMPAIGN")
+                .build();
+        existing.setId(STAMP_ID);
+
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
+        when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
+        when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
+        when(stampDesignResolver.resolveActive(CAMPAIGN_ID, STATION_ID)).thenReturn(defaultDesign());
+        when(gpsValidationService.validate(any(), any(), any(), any()))
+                .thenReturn(new GpsValidationService.GpsValidationResult(BigDecimal.ONE, BigDecimal.valueOf(30), true));
+        when(userStampRepository.save(any(UserStamp.class))).thenThrow(
+                new DataIntegrityViolationException("duplicate",
+                        new RuntimeException("ERROR: duplicate key value violates unique constraint \"uq_user_stamps_user_idempotency\"")));
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(USER_ID, idempotencyKey.toString()))
+                .thenReturn(Optional.of(existing));
+        doNothing().when(collectionPolicyService).assertLogicalMatch(any(), any(), any(), any());
+        when(stationReadPort.getStationViewById(STATION_ID))
+                .thenReturn(MetroStationView.builder().id(STATION_ID).lineId(LINE_ID).name("Central").sequence(1).active(true).build());
+        when(lineReadPort.getLineById(LINE_ID))
+                .thenReturn(MetroLineView.builder().id(LINE_ID).code("L1").name("Line 1").active(true).build());
+        when(stampDesignRepository.findById(DESIGN_ID))
+                .thenReturn(Optional.of(StampDesign.builder().imageUrl("https://cdn/x.png").name("S")
+                        .status(StampDesignStatus.ACTIVE).rarity(StampRarity.COMMON).sortOrder(0).isLimited(false).build()));
+        when(collectionQueryService.computeProgress(USER_ID, LINE_ID, CAMPAIGN_ID))
+                .thenReturn(ProgressView.builder().lineId(LINE_ID).collected(1).total(10).percentage(10).build());
+
+        CollectStampResultView res = service.collect(defaultCommand(idempotencyKey));
+        assertFalse(res.isNew());
+        assertEquals(STAMP_ID, res.stamp().stampId());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
     void collect_dataIntegrity_mapsToStampAlreadyCollected() {
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
@@ -252,7 +304,7 @@ class CollectionCommandServiceTest {
 
     @Test
     void collect_eventPublishFailure_stillSucceeds() {
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
@@ -273,8 +325,91 @@ class CollectionCommandServiceTest {
     }
 
     @Test
+    void collect_idempotencyFingerprintConflict_throws() {
+        UUID idempotencyKey = UUID.randomUUID();
+        when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any()))
+                .thenThrow(new IdempotencyConflictException());
+
+        assertThrows(IdempotencyConflictException.class, () -> service.collect(defaultCommand(idempotencyKey)));
+        verify(userStampRepository, never()).save(any());
+    }
+
+    @Test
+    void collect_idempotencyUniqueRace_logicalMismatch_throwsConflict() {
+        UUID idempotencyKey = UUID.randomUUID();
+        UUID otherStation = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        UserStamp existing = UserStamp.builder()
+                .userId(USER_ID)
+                .stationId(otherStation)
+                .campaignId(CAMPAIGN_ID)
+                .stampDesignId(DESIGN_ID)
+                .collectedAt(LocalDateTime.now(clock))
+                .gpsVerified(true)
+                .collectMethod(CollectMethod.NFC)
+                .sourceScanType("NFC")
+                .deviceFingerprint("device-fingerprint-123")
+                .idempotencyKey(idempotencyKey.toString())
+                .idempotencyFingerprint(CollectIdempotencyFingerprint.compute(USER_ID, otherStation, CAMPAIGN_ID, "NFC"))
+                .collectionPolicy("MVP_ONCE_PER_STATION_CAMPAIGN")
+                .build();
+        existing.setId(STAMP_ID);
+
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
+        when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
+        when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
+        when(stampDesignResolver.resolveActive(CAMPAIGN_ID, STATION_ID)).thenReturn(defaultDesign());
+        when(gpsValidationService.validate(any(), any(), any(), any()))
+                .thenReturn(new GpsValidationService.GpsValidationResult(BigDecimal.ONE, BigDecimal.valueOf(30), true));
+        when(userStampRepository.save(any(UserStamp.class))).thenThrow(
+                new DataIntegrityViolationException("duplicate",
+                        new RuntimeException("ERROR: duplicate key value violates unique constraint \"uq_user_stamps_user_idempotency\"")));
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(USER_ID, idempotencyKey.toString()))
+                .thenReturn(Optional.of(existing));
+        doThrow(new IdempotencyConflictException())
+                .when(collectionPolicyService).assertLogicalMatch(any(), any(), any(), any());
+
+        assertThrows(IdempotencyConflictException.class, () -> service.collect(defaultCommand(idempotencyKey)));
+    }
+
+    @Test
+    void collect_unknownDataIntegrityViolation_rethrows() {
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
+        when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
+        when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
+        when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
+        when(stampDesignResolver.resolveActive(CAMPAIGN_ID, STATION_ID)).thenReturn(defaultDesign());
+        when(gpsValidationService.validate(any(), any(), any(), any()))
+                .thenReturn(new GpsValidationService.GpsValidationResult(BigDecimal.ONE, BigDecimal.valueOf(30), true));
+        when(userStampRepository.save(any(UserStamp.class))).thenThrow(
+                new DataIntegrityViolationException("unexpected", new RuntimeException("some unknown db error")));
+
+        DataIntegrityViolationException ex = assertThrows(DataIntegrityViolationException.class,
+                () -> service.collect(defaultCommand(UUID.randomUUID())));
+        assertFalse(ex.getMostSpecificCause().getMessage().contains("uq_user_stamps"));
+    }
+
+    @Test
+    void collect_nullPayload_throwsInvalidRequest() {
+        CollectStampCommand cmd = new CollectStampCommand(
+                USER_ID, UUID.randomUUID(), "NFC", null,
+                BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, "ANDROID", "1.0.0", "fp");
+        assertThrows(InvalidRequestException.class, () -> service.collect(cmd));
+    }
+
+    @Test
+    void collect_missingUserId_throwsInvalidRequest() {
+        CollectStampCommand cmd = new CollectStampCommand(
+                null, UUID.randomUUID(), "NFC", "NFC1",
+                BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, "ANDROID", "1.0.0", "fp");
+        assertThrows(InvalidRequestException.class, () -> service.collect(cmd));
+    }
+
+    @Test
     void collect_gpsMissing_fails() {
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);
@@ -290,7 +425,7 @@ class CollectionCommandServiceTest {
 
     @Test
     void collect_gpsOutsideRadius_fails() {
-        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID))).thenReturn(Optional.empty());
+        when(collectionPolicyService.resolveIdempotentReplay(anyString(), eq(USER_ID), any(), any(), any())).thenReturn(Optional.empty());
         when(stationScanResolverPort.resolve("NFC", "NFC1")).thenReturn(defaultStation());
         when(defaultCampaignResolver.resolveActiveGlobalDefault(LINE_ID)).thenReturn(defaultCampaign());
         when(campaignStationRepository.exists(CAMPAIGN_ID, STATION_ID)).thenReturn(true);

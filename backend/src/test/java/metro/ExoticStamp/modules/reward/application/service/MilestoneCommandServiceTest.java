@@ -20,10 +20,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,7 +35,7 @@ import static org.mockito.Mockito.when;
 class MilestoneCommandServiceTest {
 
     @Mock private MilestoneRepository milestoneRepository;
-    @Mock private RewardAppMapper rewardAppMapper;
+    private RewardAppMapper rewardAppMapper;
     @Mock private RewardAuditHelper rewardAuditHelper;
 
     private MilestoneCommandService service;
@@ -42,6 +44,7 @@ class MilestoneCommandServiceTest {
 
     @BeforeEach
     void setUp() {
+        rewardAppMapper = new RewardAppMapper();
         service = new MilestoneCommandService(milestoneRepository, rewardAppMapper, rewardAuditHelper, clock);
     }
 
@@ -81,9 +84,112 @@ class MilestoneCommandServiceTest {
     }
 
     @Test
-    void reorder_nullCampaign_throwsInvalid() {
+    void reorder_archivedMilestone_throwsInvalid() {
+        UUID aId = UUID.randomUUID();
+        Milestone archived = milestone(aId, 0);
+        archived.setStatus(MilestoneStatus.ARCHIVED);
+        when(milestoneRepository.findAllByCampaignIdOrderBySortOrderAsc(campaignId))
+                .thenReturn(List.of(archived));
+
         assertThrows(InvalidReorderException.class, () ->
-                service.reorder(new ReorderMilestonesCommand(null, List.of())));
+                service.reorder(new ReorderMilestonesCommand(campaignId, List.of(aId))));
+    }
+
+    @Test
+    void create_success() {
+        when(milestoneRepository.existsByCampaignIdAndCodeAndIdNot(campaignId, "M1", null)).thenReturn(false);
+        when(milestoneRepository.save(any())).thenAnswer(inv -> {
+            Milestone m = inv.getArgument(0);
+            m.setId(UUID.randomUUID());
+            return m;
+        });
+
+        var view = service.create(new metro.ExoticStamp.modules.reward.application.command.CreateMilestoneCommand(
+                campaignId, "M1", 3, "Three", "desc", "VOUCHER", "Voucher", null, null, "DRAFT", 0));
+
+        assertEquals("M1", view.code());
+        verify(rewardAuditHelper).scheduleMilestoneCreated(any());
+    }
+
+    @Test
+    void create_duplicateCode_throws() {
+        when(milestoneRepository.existsByCampaignIdAndCodeAndIdNot(campaignId, "M1", null)).thenReturn(true);
+
+        assertThrows(metro.ExoticStamp.modules.reward.domain.exception.MilestoneCodeDuplicateException.class, () ->
+                service.create(new metro.ExoticStamp.modules.reward.application.command.CreateMilestoneCommand(
+                        campaignId, "M1", 3, "Three", null, "VOUCHER", "Voucher", null, null, null, 0)));
+    }
+
+    @Test
+    void softDelete_setsInactiveAndDeletedAt() {
+        UUID id = UUID.randomUUID();
+        Milestone m = milestone(id, 0);
+        when(milestoneRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(m));
+        when(milestoneRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.softDelete(id);
+
+        assertEquals(MilestoneStatus.INACTIVE, m.getStatus());
+        assertTrue(m.getDeletedAt() != null);
+        verify(rewardAuditHelper).scheduleMilestoneDisabled(id);
+    }
+
+    @Test
+    void update_archivedMilestone_rejected() {
+        UUID id = UUID.randomUUID();
+        Milestone m = milestone(id, 0);
+        m.setStatus(MilestoneStatus.ARCHIVED);
+        when(milestoneRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(m));
+
+        assertThrows(metro.ExoticStamp.modules.reward.domain.exception.MilestoneArchivedException.class, () ->
+                service.update(new metro.ExoticStamp.modules.reward.application.command.UpdateMilestoneCommand(
+                        id, "NEW", null, null, null, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void create_missingCampaignId_rejected() {
+        assertThrows(metro.ExoticStamp.modules.reward.domain.exception.InvalidMilestoneStateException.class, () ->
+                service.create(new metro.ExoticStamp.modules.reward.application.command.CreateMilestoneCommand(
+                        null, "M1", 3, "Three", null, "VOUCHER", "Voucher", null, null, null, 0)));
+    }
+
+    @Test
+    void create_missingRewardType_rejected() {
+        assertThrows(metro.ExoticStamp.modules.reward.domain.exception.InvalidMilestoneStateException.class, () ->
+                service.create(new metro.ExoticStamp.modules.reward.application.command.CreateMilestoneCommand(
+                        campaignId, "M1", 3, "Three", null, null, "Voucher", null, null, null, 0)));
+    }
+
+    @Test
+    void update_success() {
+        UUID id = UUID.randomUUID();
+        Milestone m = milestone(id, 0);
+        when(milestoneRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(m));
+        when(milestoneRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var view = service.update(new metro.ExoticStamp.modules.reward.application.command.UpdateMilestoneCommand(
+                id, "NEW", 5, "Updated", "desc", "DIGITAL_STICKER", "Sticker", null, null, "ACTIVE", 1));
+
+        assertEquals("NEW", view.code());
+        verify(rewardAuditHelper).scheduleMilestoneUpdated(id);
+    }
+
+    @Test
+    void update_duplicateCode_throws() {
+        UUID id = UUID.randomUUID();
+        Milestone m = milestone(id, 0);
+        when(milestoneRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(m));
+        when(milestoneRepository.existsByCampaignIdAndCodeAndIdNot(campaignId, "DUP", id)).thenReturn(true);
+
+        assertThrows(metro.ExoticStamp.modules.reward.domain.exception.MilestoneCodeDuplicateException.class, () ->
+                service.update(new metro.ExoticStamp.modules.reward.application.command.UpdateMilestoneCommand(
+                        id, "DUP", null, null, null, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void reorder_nullCampaignId_throws() {
+        assertThrows(InvalidReorderException.class, () ->
+                service.reorder(new ReorderMilestonesCommand(null, List.of(UUID.randomUUID()))));
     }
 
     private Milestone milestone(UUID id, int sortOrder) {

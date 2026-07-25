@@ -1,0 +1,24 @@
+{
+  "application": "ExoticStamp",
+  "version": "0.1.0-rc.1",
+  "commitSha": "0000000000000000000000000000000000000000",
+  "shortSha": "0000000",
+  "branch": "chore/batch-f0-deployment-prep",
+  "buildTimestampUtc": "2026-07-25T00:00:00Z",
+  "javaVersion": "21",
+  "mavenVersion": "3.9.x",
+  "dockerImageRepository": "ghcr.io/example/exotic-stamp-backend",
+  "dockerImageTags": [
+    "v0.1.0-rc.1",
+    "git-0000000"
+  ],
+  "dockerImageDigest": "unresolved",
+  "flywaySchemaVersion": "23",
+  "configurationProfile": "prod",
+  "artifactChecksums": {
+    "jarSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "sourceDirty": false,
+  "releaseNotesPath": "docs/deployment/BATCH_F0_IMPLEMENTATION_REPORT.md"
+}

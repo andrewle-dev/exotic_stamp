@@ -50,7 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         AuthPresentationMapper.class,
         GlobalExceptionHandler.class,
         RefreshCookieSupport.class,
-        AuthCookieProperties.class
+        AuthCookieProperties.class,
+        metro.ExoticStamp.infra.security.ClientIpResolver.class
 })
 class AuthControllerTest {
 

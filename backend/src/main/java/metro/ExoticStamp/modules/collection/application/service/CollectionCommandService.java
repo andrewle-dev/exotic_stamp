@@ -6,6 +6,7 @@ import metro.ExoticStamp.modules.collection.application.command.CollectStampComm
 import metro.ExoticStamp.modules.collection.application.port.StationScanResolverPort;
 import metro.ExoticStamp.modules.collection.application.port.UserStampCachePort;
 import metro.ExoticStamp.modules.collection.application.support.CollectionEnumParser;
+import metro.ExoticStamp.modules.collection.application.support.CollectIdempotencyFingerprint;
 import metro.ExoticStamp.modules.collection.application.support.CollectionPolicyService;
 import metro.ExoticStamp.modules.collection.application.support.CollectionRuntimeAuditHelper;
 import metro.ExoticStamp.modules.collection.application.support.DefaultCampaignResolver;
@@ -20,6 +21,7 @@ import metro.ExoticStamp.modules.collection.domain.exception.GpsAccuracyTooLowEx
 import metro.ExoticStamp.modules.collection.domain.exception.GpsInvalidException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsOutOfRangeException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsRequiredException;
+import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyConflictException;
 import metro.ExoticStamp.modules.collection.domain.exception.InvalidRequestException;
 import metro.ExoticStamp.modules.collection.domain.exception.StampAlreadyCollectedException;
 import metro.ExoticStamp.modules.collection.domain.model.Campaign;
@@ -80,13 +82,17 @@ public class CollectionCommandService {
         UUID idempotencyKey = cmd.idempotencyKey() != null ? cmd.idempotencyKey() : UUID.randomUUID();
         String idempotencyKeyStr = idempotencyKey.toString();
 
-        Optional<UserStamp> replay = collectionPolicyService.resolveIdempotentReplay(idempotencyKeyStr, cmd.userId());
+        ResolvedStationView station = stationScanResolverPort.resolve(scanType, cmd.payload().trim());
+        Campaign campaign = defaultCampaignResolver.resolveActiveGlobalDefault(station.lineId());
+
+        String fingerprint = CollectIdempotencyFingerprint.compute(
+                cmd.userId(), station.id(), campaign.getId(), scanType);
+
+        Optional<UserStamp> replay = collectionPolicyService.resolveIdempotentReplay(
+                idempotencyKeyStr, cmd.userId(), fingerprint, station.id(), campaign.getId());
         if (replay.isPresent()) {
             return buildResult(replay.get(), false);
         }
-
-        ResolvedStationView station = stationScanResolverPort.resolve(scanType, cmd.payload().trim());
-        Campaign campaign = defaultCampaignResolver.resolveActiveGlobalDefault(station.lineId());
 
         CollectionEligibilityPolicy.assertCampaignStationEligible(
                 campaignStationRepository.exists(campaign.getId(), station.id()),
@@ -136,6 +142,7 @@ public class CollectionCommandService {
                 .appVersion(cmd.appVersion())
                 .collectionPolicy(CollectionPolicy.MVP_ONCE_PER_STATION_CAMPAIGN)
                 .idempotencyKey(idempotencyKeyStr)
+                .idempotencyFingerprint(fingerprint)
                 .createdAt(now)
                 .build();
 
@@ -145,6 +152,11 @@ public class CollectionCommandService {
         } catch (DataIntegrityViolationException ex) {
             if (isUserStampCollectUniqueViolation(ex)) {
                 throw new StampAlreadyCollectedException(station.id());
+            }
+            Optional<UserStamp> idempotent = resolveIdempotencyUniqueRace(
+                    ex, idempotencyKeyStr, cmd.userId(), fingerprint, station.id(), campaign.getId());
+            if (idempotent.isPresent()) {
+                return buildResult(idempotent.get(), false);
             }
             throw ex;
         }
@@ -288,5 +300,29 @@ public class CollectionCommandService {
         }
         return msg.contains("uq_user_stamps_collect")
                 || (msg.contains("user_stamps") && msg.contains("user_id") && msg.contains("station_id"));
+    }
+
+    /**
+     * Permanent DB unique {@code uq_user_stamps_user_idempotency} is the concurrency backstop.
+     * Concurrent retries with the same user+key must return idempotent success, not a generic 409.
+     */
+    private Optional<UserStamp> resolveIdempotencyUniqueRace(
+            DataIntegrityViolationException ex,
+            String idempotencyKey,
+            UUID userId,
+            String fingerprint,
+            UUID stationId,
+            UUID campaignId) {
+        String msg = ex.getMostSpecificCause().getMessage();
+        if (msg == null || !msg.contains("uq_user_stamps_user_idempotency")) {
+            return Optional.empty();
+        }
+        Optional<UserStamp> existing = userStampRepository
+                .findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(userId, idempotencyKey);
+        if (existing.isEmpty()) {
+            return Optional.empty();
+        }
+        collectionPolicyService.assertLogicalMatch(existing.get(), fingerprint, stationId, campaignId);
+        return existing;
     }
 }

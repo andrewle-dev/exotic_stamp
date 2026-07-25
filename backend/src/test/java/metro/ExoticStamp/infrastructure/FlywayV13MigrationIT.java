@@ -11,7 +11,6 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -30,13 +29,12 @@ class FlywayV13MigrationIT {
     }
 
     @Test
-    void appliesV13AsLatestMigration() throws Exception {
+    void appliesV13Migration() throws Exception {
         try (Connection connection = postgres.createConnection("");
              Statement statement = connection.createStatement()) {
             ResultSet version = statement.executeQuery(
-                    "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1");
-            assertTrue(version.next());
-            assertEquals("13", version.getString("version"));
+                    "SELECT 1 FROM flyway_schema_history WHERE version = '13'");
+            assertTrue(version.next(), "V13 migration should be applied");
             assertConstraintExists(statement, "chk_lines_status");
             assertConstraintExists(statement, "uq_stations_line_code");
             assertConstraintExists(statement, "chk_stations_scan_key_status");

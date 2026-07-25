@@ -1,0 +1,105 @@
+# Prod-like local stack (placeholders only).
+# Usage (from backend/):
+#   cp .env.prod-like.example .env.prod-like   # fill secrets
+#   docker compose -f docker-compose.prod-like.yml --env-file .env.prod-like up -d
+# Optional LocalStack S3:
+#   docker compose -f docker-compose.prod-like.yml --profile local-s3 --env-file .env.prod-like up -d
+#
+# Backend is not published on the host; Caddy terminates TLS and proxies to backend:8080.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-exotic_stamp}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # no host ports
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # no host ports
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env.prod-like
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SERVER_PORT: "8080"
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-exotic_stamp}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-s3}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-exotic-stamp-media}
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-https://cdn.example.com}
+      # When using profile local-s3, override endpoint + path-style in .env.prod-like
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    # no public 8080 — Caddy only
+    stop_grace_period: 40s
+
+  localstack:
+    profiles: ["local-s3"]
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: s3
+      AWS_DEFAULT_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    networks:
+      - internal
+    # no host ports
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./infra/caddy/Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    networks:
+      - internal
+      - edge
+
+networks:
+  internal:
+    # Private compose network (no published DB/Redis/backend ports).
+    # Not marked internal:true so the backend can reach real AWS S3.
+  edge:
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

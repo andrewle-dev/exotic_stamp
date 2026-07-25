@@ -23,7 +23,7 @@ public class CorsProperties {
     private long maxAgeSeconds = 3600;
 
     @PostConstruct
-    void rejectWildcardOriginsWithCredentials() {
+    public void rejectWildcardOriginsWithCredentials() {
         if (!allowCredentials) {
             return;
         }

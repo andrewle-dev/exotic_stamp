@@ -104,9 +104,23 @@ public class RewardEvaluationService {
             if (allocation.isPresent()) {
                 saved.setStatus(RewardStatus.ISSUED);
                 saved.setVoucherPoolId(allocation.get().voucherPoolId());
-                saved = userRewardRepository.save(saved);
-                rewardAuditHelper.scheduleVoucherAllocated(allocation.get().voucherPoolId(), saved.getId());
-                rewardAuditHelper.scheduleRewardIssued(saved.getId());
+                try {
+                    saved = userRewardRepository.save(saved);
+                    rewardAuditHelper.scheduleVoucherAllocated(allocation.get().voucherPoolId(), saved.getId());
+                    rewardAuditHelper.scheduleRewardIssued(saved.getId());
+                } catch (DataIntegrityViolationException ex) {
+                    if (!isVoucherPoolLinkUniqueViolation(ex)) {
+                        throw ex;
+                    }
+                    log.warn("[Reward] voucher_pool_id unique race userId={} milestoneId={} voucherPoolId={}",
+                            userId, milestoneId, allocation.get().voucherPoolId());
+                    voucherAllocationService.release(allocation.get().voucherPoolId());
+                    saved.setVoucherPoolId(null);
+                    saved.setStatus(RewardStatus.PENDING_STOCK);
+                    saved = userRewardRepository.save(saved);
+                    rewardAuditHelper.scheduleVoucherStockEmpty(milestoneId);
+                    rewardAuditHelper.scheduleRewardPendingStock(saved.getId());
+                }
             } else {
                 rewardAuditHelper.scheduleVoucherStockEmpty(milestoneId);
                 rewardAuditHelper.scheduleRewardPendingStock(saved.getId());
@@ -115,24 +129,95 @@ public class RewardEvaluationService {
             rewardAuditHelper.scheduleRewardIssued(saved.getId());
         }
 
-        meterRegistry.counter("reward.issued", "rewardType", rewardType.name()).increment();
+        if (saved.getStatus() == RewardStatus.ISSUED) {
+            meterRegistry.counter("reward.issued", "rewardType", rewardType.name()).increment();
+            publishIssuedEventAfterCommit(userId, saved.getId(), milestoneId, rewardType);
+        }
         rewardCachePort.evictUserRewardListAll(userId);
         rewardCachePort.evictUserRewardDetail(userId, saved.getId());
+    }
 
-        UserReward finalSaved = saved;
+    /**
+     * Fulfill an existing PENDING_STOCK reward when voucher stock becomes available.
+     * Does not create a new user_rewards row.
+     */
+    @Transactional
+    public PendingStockResult fulfillPendingStock(UUID userRewardId) {
+        if (userRewardId == null) {
+            return PendingStockResult.SKIPPED;
+        }
+        UserReward reward = userRewardRepository.findById(userRewardId).orElse(null);
+        if (reward == null) {
+            return PendingStockResult.SKIPPED;
+        }
+        if (reward.getStatus() != RewardStatus.PENDING_STOCK || reward.getVoucherPoolId() != null) {
+            return PendingStockResult.SKIPPED;
+        }
+        Milestone milestone = milestoneRepository.findById(reward.getMilestoneId()).orElse(null);
+        if (milestone == null || !milestone.isEvaluable() || milestone.getRewardType() != RewardType.VOUCHER) {
+            return PendingStockResult.SKIPPED;
+        }
+        long stampCount = userStampCampaignCountPort.countDistinctStationsByUserIdAndCampaignId(
+                reward.getUserId(), reward.getCampaignId());
+        if (stampCount < milestone.getStampsRequired()) {
+            return PendingStockResult.SKIPPED;
+        }
+
+        var allocation = voucherAllocationService.allocate(
+                milestone.getId(), reward.getUserId(), reward.getId());
+        if (allocation.isEmpty()) {
+            return PendingStockResult.STILL_NO_STOCK;
+        }
+        reward.setStatus(RewardStatus.ISSUED);
+        reward.setVoucherPoolId(allocation.get().voucherPoolId());
+        try {
+            userRewardRepository.save(reward);
+        } catch (DataIntegrityViolationException ex) {
+            if (!isVoucherPoolLinkUniqueViolation(ex)) {
+                throw ex;
+            }
+            voucherAllocationService.release(allocation.get().voucherPoolId());
+            reward.setVoucherPoolId(null);
+            reward.setStatus(RewardStatus.PENDING_STOCK);
+            userRewardRepository.save(reward);
+            return PendingStockResult.STILL_NO_STOCK;
+        }
+        rewardAuditHelper.scheduleVoucherAllocated(allocation.get().voucherPoolId(), reward.getId());
+        rewardAuditHelper.scheduleRewardIssued(reward.getId());
+        meterRegistry.counter("reward.issued", "rewardType", RewardType.VOUCHER.name()).increment();
+        rewardCachePort.evictUserRewardListAll(reward.getUserId());
+        rewardCachePort.evictUserRewardDetail(reward.getUserId(), reward.getId());
+        publishIssuedEventAfterCommit(
+                reward.getUserId(), reward.getId(), milestone.getId(), RewardType.VOUCHER);
+        return PendingStockResult.FULFILLED;
+    }
+
+    private void publishIssuedEventAfterCommit(
+            UUID userId, UUID userRewardId, UUID milestoneId, RewardType rewardType) {
         RbacTransactionCallbacks.afterCommit(() -> {
             try {
                 eventPublisher.publishEvent(RewardIssuedEvent.milestoneIssued(
-                        userId, finalSaved.getId(), milestoneId, rewardType));
+                        userId, userRewardId, milestoneId, rewardType));
             } catch (Exception e) {
                 log.error("[Reward] RewardIssuedEvent publish failed userId={} milestoneId={}: {}",
-                        userId, milestoneId, e.getMessage(), e);
+                        userId, milestoneId, e.getClass().getSimpleName());
             }
         });
+    }
+
+    public enum PendingStockResult {
+        FULFILLED,
+        STILL_NO_STOCK,
+        SKIPPED
     }
 
     private static boolean isUserRewardUniqueViolation(DataIntegrityViolationException ex) {
         String msg = ex.getMostSpecificCause().getMessage();
         return msg != null && msg.contains("uq_user_rewards_once");
+    }
+
+    private static boolean isVoucherPoolLinkUniqueViolation(DataIntegrityViolationException ex) {
+        String msg = ex.getMostSpecificCause().getMessage();
+        return msg != null && msg.contains("uq_user_rewards_voucher_pool_id");
     }
 }

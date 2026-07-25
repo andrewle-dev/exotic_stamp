@@ -62,7 +62,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         GlobalExceptionHandler.class,
         AuthCommandService.class,
         RefreshCookieSupport.class,
-        AuthCookieProperties.class
+        AuthCookieProperties.class,
+        metro.ExoticStamp.infra.security.ClientIpResolver.class
 })
 class AuthResendVerificationControllerTest {
 

@@ -22,14 +22,15 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:change_me}
+      # Empty default = local Redis without requirepass.
+      password: ${REDIS_PASSWORD:change-me-only}
       timeout: 3s
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:work.exotictravelers@gmail.com}
-    password: ${MAIL_PASSWORD:jfeg nqup glrr hqzy}
+    username: ${MAIL_USERNAME:admin@facewashfox.com.vn}
+    password: ${MAIL_PASSWORD:uvbn oebx spwz kswj}
     properties:
       mail:
         smtp:
@@ -50,8 +51,9 @@ spring:
 
 application:
   bootstrap:
-    admin-password: ${ADMIN_SEED_PASSWORD:changeme-dev-only}
-    demo-user-password: ${DEMO_USER_PASSWORD:changeme-demo-only}
+    # Dev seed passwords (AdminSeedBootstrap / MvpDemoSeedBootstrap). Override via .env if needed.
+    admin-password: ${ADMIN_SEED_PASSWORD:Admin@123456}
+    demo-user-password: ${DEMO_USER_PASSWORD:Demo@123456}
   frontend:
     dev: http://localhost:3000
     prod: https://report.facewashfox.com
@@ -61,12 +63,12 @@ application:
     prod: https://backend.facewashfox.com
 
   mail:
-    # Must be a valid mailbox address; the friendly display name is set via display-name below.
-    from: ${MAIL_FROM:work.exotictravelers@gmail.com}
+    # Must be a valid mailbox address; display name is handled by the mail provider/client.
+    from: ${MAIL_FROM:admin@facewashfox.com.vn}
     display-name: ${MAIL_DISPLAY_NAME:Exotic Travelers}
     reply-to: ${MAIL_REPLY_TO:}
     list-unsubscribe: ${MAIL_LIST_UNSUBSCRIBE:}
-    logo-url: https://res.cloudinary.com/dnahocnhk/image/upload/v1776831366/ExoticStamp_logo-removebg-preview_c8kmaa.png
+    logo-url: ${MAIL_LOGO_URL:https://res.cloudinary.com/dnahocnhk/image/upload/f_png,b_white/v1762831622/fwf-logo_veozws.webp}
     queue:
       max-per-minute: 30
       batch-size: 10
@@ -75,14 +77,17 @@ application:
       stuck-processing-threshold-minutes: 5
 
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://report.facewashfox.com}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
 
   security:
     token-revocation:
       fail-open-on-db-error: true
+    rate-limit:
+      backend: redis
 
 jwt:
-  secret: ${JWT_SECRET:N0WMqHgE1DHx8yzrf4NIEpPl83vXkOM2MmN2hjqJ5Yh-exoticstamp-dunglv-HDvnawi2}
+  # Local-only default: Base64 of 32+ bytes. Override with JWT_SECRET in .env for real use.
+  secret: ${JWT_SECRET:ZXhvdGljU3RhbXBMb2NhbERldkp3dFNlY3JldEtleTMyYnl0ZXMh}
 
 logging:
   level:

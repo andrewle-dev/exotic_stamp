@@ -41,9 +41,10 @@ class CampaignRepositoryAdapterTest {
     }
 
     @Test
-    void existsDefaultByLineId_delegates() {
+    void existsDefaultByLineId_delegatesToActiveOnlyQuery() {
         UUID lineId = UUID.randomUUID();
-        when(jpa.existsByLineIdAndIsDefaultTrue(lineId)).thenReturn(true);
+        when(jpa.existsActiveDefaultByLineId(lineId)).thenReturn(true);
         assertTrue(adapter.existsDefaultByLineId(lineId));
+        verify(jpa).existsActiveDefaultByLineId(lineId);
     }
 }

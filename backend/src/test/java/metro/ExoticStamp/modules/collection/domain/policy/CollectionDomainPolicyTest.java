@@ -4,6 +4,7 @@ import metro.ExoticStamp.modules.collection.domain.exception.CampaignNotActiveEx
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignStationNotEligibleException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsAccuracyTooLowException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsOutOfRangeException;
+import metro.ExoticStamp.modules.collection.domain.exception.GpsInvalidException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsRequiredException;
 import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyKeyConflictException;
 import metro.ExoticStamp.modules.collection.domain.exception.StampAlreadyCollectedException;
@@ -97,5 +98,64 @@ class CollectionDomainPolicyTest {
         assertEquals(150.0, CollectionGpsPolicy.resolveZoneRadius(5));
         assertEquals(150.0, CollectionGpsPolicy.resolveZoneRadius(5000));
         assertEquals(80.0, CollectionGpsPolicy.resolveZoneRadius(80));
+        assertEquals(150.0, CollectionGpsPolicy.resolveZoneRadius(null));
+    }
+
+    @Test
+    void gps_missingAccuracy_throwsRequired() {
+        CollectionGpsPolicy.StationLocation station = new CollectionGpsPolicy.StationLocation(
+                BigDecimal.TEN, BigDecimal.TEN, 150);
+        assertThrows(GpsRequiredException.class,
+                () -> CollectionGpsPolicy.validate(BigDecimal.TEN, BigDecimal.TEN, null, station, 6_371_000));
+    }
+
+    @Test
+    void gps_invalidStationCoords_throwsInvalid() {
+        assertThrows(GpsInvalidException.class,
+                () -> CollectionGpsPolicy.validate(
+                        BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, null, 6_371_000));
+        CollectionGpsPolicy.StationLocation missingLat = new CollectionGpsPolicy.StationLocation(
+                null, BigDecimal.TEN, 150);
+        assertThrows(GpsInvalidException.class,
+                () -> CollectionGpsPolicy.validate(
+                        BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, missingLat, 6_371_000));
+    }
+
+    @Test
+    void gps_zeroAccuracy_rejected() {
+        CollectionGpsPolicy.StationLocation station = new CollectionGpsPolicy.StationLocation(
+                BigDecimal.TEN, BigDecimal.TEN, 150);
+        assertThrows(GpsAccuracyTooLowException.class,
+                () -> CollectionGpsPolicy.validate(
+                        BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO, station, 6_371_000));
+    }
+
+    @Test
+    void gps_withinRadius_returnsVerifiedResult() {
+        CollectionGpsPolicy.StationLocation station = new CollectionGpsPolicy.StationLocation(
+                BigDecimal.valueOf(10), BigDecimal.valueOf(20), 150);
+        CollectionGpsPolicy.GpsCheckResult result = CollectionGpsPolicy.validate(
+                BigDecimal.valueOf(10), BigDecimal.valueOf(20), BigDecimal.valueOf(25),
+                station, 0);
+        assertTrue(result.verified());
+        assertEquals(0, result.distanceMeters().compareTo(new BigDecimal("0.00")));
+    }
+
+    @Test
+    void gps_invalidUserCoordinates_throwsInvalid() {
+        CollectionGpsPolicy.StationLocation station = new CollectionGpsPolicy.StationLocation(
+                BigDecimal.TEN, BigDecimal.TEN, 150);
+        assertThrows(GpsInvalidException.class,
+                () -> CollectionGpsPolicy.validate(
+                        BigDecimal.valueOf(91), BigDecimal.ZERO, BigDecimal.TEN, station, 6_371_000));
+        assertThrows(GpsInvalidException.class,
+                () -> CollectionGpsPolicy.validate(
+                        BigDecimal.ZERO, BigDecimal.valueOf(181), BigDecimal.TEN, station, 6_371_000));
+    }
+
+    @Test
+    void gps_zoneRadiusBoundaryValues() {
+        assertEquals(20.0, CollectionGpsPolicy.resolveZoneRadius(20));
+        assertEquals(1000.0, CollectionGpsPolicy.resolveZoneRadius(1000));
     }
 }

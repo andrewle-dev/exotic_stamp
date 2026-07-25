@@ -4,6 +4,7 @@ import metro.ExoticStamp.common.exceptions.storage.InvalidImageTypeException;
 import metro.ExoticStamp.infra.storage.FileValidator;
 import metro.ExoticStamp.infra.storage.StorageProperties;
 import metro.ExoticStamp.infra.storage.StorageService;
+import metro.ExoticStamp.infra.storage.asset.AssetLifecycleService;
 import metro.ExoticStamp.modules.metro.application.command.CreateStationCommand;
 import metro.ExoticStamp.modules.metro.application.command.ReorderStationsCommand;
 import metro.ExoticStamp.modules.metro.application.command.RotateStationQrCommand;
@@ -59,6 +60,8 @@ class StationCommandServiceTest {
     @Mock private StationCachePort stationCachePort;
     @Mock private MetroAppMapper mapper;
     @Mock private StorageService storageService;
+    @Mock private AssetLifecycleService assetLifecycleService;
+    @Mock private StationImagePointerService stationImagePointerService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private MetroAuditHelper metroAuditHelper;
 
@@ -71,7 +74,8 @@ class StationCommandServiceTest {
         props.getFile().setAllowedTypes(List.of("image/jpeg", "image/png", "image/webp"));
         stationCommandService = new StationCommandService(
                 lineRepository, stationRepository, stationCachePort, mapper,
-                storageService, new FileValidator(props), eventPublisher, metroAuditHelper);
+                storageService, new FileValidator(props), assetLifecycleService,
+                stationImagePointerService, eventPublisher, metroAuditHelper);
     }
 
     @Test

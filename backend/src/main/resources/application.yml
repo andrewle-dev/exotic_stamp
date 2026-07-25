@@ -1,34 +1,3 @@
-server:
-  port: ${SERVER_PORT:8080}
-
-spring:
-  datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    open-in-view: false
-
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      timeout: 3s
-
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
-
-  servlet:
-    multipart:
-      max-file-size: ${STORAGE_MULTIPART_MAX_FILE_SIZE:5MB}
-      max-request-size: ${STORAGE_MULTIPART_MAX_REQUEST_SIZE:6MB}
-
 management:
   endpoints:
     web:
@@ -37,7 +6,57 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,redis
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: ${SERVER_SHUTDOWN:graceful}
+  lifecycle:
+    timeout-per-shutdown-phase: ${SERVER_SHUTDOWN_TIMEOUT:30s}
 
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/exotic_stamp}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:f123}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:admin@facewashfox.com.vn}
+    password: ${MAIL_PASSWORD:uvbn oebx spwz kswj}
+
+  servlet:
+    multipart:
+      max-file-size: ${STORAGE_MULTIPART_MAX_FILE_SIZE:5MB}
+      max-request-size: ${STORAGE_MULTIPART_MAX_REQUEST_SIZE:6MB}
+
+  lifecycle:
+    timeout-per-shutdown-phase: ${SERVER_SHUTDOWN_TIMEOUT:30s}
 application:
   frontend:
     dev: http://localhost:3000
@@ -55,14 +74,14 @@ application:
     max-description-length: 500
 
   mail:
-    from: ${MAIL_FROM}
+    from: ${MAIL_FROM:admin@facewashfox.com.vn}
     # Friendly sender name shown by mail clients next to the From address.
     display-name: ${MAIL_DISPLAY_NAME:Exotic Travelers}
     # Optional. Leave unset so replies go to the From inbox; set to a monitored mailbox if desired.
     reply-to: ${MAIL_REPLY_TO:}
     # Optional. Set only if marketing-adjacent mail is sent from this domain (one-click unsubscribe).
     list-unsubscribe: ${MAIL_LIST_UNSUBSCRIBE:}
-    logo-url: https://res.cloudinary.com/dnahocnhk/image/upload/f_png,b_white/v1762831622/fwf-logo_veozws.webp
+    logo-url: ${MAIL_LOGO_URL:https://res.cloudinary.com/dnahocnhk/image/upload/f_png,b_white/v1762831622/fwf-logo_veozws.webp}
     queue:
       max-per-minute: 30
       batch-size: 10
@@ -80,6 +99,52 @@ application:
   security:
     token-revocation:
       fail-open-on-db-error: false
+    rate-limit:
+      enabled: true
+      backend: redis
+      key-pepper: ${RATE_LIMIT_KEY_PEPPER:}
+      login:
+        enabled: true
+        capacity: 10
+        refill-tokens: 10
+        refill-period: 1m
+        ttl: 2m
+      register:
+        enabled: true
+        capacity: 5
+        refill-tokens: 5
+        refill-period: 1m
+        ttl: 2m
+      otp-issue:
+        enabled: true
+        capacity: 5
+        refill-tokens: 5
+        refill-period: 1m
+        ttl: 2m
+      otp-verify:
+        enabled: true
+        capacity: 10
+        refill-tokens: 10
+        refill-period: 1m
+        ttl: 2m
+      refresh:
+        enabled: true
+        capacity: 30
+        refill-tokens: 30
+        refill-period: 1m
+        ttl: 2m
+      scan-resolve:
+        enabled: true
+        capacity: 60
+        refill-tokens: 60
+        refill-period: 1m
+        ttl: 2m
+      collect:
+        enabled: true
+        capacity: 30
+        refill-tokens: 30
+        refill-period: 1m
+        ttl: 2m
 
   auth:
     refresh-reuse-grace: 30s
@@ -106,10 +171,11 @@ application:
         max-attempts: 5
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:ZXhvdGljU3RhbXBMb2NhbERldkp3dFNlY3JldEtleTMyYnl0ZXMh}
   access-token-ttl: 15m
   refresh-token-ttl: 7d
-  issuer: metricsX
+  issuer: exotic-stamp
+  clock-skew-seconds: 30
 
 cache:
   user-ttl: 30m
@@ -144,6 +210,12 @@ reward:
   stamp-collected-event-max-attempts: 3
   stamp-collected-event-retry-backoff: 200ms
   expiry-cron: "0 0 2 * * *"
+  reconcile-cron: "0 20 */1 * * *"
+  reconcile-lookback: 48h
+  reconcile-batch-size: 50
+  reconcile-max-duration: 30s
+  reconcile-max-batches: 5
+  reconcile-max-batch-size: 100
 
 community:
   default-page-size: 20
@@ -170,15 +242,36 @@ mobile:
 
 storage:
   provider: ${STORAGE_PROVIDER:local}
+  public-base-url: ${STORAGE_PUBLIC_BASE_URL:}
   local:
-    base-path: ${STORAGE_LOCAL_PATH:D:/Part-time/ExoticStamp/backend/uploads}
+    # Portable default for local/dev only. Production requires STORAGE_PROVIDER=s3.
+    base-path: ${STORAGE_LOCAL_PATH:./uploads}
     base-url: ${STORAGE_LOCAL_URL:http://localhost:8080/uploads}
   file:
     max-size-mb: ${STORAGE_FILE_MAX_SIZE_MB:5}
+    max-width: 2560
+    max-height: 2560
+    max-pixels: 6553600
     allowed-types:
       - image/jpeg
       - image/png
       - image/webp
+  s3:
+    bucket: ${AWS_S3_BUCKET:}
+    region: ${AWS_REGION:}
+    endpoint: ${AWS_S3_ENDPOINT:}
+    path-style-access: ${AWS_S3_PATH_STYLE:false}
+    connect-timeout: ${AWS_S3_CONNECT_TIMEOUT:5s}
+    api-call-timeout: ${AWS_S3_API_CALL_TIMEOUT:60s}
+    api-call-attempt-timeout: ${AWS_S3_API_CALL_ATTEMPT_TIMEOUT:20s}
+    max-retries: ${AWS_S3_MAX_RETRIES:2}
+    presign-expiry: ${AWS_S3_PRESIGN_EXPIRY:15m}
+  cleanup:
+    orphan-retention: ${STORAGE_ORPHAN_RETENTION:14d}
+    batch-size: ${STORAGE_CLEANUP_BATCH_SIZE:50}
+    max-run-duration: ${STORAGE_CLEANUP_MAX_DURATION:30s}
+    dry-run: ${STORAGE_CLEANUP_DRY_RUN:false}
+    cron: ${STORAGE_CLEANUP_CRON:0 15 3 * * *}
 
 logging:
   level:

@@ -36,10 +36,10 @@ public class StampDesign extends BaseEntity {
     @Column(length = 500)
     private String description;
 
-    @Column(name = "image_url", nullable = false, length = 255)
+    @Column(name = "image_url", nullable = false, length = 512)
     private String imageUrl;
 
-    @Column(name = "preview_image_url", length = 255)
+    @Column(name = "preview_image_url", length = 512)
     private String previewImageUrl;
 
     @Enumerated(EnumType.STRING)

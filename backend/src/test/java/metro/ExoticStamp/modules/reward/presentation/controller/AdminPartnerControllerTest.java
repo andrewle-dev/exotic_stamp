@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -118,5 +119,35 @@ class AdminPartnerControllerTest {
                                 {"name":"Partner A","contactEmail":"a@partner.test"}
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void activatePartner_ok() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminRewardCommandService.activatePartner(id)).thenReturn(PartnerView.builder()
+                .id(id)
+                .name("Partner")
+                .active(true)
+                .build());
+
+        mockMvc.perform(patch("/api/v1/admin/partners/" + id + "/activate").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.active").value(true));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void deactivatePartner_ok() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(adminRewardCommandService.deactivatePartner(id)).thenReturn(PartnerView.builder()
+                .id(id)
+                .name("Partner")
+                .active(false)
+                .build());
+
+        mockMvc.perform(patch("/api/v1/admin/partners/" + id + "/deactivate").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.active").value(false));
     }
 }

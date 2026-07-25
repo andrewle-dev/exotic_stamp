@@ -9,13 +9,19 @@ import metro.ExoticStamp.modules.metro.application.port.LineReadPort;
 import metro.ExoticStamp.modules.metro.application.view.MetroLineView;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Dev-only default-campaign bootstrap for active lines. Never runs under {@code prod}.
+ * Production default campaigns are created via admin campaign APIs after lines exist.
+ */
 @Slf4j
 @Component
+@Profile("dev")
 @RequiredArgsConstructor
 public class CollectionBootstrapper implements ApplicationRunner {
 

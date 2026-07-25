@@ -9,10 +9,14 @@ import metro.ExoticStamp.common.response.ApiResponse;
 import metro.ExoticStamp.common.response.PageResponse;
 import metro.ExoticStamp.modules.reward.application.service.AdminRewardCommandService;
 import metro.ExoticStamp.modules.reward.application.service.AdminRewardQueryService;
+import metro.ExoticStamp.modules.reward.application.service.RewardReconcileService;
+import metro.ExoticStamp.modules.reward.application.exception.RewardReconcileBusyException;
+import metro.ExoticStamp.modules.rbac.application.support.RbacSecurityContextHelper;
 import metro.ExoticStamp.modules.reward.presentation.mapper.RewardPresentationMapper;
 import metro.ExoticStamp.modules.reward.presentation.request.BulkUploadVoucherRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.CreateRewardRequest;
 import metro.ExoticStamp.modules.reward.presentation.request.UpdateRewardRequest;
+import metro.ExoticStamp.modules.reward.presentation.response.RewardReconcileResponse;
 import metro.ExoticStamp.modules.reward.presentation.response.RewardResponse;
 import metro.ExoticStamp.modules.reward.presentation.response.VoucherPoolStatsResponse;
 import org.springframework.http.HttpStatus;
@@ -38,6 +42,8 @@ public class AdminRewardController {
 
     private final AdminRewardQueryService adminRewardQueryService;
     private final AdminRewardCommandService adminRewardCommandService;
+    private final RewardReconcileService rewardReconcileService;
+    private final RbacSecurityContextHelper securityContextHelper;
     private final RewardPresentationMapper presentationMapper;
 
     @GetMapping
@@ -114,5 +120,32 @@ public class AdminRewardController {
     public ResponseEntity<ApiResponse<VoucherPoolStatsResponse>> voucherStats(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(
                 presentationMapper.toVoucherStatsResponse(adminRewardQueryService.getVoucherStats(id))));
+    }
+
+    @PostMapping("/reconcile")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Reconcile missing rewards and pending-stock vouchers (bounded)",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<ApiResponse<RewardReconcileResponse>> reconcile(
+            @RequestParam(required = false) Integer batchSize,
+            @RequestParam(defaultValue = "false") boolean dryRun
+    ) {
+        var adminId = securityContextHelper.currentUserId().orElse(null);
+        var result = rewardReconcileService.runReconcile(
+                RewardReconcileService.ReconcileRequest.admin(batchSize, dryRun, adminId));
+        if (result.skipped() && "already-running".equals(result.skipReason())) {
+            throw new RewardReconcileBusyException();
+        }
+        return ResponseEntity.ok(ApiResponse.ok(new RewardReconcileResponse(
+                result.missingExamined(),
+                result.missingRepaired(),
+                result.pendingExamined(),
+                result.pendingFulfilled(),
+                result.stillNoStock(),
+                result.failed(),
+                result.skipped(),
+                result.skipReason(),
+                dryRun,
+                result.initiatedByAdminId())));
     }
 }

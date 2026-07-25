@@ -4,14 +4,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 
-@ConfigurationProperties(prefix = "jwt") // Use this annotation to bind jwt.secrete from application.yml
+@ConfigurationProperties(prefix = "jwt")
 @Component
 @Validated
 @Getter
@@ -29,5 +28,7 @@ public class JwtProperties {
 
     @NotBlank
     private String issuer = "exotic-stamp";
-}
 
+    /** Allowed clock skew when validating {@code exp}/{@code nbf} (seconds). */
+    private long clockSkewSeconds = 30;
+}

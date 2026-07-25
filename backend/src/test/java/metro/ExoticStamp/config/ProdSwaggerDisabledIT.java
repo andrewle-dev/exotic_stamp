@@ -1,26 +1,28 @@
 package metro.ExoticStamp.config;
 
+import metro.ExoticStamp.support.IntegrationTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("prod")
 @Testcontainers(disabledWithoutDocker = true)
-class ProdSwaggerDisabledTest {
-
-    private static final String JWT_TEST_SECRET =
-            "test-jwt-secret-must-be-at-least-256-bits-long-for-hmac-sha";
+class ProdSwaggerDisabledIT {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -31,29 +33,35 @@ class ProdSwaggerDisabledTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379).toString());
-        registry.add("jwt.secret", () -> JWT_TEST_SECRET);
-        registry.add("DB_URL", postgres::getJdbcUrl);
-        registry.add("DB_USERNAME", postgres::getUsername);
-        registry.add("DB_PASSWORD", postgres::getPassword);
-        registry.add("REDIS_HOST", redis::getHost);
-        registry.add("REDIS_PORT", () -> redis.getMappedPort(6379).toString());
-        registry.add("FRONTEND_URL", () -> "https://example.com");
-        registry.add("BACKEND_URL", () -> "https://api.example.com");
-        registry.add("MAIL_USERNAME", () -> "test@example.com");
-        registry.add("MAIL_PASSWORD", () -> "test-mail-password");
+        IntegrationTestSupport.registerPostgresAndRedis(registry, postgres, redis);
+        IntegrationTestSupport.registerCommonSecrets(registry);
+        IntegrationTestSupport.registerProdSite(registry);
     }
 
     @Autowired
     private Environment environment;
 
+    @Autowired
+    private MockMvc mockMvc;
+
     @Test
     void swaggerDisabledInProdProfile() {
         assertThat(environment.getProperty("springdoc.api-docs.enabled", Boolean.class)).isFalse();
         assertThat(environment.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isFalse();
+    }
+
+    @Test
+    void swaggerUiNotPubliclyAccessibleUnderProd() throws Exception {
+        // Unauthenticated → 401 entry point; denyAll still blocks if somehow authenticated → 403.
+        mockMvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(result -> {
+                    int s = result.getResponse().getStatus();
+                    assertThat(s).as("swagger-ui must not be public").isIn(401, 403, 404);
+                });
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(result -> {
+                    int s = result.getResponse().getStatus();
+                    assertThat(s).as("api-docs must not be public").isIn(401, 403, 404);
+                });
     }
 }

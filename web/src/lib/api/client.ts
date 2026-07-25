@@ -7,15 +7,6 @@ import { parseApiError } from './errors'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 
-/** ngrok free serves an HTML interstitial for browser GETs unless this header is set. */
-function shouldSkipNgrokBrowserWarning(baseUrl: string): boolean {
-  const envFlag = import.meta.env.VITE_NGROK_SKIP_BROWSER_WARNING
-  if (envFlag === 'true' || envFlag === '1') {
-    return true
-  }
-  return /ngrok/i.test(baseUrl)
-}
-
 type Deferred = {
   promise: Promise<void>
   resolve: () => void
@@ -95,16 +86,11 @@ export function refreshAccessTokenOnce(
   return refreshPromise
 }
 
-const skipNgrokBrowserWarning = shouldSkipNgrokBrowserWarning(API_BASE_URL)
-
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     Accept: 'application/json',
     'X-Client-Transport': 'cookie',
-    ...(skipNgrokBrowserWarning
-      ? { 'ngrok-skip-browser-warning': 'true' }
-      : {}),
   },
   withCredentials: true,
 })
@@ -120,10 +106,6 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
 
   if (!isAuthBootstrapExempt) {
     await waitForAuthBootstrap()
-  }
-
-  if (skipNgrokBrowserWarning) {
-    config.headers.set('ngrok-skip-browser-warning', 'true')
   }
 
   const token = tokenStore.get()

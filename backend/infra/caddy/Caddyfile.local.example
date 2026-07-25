@@ -1,0 +1,66 @@
+# Local-only Caddyfile for prod-like validation (no public ACME).
+# Usage: point compose caddy volume at this file when DOMAIN=localhost.
+
+:80 {
+	encode gzip
+
+	request_body {
+		max_size 8MB
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	@swagger {
+		path /swagger-ui /swagger-ui/* /v3/api-docs /v3/api-docs/* /swagger-resources /swagger-resources/*
+	}
+	respond @swagger 404
+
+	handle /actuator/health/readiness {
+		reverse_proxy backend:8080 {
+			transport http {
+				read_timeout 10s
+				write_timeout 10s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	handle /actuator/health/liveness {
+		reverse_proxy backend:8080 {
+			transport http {
+				read_timeout 10s
+				write_timeout 10s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8080 {
+			transport http {
+				read_timeout 60s
+				write_timeout 60s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	@actuator_block {
+		path /actuator /actuator/*
+		not path /actuator/health/readiness
+		not path /actuator/health/liveness
+	}
+	respond @actuator_block 404
+
+	respond 404
+
+	log {
+		output stdout
+		format json
+	}
+}

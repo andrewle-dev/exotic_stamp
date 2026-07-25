@@ -31,37 +31,37 @@ public class OtpRepository extends RedisKeyValueSupport {
 
     public void save(String email, OtpType type, String otp) {
         AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
-        putValue(DOMAIN, key(email, type), otp, settings.getTtl());
+        putValueRequired(DOMAIN, key(email, type), otp, settings.getTtl());
     }
 
     public Optional<String> find(String email, OtpType type) {
-        return getValue(DOMAIN, key(email, type)).map(Object::toString);
+        return getValueRequired(DOMAIN, key(email, type)).map(Object::toString);
     }
 
     public void delete(String email, OtpType type) {
-        deleteValue(DOMAIN, key(email, type));
+        deleteValueRequired(DOMAIN, key(email, type));
     }
 
     public boolean exists(String email, OtpType type) {
-        return hasKey(DOMAIN, key(email, type), false);
+        return hasKeyRequired(DOMAIN, key(email, type));
     }
 
     public boolean isOnCooldown(String email, OtpType type) {
-        return hasKey(DOMAIN, cooldownKey(email, type), false);
+        return hasKeyRequired(DOMAIN, cooldownKey(email, type));
     }
 
     public void saveCooldown(String email, OtpType type) {
         AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
-        putValue(DOMAIN, cooldownKey(email, type), "1", settings.getCooldownTtl());
+        putValueRequired(DOMAIN, cooldownKey(email, type), "1", settings.getCooldownTtl());
     }
 
     public long getCooldownTtlSeconds(String email, OtpType type) {
-        return getTtlSeconds(DOMAIN, cooldownKey(email, type));
+        return getTtlSecondsRequired(DOMAIN, cooldownKey(email, type));
     }
 
     public boolean isMaxAttemptsExceeded(String email, OtpType type) {
         AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
-        return getValue(DOMAIN, attemptsKey(email, type))
+        return getValueRequired(DOMAIN, attemptsKey(email, type))
                 .map(Object::toString)
                 .map(value -> {
                     try {
@@ -75,11 +75,11 @@ public class OtpRepository extends RedisKeyValueSupport {
 
     public void incrementAttempts(String email, OtpType type) {
         AuthSecurityProperties.PurposeSettings settings = settingsFor(type);
-        incrementWithTtl(DOMAIN, attemptsKey(email, type), settings.getAttemptsTtl());
+        incrementWithTtlRequired(DOMAIN, attemptsKey(email, type), settings.getAttemptsTtl());
     }
 
     public int getAttemptsCount(String email, OtpType type) {
-        return getValue(DOMAIN, attemptsKey(email, type))
+        return getValueRequired(DOMAIN, attemptsKey(email, type))
                 .map(Object::toString)
                 .map(value -> {
                     try {

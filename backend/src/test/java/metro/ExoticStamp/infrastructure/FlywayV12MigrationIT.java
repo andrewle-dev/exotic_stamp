@@ -11,7 +11,6 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -30,14 +29,13 @@ class FlywayV12MigrationIT {
     }
 
     @Test
-    void appliesV12AsLatestMigration() throws Exception {
+    void appliesV12Migration() throws Exception {
         try (Connection connection = postgres.createConnection("");
              Statement statement = connection.createStatement()) {
 
             ResultSet version = statement.executeQuery(
-                    "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1");
-            assertTrue(version.next());
-            assertEquals("13", version.getString("version"));
+                    "SELECT 1 FROM flyway_schema_history WHERE version = '12'");
+            assertTrue(version.next(), "V12 migration should be applied");
 
             assertConstraintExists(statement, "chk_users_status");
             assertConstraintExists(statement, "fk_user_stamps_user_id");
@@ -60,23 +58,22 @@ class FlywayV12MigrationIT {
                     ON CONFLICT DO NOTHING
                     """);
             statement.execute("""
-                    INSERT INTO milestones (id, line_id, stamps_required, name, is_active)
-                    VALUES ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 1, 'M1', true)
-                    ON CONFLICT DO NOTHING
-                    """);
-            statement.execute("""
-                    INSERT INTO rewards (id, milestone_id, reward_type, name, is_active)
-                    VALUES ('44444444-4444-4444-4444-444444444444', '33333333-3333-3333-3333-333333333333', 'VOUCHER', 'R1', true)
+                    INSERT INTO milestones (
+                        id, line_id, code, stamps_required, name, reward_type, reward_title, status, sort_order, is_active
+                    ) VALUES (
+                        '33333333-3333-3333-3333-333333333333',
+                        '22222222-2222-2222-2222-222222222222',
+                        'M1', 1, 'M1', 'VOUCHER', 'R1', 'ACTIVE', 0, true
+                    )
                     ON CONFLICT DO NOTHING
                     """);
 
             boolean rejected = false;
             try {
                 statement.execute("""
-                        INSERT INTO user_rewards (id, user_id, reward_id, milestone_id, status)
+                        INSERT INTO user_rewards (id, user_id, milestone_id, status)
                         VALUES ('55555555-5555-5555-5555-555555555555',
                                 '11111111-1111-1111-1111-111111111111',
-                                '44444444-4444-4444-4444-444444444444',
                                 '33333333-3333-3333-3333-333333333333',
                                 'INVALID')
                         """);
