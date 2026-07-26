@@ -45,7 +45,7 @@ application:
 
   auth:
     cookie:
-      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+      same-site: ${AUTH_COOKIE_SAME_SITE:None}
       secure-always: true
       path: /api/v1/auth
       domain: ${AUTH_COOKIE_DOMAIN:}

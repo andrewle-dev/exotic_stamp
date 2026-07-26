@@ -26,12 +26,12 @@ server:
 
 spring:
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:}
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/exotic_stamp}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:f123}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -47,8 +47,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:admin@facewashfox.com.vn}
-    password: ${MAIL_PASSWORD:uvbn oebx spwz kswj}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
 
   servlet:
     multipart:
@@ -60,10 +60,10 @@ spring:
 application:
   frontend:
     dev: http://localhost:3000
-    prod: frontend url
+    prod: ${FRONTEND_URL:}
 
   backend:
-    prod: backend url
+    prod: ${BACKEND_URL:}
 
   rbac:
     admin-role-code: ADMIN
@@ -74,14 +74,14 @@ application:
     max-description-length: 500
 
   mail:
-    from: ${MAIL_FROM:admin@facewashfox.com.vn}
+    from: ${MAIL_FROM:}
     # Friendly sender name shown by mail clients next to the From address.
     display-name: ${MAIL_DISPLAY_NAME:Exotic Travelers}
     # Optional. Leave unset so replies go to the From inbox; set to a monitored mailbox if desired.
     reply-to: ${MAIL_REPLY_TO:}
     # Optional. Set only if marketing-adjacent mail is sent from this domain (one-click unsubscribe).
     list-unsubscribe: ${MAIL_LIST_UNSUBSCRIBE:}
-    logo-url: ${MAIL_LOGO_URL:https://res.cloudinary.com/dnahocnhk/image/upload/f_png,b_white/v1762831622/fwf-logo_veozws.webp}
+    logo-url: ${MAIL_LOGO_URL:}
     queue:
       max-per-minute: 30
       batch-size: 10
@@ -171,7 +171,7 @@ application:
         max-attempts: 5
 
 jwt:
-  secret: ${JWT_SECRET:ZXhvdGljU3RhbXBMb2NhbERldkp3dFNlY3JldEtleTMyYnl0ZXMh}
+  secret: ${JWT_SECRET:}
   access-token-ttl: 15m
   refresh-token-ttl: 7d
   issuer: exotic-stamp

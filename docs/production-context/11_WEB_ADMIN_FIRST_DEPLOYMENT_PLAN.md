@@ -7,8 +7,8 @@ Smallest safe target:
 ## A. Source Closure
 
 1. Resolve `GAP-001` and declare the single release Git root.
-2. Remove source-embedded secrets/defaults from backend tracked config.
-3. Re-enable and verify active S3 implementation.
+2. Bind runtime secrets from environment delivery using the committed examples and runbooks.
+3. Verify the restored active S3 implementation against Docker-backed CI and staging smoke.
 4. Confirm web admin uses only required first-release screens.
 
 Operator action:
@@ -29,6 +29,7 @@ Operator action:
 2. Set `VITE_API_BASE_URL` to the future staging backend HTTPS URL.
 3. Set `VITE_APP_ENV=staging`.
 4. Record any build metadata vars (`VITE_APP_VERSION`, `VITE_BUILD_DATE`) if desired.
+5. Apply the committed `web/vercel.json` and `web/.vercelignore` expectations.
 
 Operator action:
 - Open **Vercel** and configure project env vars for staging.

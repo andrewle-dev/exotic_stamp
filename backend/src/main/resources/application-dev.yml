@@ -6,7 +6,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/exotic_stamp}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:f123}
+    password: ${DB_PASSWORD:}
 
   jpa:
     hibernate:
@@ -23,14 +23,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       # Empty default = local Redis without requirepass.
-      password: ${REDIS_PASSWORD:change-me-only}
+      password: ${REDIS_PASSWORD:}
       timeout: 3s
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:admin@facewashfox.com.vn}
-    password: ${MAIL_PASSWORD:uvbn oebx spwz kswj}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -52,23 +52,23 @@ spring:
 application:
   bootstrap:
     # Dev seed passwords (AdminSeedBootstrap / MvpDemoSeedBootstrap). Override via .env if needed.
-    admin-password: ${ADMIN_SEED_PASSWORD:Admin@123456}
-    demo-user-password: ${DEMO_USER_PASSWORD:Demo@123456}
+    admin-password: ${ADMIN_SEED_PASSWORD:}
+    demo-user-password: ${DEMO_USER_PASSWORD:}
   frontend:
     dev: http://localhost:3000
-    prod: https://report.facewashfox.com
+    prod: ${FRONTEND_URL:https://admin.example.com}
 
   backend:
     dev: http://localhost:8080
-    prod: https://backend.facewashfox.com
+    prod: ${BACKEND_URL:https://api.example.com}
 
   mail:
     # Must be a valid mailbox address; display name is handled by the mail provider/client.
-    from: ${MAIL_FROM:admin@facewashfox.com.vn}
+    from: ${MAIL_FROM:}
     display-name: ${MAIL_DISPLAY_NAME:Exotic Travelers}
     reply-to: ${MAIL_REPLY_TO:}
     list-unsubscribe: ${MAIL_LIST_UNSUBSCRIBE:}
-    logo-url: ${MAIL_LOGO_URL:https://res.cloudinary.com/dnahocnhk/image/upload/f_png,b_white/v1762831622/fwf-logo_veozws.webp}
+    logo-url: ${MAIL_LOGO_URL:}
     queue:
       max-per-minute: 30
       batch-size: 10
@@ -86,8 +86,7 @@ application:
       backend: redis
 
 jwt:
-  # Local-only default: Base64 of 32+ bytes. Override with JWT_SECRET in .env for real use.
-  secret: ${JWT_SECRET:ZXhvdGljU3RhbXBMb2NhbERldkp3dFNlY3JldEtleTMyYnl0ZXMh}
+  secret: ${JWT_SECRET:}
 
 logging:
   level:

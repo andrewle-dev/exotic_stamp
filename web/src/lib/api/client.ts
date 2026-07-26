@@ -5,7 +5,21 @@ import axios, {
 import { tokenStore } from '../auth/tokenStore'
 import { parseApiError } from './errors'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const LOCAL_API_BASE_URL = 'http://localhost:8080'
+
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+export function resolveApiBaseUrl(rawValue: string | undefined): string {
+  const trimmed = rawValue?.trim()
+  if (!trimmed) {
+    return LOCAL_API_BASE_URL
+  }
+  return trimTrailingSlashes(trimmed)
+}
+
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
 type Deferred = {
   promise: Promise<void>

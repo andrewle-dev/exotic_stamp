@@ -237,7 +237,6 @@
              DEVELOPER UTILITIES
              - lombok       : Boilerplate reduction (@Data, @Builder, etc.)
              - commons-lang3: String/array/number utilities (Apache Commons)
-             - dotenv-java  : Load .env files into the environment at runtime
         ========================================================= -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
@@ -252,12 +251,6 @@
 			<artifactId>commons-lang3</artifactId>
 			<version>3.14.0</version>
 		</dependency>
-		<dependency>
-			<groupId>io.github.cdimascio</groupId>
-			<artifactId>dotenv-java</artifactId>
-			<version>3.0.0</version>
-		</dependency>
-
 		<!-- =========================================================
              EXCEL PROCESSING — APACHE POI
              - poi       : Core POI (XLS, HSSF)
@@ -285,10 +278,8 @@
 		</dependency>
 
 		<!-- =========================================================
-             AWS S3 (SDK v2) — temporarily disabled for local run.
-             Re-enable deps + rename *.java.disabled back when S3 is needed.
+             AWS S3 (SDK v2)
         ========================================================= -->
-		<!--
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
@@ -299,7 +290,6 @@
 			<artifactId>url-connection-client</artifactId>
 			<version>2.29.45</version>
 		</dependency>
-		-->
 
 		<!-- =========================================================
              HTML PARSING
@@ -416,13 +406,9 @@
 							<version>0.2.0</version>
 						</path>
 					</annotationProcessorPaths>
-					<!-- Temporarily disabled: IntelliJ warns when MapStruct processor is not active in IDE.
-					     Re-enable for Maven builds that rely on default componentModel=spring. -->
-					<!--
 					<compilerArgs>
 						<arg>-Amapstruct.defaultComponentModel=spring</arg>
 					</compilerArgs>
-					-->
 				</configuration>
 			</plugin>
 

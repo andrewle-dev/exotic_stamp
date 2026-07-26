@@ -40,3 +40,10 @@ The Exotic Stamp monorepo is **not production-ready today** for the stated "Web 
 
 - This pack is evidence-based from the current repository and safe local commands only.
 - No cloud state, DNS, Vercel project, AWS resource, or live deployment was inspected directly.
+
+## Batch F.0.1 Closure Update
+
+- Root GitHub Actions workflows now exist for backend and web CI.
+- Backend S3 source files are restored to the active compile path.
+- Backend tracked secret-like defaults were removed from YAML in favor of explicit environment injection.
+- Web staging/production builds now require `VITE_API_BASE_URL`, and committed Vercel config/runbook files are present.
