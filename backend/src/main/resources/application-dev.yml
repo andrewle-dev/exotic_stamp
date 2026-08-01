@@ -6,7 +6,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/exotic_stamp}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:f123}
 
   jpa:
     hibernate:
@@ -23,14 +23,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       # Empty default = local Redis without requirepass.
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:change-me}
       timeout: 3s
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME:work.exotictravelers@gmail.com}
+    password: ${MAIL_PASSWORD:jfeg nqup glrr hqzy}
     properties:
       mail:
         smtp:
@@ -64,11 +64,11 @@ application:
 
   mail:
     # Must be a valid mailbox address; display name is handled by the mail provider/client.
-    from: ${MAIL_FROM:}
+    from: ${MAIL_FROM:work.exotictravelers@gmail.com}
     display-name: ${MAIL_DISPLAY_NAME:Exotic Travelers}
     reply-to: ${MAIL_REPLY_TO:}
     list-unsubscribe: ${MAIL_LIST_UNSUBSCRIBE:}
-    logo-url: ${MAIL_LOGO_URL:}
+    logo-url: ${MAIL_LOGO_URL:https://res.cloudinary.com/dnahocnhk/image/upload/v1776831366/ExoticStamp_logo-removebg-preview_c8kmaa.png}
     queue:
       max-per-minute: 30
       batch-size: 10
@@ -86,7 +86,7 @@ application:
       backend: redis
 
 jwt:
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET:ZXhvdGljU3RhbXBMb2NhbERldkp3dFNlY3JldEtleTMyYnl0ZXMh}
 
 logging:
   level:
