@@ -436,7 +436,7 @@ class _SocialButton extends StatelessWidget {
     required this.color,
   });
 
-  final IconData icon;
+  final FaIconData icon;
   final Color color;
 
   @override
