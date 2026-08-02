@@ -8,6 +8,7 @@ import metro.ExoticStamp.modules.auth.infrastructure.security.UserDetailsService
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
 import metro.ExoticStamp.common.reorder.ReorderItemView;
 import metro.ExoticStamp.common.reorder.ReorderResultView;
+import metro.ExoticStamp.common.response.PageResponse;
 import metro.ExoticStamp.modules.reward.RewardWebMvcTestSecurityConfig;
 import metro.ExoticStamp.modules.reward.application.service.MilestoneCommandService;
 import metro.ExoticStamp.modules.reward.application.service.MilestoneQueryService;
@@ -23,10 +24,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.util.List;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -100,5 +103,61 @@ class AdminRewardMilestoneControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.scopeId").value(campaignId.toString()))
                 .andExpect(jsonPath("$.data.updatedCount").value(1));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_ADMIN", "REWARD_MILESTONE_MANAGE"})
+    void listMilestones_returnsPage() throws Exception {
+        UUID campaignId = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        when(milestoneQueryService.list(eq(campaignId), eq("ACTIVE"), eq(0), eq(0)))
+                .thenReturn(PageResponse.of(
+                        List.of(MilestoneView.builder()
+                                .id(id)
+                                .campaignId(campaignId)
+                                .code("M1")
+                                .requiredStampCount(3)
+                                .name("Three")
+                                .rewardType(RewardType.VOUCHER)
+                                .rewardTitle("Voucher")
+                                .status(MilestoneStatus.ACTIVE)
+                                .sortOrder(0)
+                                .build()),
+                        1, 1, 0, 20));
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/rewards/milestones")
+                        .param("campaignId", campaignId.toString())
+                        .param("status", "ACTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].code").value("M1"));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_ADMIN", "REWARD_MILESTONE_MANAGE"})
+    void getMilestone_ok() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(milestoneQueryService.get(id)).thenReturn(MilestoneView.builder()
+                .id(id)
+                .code("M1")
+                .requiredStampCount(5)
+                .name("Five")
+                .rewardType(RewardType.DIGITAL_STICKER)
+                .rewardTitle("Sticker")
+                .status(MilestoneStatus.ACTIVE)
+                .sortOrder(0)
+                .build());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/rewards/milestones/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(id.toString()));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_ADMIN", "REWARD_MILESTONE_MANAGE"})
+    void deleteMilestone_ok() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(MockMvcRequestBuilders.delete("/api/v1/admin/rewards/milestones/" + id).with(csrf()))
+                .andExpect(status().isOk());
     }
 }

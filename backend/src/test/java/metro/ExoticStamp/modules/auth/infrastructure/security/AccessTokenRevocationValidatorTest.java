@@ -1,6 +1,7 @@
 package metro.ExoticStamp.modules.auth.infrastructure.security;
 
 import metro.ExoticStamp.modules.auth.infrastructure.redis.AccessTokenRevocationRedisRepository;
+import metro.ExoticStamp.modules.auth.infrastructure.redis.AccessTokenRevocationRedisRepository.DenylistCheck;
 import metro.ExoticStamp.modules.user.domain.repository.UserRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,24 +46,31 @@ class AccessTokenRevocationValidatorTest {
 
     @Test
     void denylisted_returnsRevoked() {
-        when(redis.isDenylisted(jti)).thenReturn(true);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.DENYLISTED);
 
         assertEquals(AccessTokenRevocationStatus.REVOKED, validator.validate(userId, jti, 0L));
         verify(userRepository, never()).findTokenVersionById(any());
     }
 
     @Test
+    void denylistUnavailable_returnsDependencyUnavailable() {
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.UNAVAILABLE);
+
+        assertEquals(AccessTokenRevocationStatus.DEPENDENCY_UNAVAILABLE, validator.validate(userId, jti, 0L));
+        verify(userRepository, never()).findTokenVersionById(any());
+    }
+
+    @Test
     void cachedVersionMismatch_afterGlobalRevocation_rejectsAccessFromLosingRace() {
-        when(redis.isDenylisted(jti)).thenReturn(false);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.of(5L));
 
-        // Access JWT still carries tokenVersion=4 after logout-all / reuse bumped version to 5.
         assertEquals(AccessTokenRevocationStatus.REVOKED, validator.validate(userId, jti, 4L));
     }
 
     @Test
     void cachedVersionMatch_returnsOk() {
-        when(redis.isDenylisted(jti)).thenReturn(false);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.of(4L));
 
         assertEquals(AccessTokenRevocationStatus.OK, validator.validate(userId, jti, 4L));
@@ -71,7 +79,7 @@ class AccessTokenRevocationValidatorTest {
 
     @Test
     void cacheMiss_dbMatch_returnsOkAndSetsCache() {
-        when(redis.isDenylisted(jti)).thenReturn(false);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.empty());
         when(userRepository.findTokenVersionById(userId)).thenReturn(Optional.of(7L));
 
@@ -82,7 +90,7 @@ class AccessTokenRevocationValidatorTest {
 
     @Test
     void cacheMiss_dbMismatch_returnsRevoked() {
-        when(redis.isDenylisted(jti)).thenReturn(false);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.empty());
         when(userRepository.findTokenVersionById(userId)).thenReturn(Optional.of(8L));
 
@@ -93,7 +101,7 @@ class AccessTokenRevocationValidatorTest {
     @Test
     void dbError_failOpenEnabled_returnsFailOpen() {
         tokenRevocationProperties.setFailOpenOnDbError(true);
-        when(redis.isDenylisted(jti)).thenReturn(false);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.empty());
         when(userRepository.findTokenVersionById(userId)).thenThrow(new RuntimeException("db down"));
 
@@ -101,9 +109,19 @@ class AccessTokenRevocationValidatorTest {
     }
 
     @Test
+    void cacheMiss_userNotFoundInDb_returnsRevoked() {
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
+        when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.empty());
+        when(userRepository.findTokenVersionById(userId)).thenReturn(Optional.empty());
+
+        assertEquals(AccessTokenRevocationStatus.REVOKED, validator.validate(userId, jti, 7L));
+        verify(redis, never()).setCachedTokenVersion(eq(userId), anyLong());
+    }
+
+    @Test
     void dbError_failClosed_returnsRevoked() {
         tokenRevocationProperties.setFailOpenOnDbError(false);
-        when(redis.isDenylisted(jti)).thenReturn(false);
+        when(redis.isDenylistedCheck(jti)).thenReturn(DenylistCheck.CLEAR);
         when(redis.getCachedTokenVersion(userId)).thenReturn(Optional.empty());
         when(userRepository.findTokenVersionById(userId)).thenThrow(new RuntimeException("db down"));
 

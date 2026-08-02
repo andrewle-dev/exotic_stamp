@@ -5,16 +5,21 @@ import axios, {
 import { tokenStore } from '../auth/tokenStore'
 import { parseApiError } from './errors'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
+const LOCAL_API_BASE_URL = 'http://localhost:8080'
 
-/** ngrok free serves an HTML interstitial for browser GETs unless this header is set. */
-function shouldSkipNgrokBrowserWarning(baseUrl: string): boolean {
-  const envFlag = import.meta.env.VITE_NGROK_SKIP_BROWSER_WARNING
-  if (envFlag === 'true' || envFlag === '1') {
-    return true
-  }
-  return /ngrok/i.test(baseUrl)
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '')
 }
+
+export function resolveApiBaseUrl(rawValue: string | undefined): string {
+  const trimmed = rawValue?.trim()
+  if (!trimmed) {
+    return LOCAL_API_BASE_URL
+  }
+  return trimTrailingSlashes(trimmed)
+}
+
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
 type Deferred = {
   promise: Promise<void>
@@ -95,16 +100,11 @@ export function refreshAccessTokenOnce(
   return refreshPromise
 }
 
-const skipNgrokBrowserWarning = shouldSkipNgrokBrowserWarning(API_BASE_URL)
-
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     Accept: 'application/json',
     'X-Client-Transport': 'cookie',
-    ...(skipNgrokBrowserWarning
-      ? { 'ngrok-skip-browser-warning': 'true' }
-      : {}),
   },
   withCredentials: true,
 })
@@ -120,10 +120,6 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
 
   if (!isAuthBootstrapExempt) {
     await waitForAuthBootstrap()
-  }
-
-  if (skipNgrokBrowserWarning) {
-    config.headers.set('ngrok-skip-browser-warning', 'true')
   }
 
   const token = tokenStore.get()

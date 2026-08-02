@@ -54,10 +54,10 @@ public class Campaign extends BaseEntity {
     @Column(nullable = false, length = 20)
     private CampaignStatus status;
 
-    @Column(name = "banner_image_url", length = 255)
+    @Column(name = "banner_image_url", length = 512)
     private String bannerImageUrl;
 
-    @Column(name = "thumbnail_image_url", length = 255)
+    @Column(name = "thumbnail_image_url", length = 512)
     private String thumbnailImageUrl;
 
     @Column(nullable = false)

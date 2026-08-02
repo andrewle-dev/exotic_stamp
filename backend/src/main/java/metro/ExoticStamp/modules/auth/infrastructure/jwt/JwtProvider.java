@@ -33,9 +33,11 @@ public class JwtProvider {
     static final String CLAIM_TOKEN_VERSION = "tokenVersion";
 
     static final String TYPE_ACCESS = "ACCESS";
-    private static final String TYPE_REFRESH = "REFRESH";
+    static final String TYPE_REFRESH = "REFRESH";
 
     private final JwtProperties props;
+
+    private volatile SecretKey cachedSecretKey;
 
     /**
      * Issues an access token with {@code jti} and {@code tokenVersion} for server-side revocation.
@@ -46,10 +48,10 @@ public class JwtProvider {
         Date expiry = Date.from(Instant.now().plus(props.getAccessTokenTtl()));
 
         String compact = Jwts.builder()
-                .setIssuer(props.getIssuer())
-                .setSubject(user.getId().toString())
-                .setIssuedAt(now)
-                .setExpiration(expiry)
+                .issuer(props.getIssuer())
+                .subject(user.getId().toString())
+                .issuedAt(now)
+                .expiration(expiry)
                 .id(jti)
                 .claim(CLAIM_EMAIL, user.getEmail())
                 .claim(CLAIM_ROLES, roles)
@@ -61,7 +63,7 @@ public class JwtProvider {
     }
 
     /**
-     * Parses and validates an access JWT (signature, expiry, type, {@code jti}, {@code tokenVersion}).
+     * Parses and validates an access JWT (signature, expiry, issuer, type, {@code jti}, {@code tokenVersion}).
      */
     public ParsedAccessToken parseAccessToken(String token) {
         Claims claims = extractClaims(token);
@@ -77,7 +79,7 @@ public class JwtProvider {
             throw new InvalidTokenException("Missing tokenVersion");
         }
         long tokenVersion = rawVersion instanceof Number n ? n.longValue() : Long.parseLong(rawVersion.toString());
-        UUID userId = UUID.fromString(claims.getSubject());
+        UUID userId = parseSubjectUuid(claims.getSubject());
         return new ParsedAccessToken(userId, jti, tokenVersion);
     }
 
@@ -86,36 +88,51 @@ public class JwtProvider {
         Date expiry = Date.from(Instant.now().plus(props.getRefreshTokenTtl()));
 
         return Jwts.builder()
-                .setIssuer(props.getIssuer())
-                .setSubject(userId.toString())
-                .setIssuedAt(now)
-                .setExpiration(expiry)
+                .issuer(props.getIssuer())
+                .subject(userId.toString())
+                .issuedAt(now)
+                .expiration(expiry)
                 .claim(CLAIM_TYPE, TYPE_REFRESH)
                 .signWith(secretKey())
                 .compact();
+    }
+
+    /**
+     * Parses and validates a refresh JWT (signature, expiry, issuer, type {@code REFRESH}).
+     */
+    public UUID parseRefreshToken(String token) {
+        Claims claims = extractClaims(token);
+        if (!TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class))) {
+            throw new InvalidTokenException("Not a refresh token");
+        }
+        return parseSubjectUuid(claims.getSubject());
     }
 
     public Claims extractClaims(String token) {
         try {
             return Jwts.parser()
                     .verifyWith(secretKey())
+                    .requireIssuer(props.getIssuer())
+                    .clockSkewSeconds(props.getClockSkewSeconds())
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (ExpiredJwtException e) {
             throw new TokenExpiredException(e.getMessage());
-        } catch (JwtException e) {
+        } catch (JwtException | IllegalArgumentException e) {
             throw new InvalidTokenException(e.getMessage());
         }
     }
 
+    /** Extracts user id from a refresh token (rejects ACCESS). */
     public UUID extractUserId(String token) {
-        return UUID.fromString(extractClaims(token).getSubject());
+        return parseRefreshToken(token);
     }
 
+    /** {@code true} only if the token is a valid refresh JWT. */
     public boolean isTokenValid(String token) {
         try {
-            extractClaims(token);
+            parseRefreshToken(token);
             return true;
         } catch (Exception e) {
             return false;
@@ -135,15 +152,27 @@ public class JwtProvider {
     }
 
     private SecretKey secretKey() {
-        byte[] secretBytes = props.getSecret().getBytes(StandardCharsets.UTF_8);
-        if (secretBytes.length < 32) {
-            try {
-                secretBytes = MessageDigest.getInstance("SHA-256").digest(secretBytes);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("SHA-256 not available", e);
-            }
+        SecretKey local = cachedSecretKey;
+        if (local != null) {
+            return local;
         }
-        return Keys.hmacShaKeyFor(secretBytes);
+        synchronized (this) {
+            if (cachedSecretKey == null) {
+                byte[] decoded = JwtSecretValidator.validateBase64Secret(props.getSecret());
+                cachedSecretKey = Keys.hmacShaKeyFor(decoded);
+            }
+            return cachedSecretKey;
+        }
+    }
+
+    private static UUID parseSubjectUuid(String subject) {
+        if (subject == null || subject.isBlank()) {
+            throw new InvalidTokenException("Missing subject");
+        }
+        try {
+            return UUID.fromString(subject);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidTokenException("Invalid subject");
+        }
     }
 }
-

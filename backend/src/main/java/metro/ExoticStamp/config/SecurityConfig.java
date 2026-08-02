@@ -2,14 +2,19 @@ package metro.ExoticStamp.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import metro.ExoticStamp.infra.security.ratelimit.RateLimitFilter;
 import metro.ExoticStamp.modules.auth.config.AuthCookieProperties;
 import metro.ExoticStamp.modules.auth.infrastructure.filter.CookieAuthOriginFilter;
 import metro.ExoticStamp.modules.auth.infrastructure.filter.JwtAuthFilter;
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAccessDeniedHandler;
 import metro.ExoticStamp.modules.auth.infrastructure.security.CustomAuthEntryPoint;
 import metro.ExoticStamp.modules.auth.infrastructure.security.UserDetailsServiceImpl;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -27,6 +32,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -42,16 +49,19 @@ public class SecurityConfig {
             "/api/v1/auth/resend-otp",
             "/api/v1/auth/reset-password",
             "/api/v1/auth/resend-verification-otp",
+            "/uploads/public/**",
+            "/actuator/health",
+            "/actuator/health/**",
+            "/actuator/info"
+    };
+
+    static final String[] SWAGGER_ENDPOINTS = {
             "/api-docs",
             "/api-docs/**",
             "/v3/api-docs",
             "/v3/api-docs/**",
             "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/uploads/public/**",
-            "/actuator/health",
-            "/actuator/health/**",
-            "/actuator/info"
+            "/swagger-ui.html"
     };
 
     private final JwtAuthFilter jwtAuthFilter;
@@ -61,6 +71,10 @@ public class SecurityConfig {
     private final CorsProperties corsProperties;
     private final AuthCookieProperties authCookieProperties;
     private final ObjectMapper objectMapper;
+    private final Environment environment;
+
+    @Value("${springdoc.api-docs.enabled:true}")
+    private boolean springdocApiDocsEnabled;
 
     /**
      * Registered only via SecurityFilterChain — not as a servlet Filter {@code @Component},
@@ -71,35 +85,67 @@ public class SecurityConfig {
         return new CookieAuthOriginFilter(corsProperties, authCookieProperties, objectMapper);
     }
 
+    /**
+     * JwtAuthFilter is a Spring bean ({@code @Component}) but must not also register as a
+     * servlet Filter — that would double-invoke it outside the Security filter chain.
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthFilter> jwtAuthFilterRegistration(JwtAuthFilter filter) {
+        FilterRegistrationBean<JwtAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            CookieAuthOriginFilter cookieAuthOriginFilter
+            CookieAuthOriginFilter cookieAuthOriginFilter,
+            ObjectProvider<RateLimitFilter> rateLimitFilter
     ) throws Exception {
+        boolean docsAllowed = isSwaggerDocsAllowed();
+
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/metro/lines/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/metro/stations/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/campaigns/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/partners/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/stations/*/campaigns").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/mobile/app-config").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/metro/scan/resolve").permitAll()
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
+                    if (docsAllowed) {
+                        auth.requestMatchers(SWAGGER_ENDPOINTS).permitAll();
+                    } else {
+                        auth.requestMatchers(SWAGGER_ENDPOINTS).denyAll();
+                    }
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/metro/lines/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/v1/metro/stations/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/v1/campaigns/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/v1/partners/**").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/v1/stations/*/campaigns").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/api/v1/mobile/app-config").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/api/v1/metro/scan/resolve").permitAll()
+                            .anyRequest().authenticated();
+                })
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(cookieAuthOriginFilter, UsernamePasswordAuthenticationFilter.class)
+                // Register JWT first so relative RateLimitFilter placement is valid, and so
+                // authenticated collect policies can read SecurityContext (user id).
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
+        // Public auth/scan policies do not need auth; COLLECT uses principal when present.
+        // Place after JwtAuthFilter (not before) — addFilterBefore(..., JwtAuthFilter.class)
+        // before JWT is on the chain throws "does not have a registered order".
+        rateLimitFilter.ifAvailable(filter ->
+                http.addFilterAfter(filter, JwtAuthFilter.class));
+
         return http.build();
+    }
+
+    boolean isSwaggerDocsAllowed() {
+        boolean prod = Arrays.asList(environment.getActiveProfiles()).contains("prod");
+        return springdocApiDocsEnabled && !prod;
     }
 
     @Bean
@@ -115,7 +161,7 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
-    /** Compare security password encoder with bcrypt 
+    /** Compare security password encoder with bcrypt
      * Argon2 > bcrypt > scrypt > pbkdf2 > sha256 > sha1 > md5
     */
     @Bean

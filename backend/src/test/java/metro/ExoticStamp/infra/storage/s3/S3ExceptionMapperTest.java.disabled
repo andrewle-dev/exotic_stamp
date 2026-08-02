@@ -1,0 +1,60 @@
+package metro.ExoticStamp.infra.storage.s3;
+
+import metro.ExoticStamp.common.exceptions.storage.StorageWriteFailedException;
+import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class S3ExceptionMapperTest {
+
+    @Test
+    void mapUploadFailure_noSuchBucket_wrapsAsStorageWriteFailed() {
+        RuntimeException mapped = S3ExceptionMapper.mapUploadFailure(
+                NoSuchBucketException.builder().message("missing").build());
+        assertThat(mapped).isInstanceOf(StorageWriteFailedException.class)
+                .hasMessageContaining("bucket");
+    }
+
+    @Test
+    void mapUploadFailure_forbidden_wrapsAsCredentialsMessage() {
+        S3Exception forbidden = (S3Exception) S3Exception.builder()
+                .statusCode(403)
+                .awsErrorDetails(AwsErrorDetails.builder().errorCode("AccessDenied").build())
+                .message("denied")
+                .build();
+        RuntimeException mapped = S3ExceptionMapper.mapUploadFailure(forbidden);
+        assertThat(mapped).isInstanceOf(StorageWriteFailedException.class)
+                .hasMessageContaining("credentials");
+    }
+
+    @Test
+    void mapUploadFailure_sdkClient_wrapsAsStorageWriteFailed() {
+        RuntimeException mapped = S3ExceptionMapper.mapUploadFailure(
+                SdkClientException.create("network down"));
+        assertThat(mapped).isInstanceOf(StorageWriteFailedException.class)
+                .hasMessageContaining("Storage write failed");
+    }
+
+    @Test
+    void mapUploadFailure_runtime_passthrough() {
+        IllegalArgumentException original = new IllegalArgumentException("bad");
+        assertThat(S3ExceptionMapper.mapUploadFailure(original)).isSameAs(original);
+    }
+
+    @Test
+    void isNotFound_noSuchKeyAnd404() {
+        assertThat(S3ExceptionMapper.isNotFound(NoSuchKeyException.builder().message("gone").build()))
+                .isTrue();
+        S3Exception notFound = (S3Exception) S3Exception.builder()
+                .statusCode(404)
+                .message("not found")
+                .build();
+        assertThat(S3ExceptionMapper.isNotFound(notFound)).isTrue();
+        assertThat(S3ExceptionMapper.isNotFound(new RuntimeException("other"))).isFalse();
+    }
+}

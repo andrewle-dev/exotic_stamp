@@ -16,7 +16,7 @@ public class AccessTokenRevocationPortAdapter implements AccessTokenRevocationPo
 
     @Override
     public void addToDenylist(String jti, Duration accessTokenTtl) {
-        repository.addToDenylist(jti, accessTokenTtl);
+        repository.addToDenylistRequired(jti, accessTokenTtl);
     }
 
     @Override

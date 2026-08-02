@@ -91,4 +91,87 @@ class PartnerEligibilityTest {
         assertThat(logoOnly.getLogoUrl()).isEqualTo("https://cdn.example/logo.png");
         assertThat(logoOnly.isEligibleForPromotion(TODAY)).isFalse();
     }
+
+    @Test
+    void withinContract_nullToday_isFalse() {
+        Partner p = Partner.builder().name("A").active(true).build();
+        assertThat(p.isWithinContractWindow(null)).isFalse();
+    }
+
+    @Test
+    void withinContract_onlyStartDateBeforeToday_isTrue() {
+        Partner p = Partner.builder()
+                .name("A")
+                .active(true)
+                .contractStartDate(TODAY.minusDays(1))
+                .build();
+        assertThat(p.isWithinContractWindow(TODAY)).isTrue();
+    }
+
+    @Test
+    void withinContract_onlyEndDateAfterToday_isTrue() {
+        Partner p = Partner.builder()
+                .name("A")
+                .active(true)
+                .contractEndDate(TODAY.plusDays(1))
+                .build();
+        assertThat(p.isWithinContractWindow(TODAY)).isTrue();
+    }
+
+    @Test
+    void eligible_blankBanner_isFalse() {
+        Partner blankBanner = Partner.builder()
+                .name("Blank")
+                .active(true)
+                .bannerImageUrl("   ")
+                .build();
+        assertThat(blankBanner.isEligibleForPromotion(TODAY)).isFalse();
+    }
+
+    @Test
+    void onPrePersist_normalizesBlankBannerToNull() {
+        Partner p = Partner.builder()
+                .name("  Partner  ")
+                .active(true)
+                .bannerImageUrl("   ")
+                .logoUrl(" https://cdn/logo.png ")
+                .contactEmail(" partner@test.com ")
+                .build();
+        p.onPrePersist();
+        assertThat(p.getName()).isEqualTo("Partner");
+        assertThat(p.getBannerImageUrl()).isNull();
+        assertThat(p.getLogoUrl()).isEqualTo("https://cdn/logo.png");
+        assertThat(p.getContactEmail()).isEqualTo("partner@test.com");
+    }
+
+    @Test
+    void validate_rejectsBlankName() {
+        Partner p = Partner.builder().name("   ").active(true).build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(p::onPrePersist)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("name");
+    }
+
+    @Test
+    void eligible_nullBanner_isFalse() {
+        Partner p = Partner.builder().name("A").active(true).build();
+        assertThat(p.isEligibleForPromotion(TODAY)).isFalse();
+    }
+
+    @Test
+    void validate_rejectsOverlongFields() {
+        Partner longName = Partner.builder().name("x".repeat(101)).active(true).build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(longName::onPrePersist)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("name length");
+
+        Partner longLogo = Partner.builder()
+                .name("Ok")
+                .active(true)
+                .logoUrl("https://cdn.example/" + "a".repeat(500))
+                .build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(longLogo::onPrePersist)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("logoUrl");
+    }
 }

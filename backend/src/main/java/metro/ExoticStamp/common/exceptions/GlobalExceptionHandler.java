@@ -21,11 +21,14 @@ import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
 import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
+import metro.ExoticStamp.common.exceptions.storage.ConcurrentAssetReplaceException;
 import metro.ExoticStamp.common.exceptions.storage.FileTooLargeException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidImageDimensionsException;
 import metro.ExoticStamp.common.exceptions.storage.InvalidImageTypeException;
 import metro.ExoticStamp.common.exceptions.storage.StorageWriteFailedException;
+import metro.ExoticStamp.common.exceptions.security.SecurityDependencyUnavailableException;
+import metro.ExoticStamp.infra.security.ratelimit.RateLimitExceededException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignArchivedException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignCodeDuplicateException;
 import metro.ExoticStamp.modules.collection.domain.exception.CampaignNotActiveException;
@@ -41,6 +44,8 @@ import metro.ExoticStamp.modules.collection.domain.exception.GpsRequiredExceptio
 import metro.ExoticStamp.modules.collection.domain.exception.StampDesignNotFoundException;
 import metro.ExoticStamp.modules.collection.domain.exception.DuplicateActiveStampDesignException;
 import metro.ExoticStamp.modules.collection.domain.exception.GpsVerificationFailedException;
+import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyConflictException;
+import metro.ExoticStamp.modules.reward.application.exception.RewardReconcileBusyException;
 import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyKeyConflictException;
 import metro.ExoticStamp.modules.collection.domain.exception.InvalidRequestException;
 import metro.ExoticStamp.modules.collection.domain.exception.InvalidScanInputException;
@@ -310,6 +315,13 @@ public class GlobalExceptionHandler {
         return build(400, "INVALID_FILE", ex.getMessage(), req);
     }
 
+    @ExceptionHandler(ConcurrentAssetReplaceException.class)
+    public ResponseEntity<ErrorResponse> handleConcurrentAssetReplace(
+            ConcurrentAssetReplaceException ex, HttpServletRequest req) {
+        log.warn("[409] {}", ex.getMessage());
+        return build(409, "CONCURRENT_ASSET_REPLACE", ex.getMessage(), req);
+    }
+
     @ExceptionHandler(StorageWriteFailedException.class)
     public ResponseEntity<ErrorResponse> handleStorageWriteFailed(
             StorageWriteFailedException ex, HttpServletRequest req) {
@@ -439,6 +451,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException ex, HttpServletRequest req) {
         log.warn("[400] InvalidRequest: {}", ex.getMessage());
         return build(400, "INVALID_REQUEST", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyLogicalConflict(IdempotencyConflictException ex, HttpServletRequest req) {
+        log.warn("[409] IdempotencyConflict: {}", ex.getMessage());
+        return build(409, "IDEMPOTENCY_CONFLICT", ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(RewardReconcileBusyException.class)
+    public ResponseEntity<ErrorResponse> handleReconcileBusy(RewardReconcileBusyException ex, HttpServletRequest req) {
+        log.warn("[409] RewardReconcileBusy");
+        return build(409, "RECONCILE_BUSY", ex.getMessage(), req);
     }
 
     @ExceptionHandler(IdempotencyKeyConflictException.class)
@@ -772,7 +796,43 @@ public class GlobalExceptionHandler {
             HttpServletRequest req
     ) {
         log.warn("[429] ResendCooldown: {} seconds remaining", ex.getSecondsRemaining());
-        return build(429, "RESEND_COOLDOWN", ex.getMessage(), req);
+        return ResponseEntity.status(429)
+                .header("Retry-After", String.valueOf(Math.max(1, ex.getSecondsRemaining())))
+                .body(ErrorResponse.of(
+                        "RESEND_COOLDOWN",
+                        ex.getMessage(),
+                        429,
+                        req.getRequestURI()));
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitExceeded(
+            RateLimitExceededException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[429] RateLimitExceeded retryAfter={} at {}", ex.getRetryAfterSeconds(), req.getRequestURI());
+        return ResponseEntity.status(429)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ErrorResponse.of(
+                        "RATE_LIMIT_EXCEEDED",
+                        "Too many requests. Please try again later.",
+                        429,
+                        req.getRequestURI()));
+    }
+
+    @ExceptionHandler(SecurityDependencyUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleSecurityDependencyUnavailable(
+            SecurityDependencyUnavailableException ex,
+            HttpServletRequest req
+    ) {
+        log.warn("[503] SecurityDependencyUnavailable at {}", req.getRequestURI());
+        return ResponseEntity.status(503)
+                .header("Retry-After", "5")
+                .body(ErrorResponse.of(
+                        "SECURITY_DEPENDENCY_UNAVAILABLE",
+                        "Service temporarily unavailable. Please try again later.",
+                        503,
+                        req.getRequestURI()));
     }
 
     @ExceptionHandler(OtpMaxAttemptsExceededException.class)

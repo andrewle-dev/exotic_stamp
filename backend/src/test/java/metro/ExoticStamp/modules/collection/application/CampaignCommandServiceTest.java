@@ -30,8 +30,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -149,7 +154,49 @@ class CampaignCommandServiceTest {
     }
 
     @Test
-    void softDelete() {
+    void activate_withoutStations_rejected() {
+        UUID id = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(id).code("C1").name("C").displayName("C")
+                .campaignType(CampaignType.STANDARD).status(CampaignStatus.DRAFT)
+                .startAt(LocalDateTime.now(clock).minusDays(1))
+                .endAt(LocalDateTime.now(clock).plusDays(30))
+                .priority(0).isDefault(false).build();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
+        when(campaignStationRepository.countByCampaignId(id)).thenReturn(0);
+
+        assertThrows(InvalidRequestException.class, () -> service.update(new UpdateCampaignCommand(
+                id, null, null, null, null, null, CampaignStatus.ACTIVE.name(),
+                null, null, null, null, null)));
+    }
+
+    @Test
+    void update_duplicateCode_rejected() {
+        UUID id = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(id).code("OLD").name("C").displayName("C")
+                .campaignType(CampaignType.STANDARD).status(CampaignStatus.DRAFT)
+                .startAt(LocalDateTime.now(clock).minusDays(1))
+                .endAt(LocalDateTime.now(clock).plusDays(30))
+                .priority(0).isDefault(false).build();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
+        when(campaignRepository.existsByCodeAndIdNot("NEW", id)).thenReturn(true);
+
+        assertThrows(CampaignCodeDuplicateException.class, () -> service.update(new UpdateCampaignCommand(
+                id, "NEW", null, null, null, null, null,
+                null, null, null, null, null)));
+    }
+
+    @Test
+    void create_negativePriority_rejected() {
+        assertThrows(InvalidRequestException.class, () -> service.create(new CreateCampaignCommand(
+                "X", "N", null, null, null,
+                LocalDateTime.now(clock), LocalDateTime.now(clock).plusDays(1),
+                null, null, -1)));
+    }
+
+    @Test
+    void update_changesCampaignType() {
         UUID id = UUID.randomUUID();
         Campaign campaign = Campaign.builder()
                 .id(id).code("C1").name("C").displayName("C")
@@ -160,7 +207,137 @@ class CampaignCommandServiceTest {
         when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
         when(campaignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
+        var view = service.update(new UpdateCampaignCommand(
+                id, null, null, null, null, CampaignType.SEASONAL.name(), null,
+                null, null, null, null, null));
+
+        assertEquals("SEASONAL", view.campaignType());
+    }
+
+    @Test
+    void softDelete() {
+        UUID id = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(id).code("C1").name("C").displayName("C")
+                .campaignType(CampaignType.STANDARD).status(CampaignStatus.DRAFT)
+                .startAt(LocalDateTime.now(clock).minusDays(1))
+                .endAt(LocalDateTime.now(clock).plusDays(30))
+                .priority(0).isDefault(true).build();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
+        when(campaignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
         service.softDelete(id);
-        verify(campaignRepository).save(any());
+        assertNotNull(campaign.getDeletedAt());
+        assertTrue(campaign.isDefault()); // historical default preserved
+        verify(campaignRepository).save(campaign);
+    }
+
+    @Test
+    void create_nullCampaignType_defaultsStandard() {
+        when(campaignRepository.existsByCode("STD")).thenReturn(false);
+        when(campaignRepository.save(any())).thenAnswer(inv -> {
+            Campaign c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+
+        var view = service.create(new CreateCampaignCommand(
+                "STD", "Standard", null, null, null,
+                LocalDateTime.now(clock), LocalDateTime.now(clock).plusDays(1),
+                null, null, 0));
+
+        assertEquals("STANDARD", view.campaignType());
+    }
+
+    @Test
+    void create_blankDisplayName_usesName() {
+        when(campaignRepository.existsByCode("N1")).thenReturn(false);
+        when(campaignRepository.save(any())).thenAnswer(inv -> {
+            Campaign c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+
+        var view = service.create(new CreateCampaignCommand(
+                "N1", "Campaign Name", "   ", null, CampaignType.STANDARD.name(),
+                LocalDateTime.now(clock), LocalDateTime.now(clock).plusDays(1),
+                null, null, 0));
+
+        assertEquals("Campaign Name", view.displayName());
+    }
+
+    @Test
+    void update_draftStatusChange() {
+        UUID id = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(id).code("C1").name("C").displayName("C")
+                .campaignType(CampaignType.STANDARD).status(CampaignStatus.ACTIVE)
+                .startAt(LocalDateTime.now(clock).minusDays(1))
+                .endAt(LocalDateTime.now(clock).plusDays(30))
+                .priority(0).isDefault(false).build();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
+        when(campaignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var view = service.update(new UpdateCampaignCommand(
+                id, null, null, null, null, null, CampaignStatus.DRAFT.name(),
+                null, null, null, null, null));
+
+        assertEquals("DRAFT", view.status());
+    }
+
+    @Test
+    void update_notFound() {
+        UUID id = UUID.randomUUID();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.empty());
+        assertThrows(metro.ExoticStamp.modules.collection.domain.exception.CampaignNotFoundException.class, () ->
+                service.update(new UpdateCampaignCommand(
+                        id, null, null, null, null, null, null,
+                        null, null, null, null, null)));
+    }
+
+    @Test
+    void softDelete_notFound() {
+        UUID id = UUID.randomUUID();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.empty());
+        assertThrows(metro.ExoticStamp.modules.collection.domain.exception.CampaignNotFoundException.class,
+                () -> service.softDelete(id));
+    }
+
+    @Test
+    void update_negativePriority_rejected() {
+        UUID id = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(id).code("C1").name("C").displayName("C")
+                .campaignType(CampaignType.STANDARD).status(CampaignStatus.DRAFT)
+                .startAt(LocalDateTime.now(clock).minusDays(1))
+                .endAt(LocalDateTime.now(clock).plusDays(30))
+                .priority(0).isDefault(false).build();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
+
+        assertThrows(InvalidRequestException.class, () -> service.update(new UpdateCampaignCommand(
+                id, null, null, null, null, null, null,
+                null, null, null, null, -5)));
+    }
+
+    @Test
+    void update_partialBannerAndDates() {
+        UUID id = UUID.randomUUID();
+        Campaign campaign = Campaign.builder()
+                .id(id).code("C1").name("C").displayName("C")
+                .campaignType(CampaignType.STANDARD).status(CampaignStatus.DRAFT)
+                .startAt(LocalDateTime.now(clock).minusDays(1))
+                .endAt(LocalDateTime.now(clock).plusDays(30))
+                .priority(0).isDefault(false).build();
+        when(campaignRepository.findByIdNotDeleted(id)).thenReturn(Optional.of(campaign));
+        when(campaignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        LocalDateTime newEnd = LocalDateTime.now(clock).plusDays(60);
+        var view = service.update(new UpdateCampaignCommand(
+                id, null, null, null, "New desc", null, null,
+                null, newEnd, "https://banner", "https://thumb", null));
+
+        assertEquals("New desc", view.description());
+        assertEquals(newEnd, view.endAt());
+        assertEquals("https://banner", view.bannerImageUrl());
     }
 }

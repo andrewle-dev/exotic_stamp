@@ -44,7 +44,7 @@ public class AccessTokenPortAdapter implements AccessTokenPort {
     }
 
     @Override
-    public UUID extractUserId(String token) {
-        return jwtProvider.extractUserId(token);
+    public UUID parseRefreshUserId(String token) {
+        return jwtProvider.parseRefreshToken(token);
     }
 }

@@ -26,10 +26,10 @@ public class Partner extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "logo_url", length = 255)
+    @Column(name = "logo_url", length = 512)
     private String logoUrl;
 
-    @Column(name = "banner_image_url", length = 255)
+    @Column(name = "banner_image_url", length = 512)
     private String bannerImageUrl;
 
     @Column(name = "contact_email", length = 100)
@@ -109,11 +109,11 @@ public class Partner extends BaseEntity {
         if (name.length() > 100) {
             throw new IllegalArgumentException("Partner name length must be <= 100");
         }
-        if (logoUrl != null && logoUrl.length() > 255) {
-            throw new IllegalArgumentException("Partner logoUrl length must be <= 255");
+        if (logoUrl != null && logoUrl.length() > 512) {
+            throw new IllegalArgumentException("Partner logoUrl length must be <= 512");
         }
-        if (bannerImageUrl != null && bannerImageUrl.length() > 255) {
-            throw new IllegalArgumentException("Partner bannerImageUrl length must be <= 255");
+        if (bannerImageUrl != null && bannerImageUrl.length() > 512) {
+            throw new IllegalArgumentException("Partner bannerImageUrl length must be <= 512");
         }
         if (contactEmail != null && contactEmail.length() > 100) {
             throw new IllegalArgumentException("Partner contactEmail length must be <= 100");

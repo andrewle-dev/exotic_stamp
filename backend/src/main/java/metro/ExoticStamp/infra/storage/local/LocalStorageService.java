@@ -3,18 +3,24 @@ package metro.ExoticStamp.infra.storage.local;
 import lombok.extern.slf4j.Slf4j;
 import metro.ExoticStamp.common.exceptions.storage.InvalidFileException;
 import metro.ExoticStamp.common.exceptions.storage.StorageWriteFailedException;
+import metro.ExoticStamp.infra.storage.ObjectKeyFactory;
+import metro.ExoticStamp.infra.storage.PublicUrlResolver;
+import metro.ExoticStamp.infra.storage.StorageMetrics;
 import metro.ExoticStamp.infra.storage.StorageProperties;
 import metro.ExoticStamp.infra.storage.StorageService;
+import metro.ExoticStamp.infra.storage.StorageUploadRequest;
+import metro.ExoticStamp.infra.storage.StorageUploadResult;
+import metro.ExoticStamp.infra.storage.StorageVisibility;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.UUID;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 @Service
 @ConditionalOnProperty(name = "storage.provider", havingValue = "local", matchIfMissing = true)
@@ -22,68 +28,104 @@ import java.util.UUID;
 public class LocalStorageService implements StorageService {
 
     private final Path basePath;
-    private final String baseUrl;
+    private final ObjectKeyFactory objectKeyFactory;
+    private final PublicUrlResolver publicUrlResolver;
+    private final StorageMetrics storageMetrics;
 
-    public LocalStorageService(StorageProperties storageProperties) {
+    public LocalStorageService(
+            StorageProperties storageProperties,
+            ObjectKeyFactory objectKeyFactory,
+            PublicUrlResolver publicUrlResolver,
+            StorageMetrics storageMetrics
+    ) {
         String configured = storageProperties.getLocal().getBasePath();
         if (configured == null || configured.isBlank()) {
             throw new IllegalStateException("storage.local.base-path is required");
         }
         this.basePath = Path.of(configured).toAbsolutePath().normalize();
-        this.baseUrl = trimTrailingSlash(storageProperties.getLocal().getBaseUrl());
+        this.objectKeyFactory = objectKeyFactory;
+        this.publicUrlResolver = publicUrlResolver;
+        this.storageMetrics = storageMetrics;
         initializeBaseDirectory();
         log.info("[LocalStorage] Resolved absolute base path: {}", this.basePath);
     }
 
-    /**
-     * Absolute, normalized storage root used by upload and static serving.
-     */
     public Path getResolvedBasePath() {
         return basePath;
     }
 
     @Override
-    public String upload(MultipartFile file, String folder) {
-        String normalizedFolder = normalizeFolder(folder);
-        String ext = extensionForContentType(file.getContentType());
-        String filename = UUID.randomUUID() + "." + ext;
+    public StorageUploadResult upload(StorageUploadRequest request) {
+        if (request == null || request.file() == null || request.file().isEmpty()) {
+            throw new InvalidFileException("File is required");
+        }
+        String objectKey = objectKeyFactory.generate(request);
+        objectKeyFactory.assertSafeObjectKey(objectKey);
 
-        Path targetDir = resolveUnderBase(normalizedFolder);
-        Path target = targetDir.resolve(filename).normalize();
+        Path target = basePath.resolve(objectKey).normalize();
         assertUnderBase(target);
+        Path targetDir = target.getParent();
+
+        byte[] bytes;
+        try {
+            bytes = request.file().getBytes();
+        } catch (IOException e) {
+            storageMetrics.recordUploadFailure();
+            throw new StorageWriteFailedException("Failed to read upload bytes", e);
+        }
+
+        if (Files.exists(target)) {
+            objectKey = objectKeyFactory.generate(request);
+            target = basePath.resolve(objectKey).normalize();
+            assertUnderBase(target);
+            targetDir = target.getParent();
+            if (Files.exists(target)) {
+                throw new StorageWriteFailedException("Unable to allocate unique object key");
+            }
+        }
 
         try {
             Files.createDirectories(targetDir);
             assertUnderBase(targetDir);
-            try (InputStream in = file.getInputStream()) {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+            Files.write(target, bytes);
         } catch (IOException e) {
             deleteQuietly(target);
+            storageMetrics.recordUploadFailure();
             log.error(
-                    "[LocalStorage] write failed basePath={} folder={} filename={} type={} cause={}",
+                    "[LocalStorage] write failed basePath={} keyPrefix={} type={} cause={}",
                     basePath,
-                    normalizedFolder,
-                    filename,
+                    keyPrefix(objectKey),
                     e.getClass().getSimpleName(),
                     rootCauseMessage(e),
                     e);
             throw new StorageWriteFailedException("Failed to store file", e);
         }
 
-        if (normalizedFolder.isEmpty()) {
-            return baseUrl + "/" + filename;
-        }
-        return baseUrl + "/" + normalizedFolder + "/" + filename;
+        storageMetrics.recordUploadSuccess();
+        String contentType = request.detectedContentType() != null
+                ? request.detectedContentType()
+                : request.file().getContentType();
+        String publicUrl = request.visibility() == StorageVisibility.PUBLIC
+                ? publicUrlResolver.toPublicUrl(objectKey)
+                : null;
+        return new StorageUploadResult(
+                objectKey,
+                publicUrl,
+                contentType,
+                bytes.length,
+                sha256Hex(bytes),
+                request.visibility(),
+                "local"
+        );
     }
 
     @Override
-    public void delete(String fileUrl) {
-        if (fileUrl == null || fileUrl.isBlank()) {
+    public void delete(String fileUrlOrObjectKey) {
+        if (fileUrlOrObjectKey == null || fileUrlOrObjectKey.isBlank()) {
             return;
         }
         try {
-            Path path = resolvePathFromUrl(fileUrl);
+            Path path = resolvePathFromUrlOrKey(fileUrlOrObjectKey);
             if (path == null) {
                 return;
             }
@@ -91,45 +133,64 @@ public class LocalStorageService implements StorageService {
                 Files.delete(path);
             }
         } catch (Exception e) {
-            log.warn("[LocalStorage] delete skipped or failed url={} err={}", fileUrl, e.getMessage());
+            log.warn("[LocalStorage] delete skipped or failed err={}", e.getMessage());
         }
+    }
+
+    @Override
+    public boolean exists(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return false;
+        }
+        try {
+            objectKeyFactory.assertSafeObjectKey(objectKey);
+            Path path = basePath.resolve(objectKey).normalize();
+            if (!path.startsWith(basePath)) {
+                return false;
+            }
+            return Files.exists(path);
+        } catch (InvalidFileException ex) {
+            return false;
+        }
+    }
+
+    @Override
+    public String createPresignedGetUrl(String objectKey) {
+        objectKeyFactory.assertSafeObjectKey(objectKey);
+        if (!objectKeyFactory.isPrivateKey(objectKey)) {
+            throw new InvalidFileException("Presigned URLs are only issued for private objects");
+        }
+        // Local provider returns the derived URL (no signature) for private paths behind auth.
+        return publicUrlResolver.toPublicUrl(objectKey);
     }
 
     private void initializeBaseDirectory() {
         try {
             Files.createDirectories(basePath);
             if (!Files.isDirectory(basePath)) {
-                log.error("[LocalStorage] base path is not a directory: {}", basePath);
                 throw new IllegalStateException("storage.local.base-path is not a directory");
             }
             if (!Files.isWritable(basePath)) {
-                log.error("[LocalStorage] base path is not writable: {}", basePath);
                 throw new IllegalStateException("storage.local.base-path is not writable");
             }
         } catch (IOException e) {
-            log.error(
-                    "[LocalStorage] failed to initialize base path={} type={} cause={}",
-                    basePath,
-                    e.getClass().getSimpleName(),
-                    rootCauseMessage(e),
-                    e);
             throw new IllegalStateException("Failed to initialize local storage directory", e);
         }
     }
 
-    private Path resolvePathFromUrl(String fileUrl) {
-        if (!fileUrl.startsWith(baseUrl)) {
-            log.warn("[LocalStorage] URL not under configured baseUrl, skip delete");
-            return null;
+    private Path resolvePathFromUrlOrKey(String fileUrlOrObjectKey) {
+        String objectKey = publicUrlResolver.tryExtractObjectKey(fileUrlOrObjectKey);
+        if (objectKey == null) {
+            if (fileUrlOrObjectKey.startsWith("public/")
+                    || fileUrlOrObjectKey.startsWith("private/")
+                    || fileUrlOrObjectKey.startsWith("temporary/")) {
+                objectKey = fileUrlOrObjectKey;
+            } else {
+                log.warn("[LocalStorage] URL not under configured base, skip delete");
+                return null;
+            }
         }
-        String relative = fileUrl.substring(baseUrl.length());
-        if (relative.startsWith("/")) {
-            relative = relative.substring(1);
-        }
-        if (relative.isBlank()) {
-            return null;
-        }
-        Path resolved = basePath.resolve(relative).normalize();
+        Path resolved = basePath.resolve(objectKey).normalize();
         if (!resolved.startsWith(basePath)) {
             log.warn("[LocalStorage] delete path traversal rejected");
             return null;
@@ -137,17 +198,9 @@ public class LocalStorageService implements StorageService {
         return resolved;
     }
 
-    private Path resolveUnderBase(String normalizedFolder) {
-        Path targetDir = normalizedFolder.isEmpty()
-                ? basePath
-                : basePath.resolve(normalizedFolder).normalize();
-        assertUnderBase(targetDir);
-        return targetDir;
-    }
-
     private void assertUnderBase(Path path) {
         if (!path.startsWith(basePath)) {
-            throw new InvalidFileException("Invalid storage folder");
+            throw new InvalidFileException("Invalid storage path");
         }
     }
 
@@ -159,35 +212,20 @@ public class LocalStorageService implements StorageService {
         }
     }
 
-    private static String normalizeFolder(String folder) {
-        if (folder == null || folder.isBlank()) {
-            return "";
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
         }
-        String normalized = folder.replace('\\', '/').replaceAll("^/+", "").replaceAll("/+$", "");
-        if (normalized.contains("..")) {
-            throw new InvalidFileException("Invalid storage folder");
-        }
-        return normalized;
     }
 
-    private static String trimTrailingSlash(String url) {
-        if (url == null) {
-            return "";
+    private static String keyPrefix(String objectKey) {
+        if (objectKey == null) {
+            return "null";
         }
-        return url.replaceAll("/+$", "");
-    }
-
-    private static String extensionForContentType(String contentType) {
-        if ("image/jpeg".equalsIgnoreCase(contentType)) {
-            return "jpg";
-        }
-        if ("image/png".equalsIgnoreCase(contentType)) {
-            return "png";
-        }
-        if ("image/webp".equalsIgnoreCase(contentType)) {
-            return "webp";
-        }
-        return "bin";
+        int idx = objectKey.lastIndexOf('/');
+        return idx > 0 ? objectKey.substring(0, idx) : objectKey;
     }
 
     private static String rootCauseMessage(Throwable t) {

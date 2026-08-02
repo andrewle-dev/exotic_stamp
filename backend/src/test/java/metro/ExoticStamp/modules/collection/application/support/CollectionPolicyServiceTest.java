@@ -1,6 +1,6 @@
 package metro.ExoticStamp.modules.collection.application.support;
 
-import metro.ExoticStamp.modules.collection.config.CollectionProperties;
+import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyConflictException;
 import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyKeyConflictException;
 import metro.ExoticStamp.modules.collection.domain.exception.StampAlreadyCollectedException;
 import metro.ExoticStamp.modules.collection.domain.model.CollectMethod;
@@ -12,16 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,10 +36,7 @@ class CollectionPolicyServiceTest {
 
     @BeforeEach
     void setUp() {
-        CollectionProperties props = new CollectionProperties();
-        props.setIdempotencyWindow(Duration.ofHours(1));
-        Clock clock = Clock.fixed(Instant.parse("2025-06-01T12:00:00Z"), ZoneOffset.UTC);
-        service = new CollectionPolicyService(userStampRepository, props, clock, auditHelper);
+        service = new CollectionPolicyService(userStampRepository, auditHelper);
     }
 
     @Test
@@ -53,37 +47,92 @@ class CollectionPolicyServiceTest {
     }
 
     @Test
-    void resolveIdempotentReplay_sameUser() {
-        UserStamp stamp = UserStamp.builder()
-                .userId(U1).stationId(STATION).campaignId(CAMPAIGN).stampDesignId(UUID.randomUUID())
-                .collectedAt(LocalDateTime.now()).gpsVerified(true).collectMethod(CollectMethod.NFC)
-                .deviceFingerprint("fp").idempotencyKey("key").collectionPolicy("MVP_ONCE_PER_STATION_CAMPAIGN").build();
-        when(userStampRepository.findFirstByIdempotencyKeyAndCollectedAtAfterOrderByCollectedAtDesc(anyString(), any()))
+    void resolveIdempotentReplay_sameFingerprint_replays() {
+        String fp = CollectIdempotencyFingerprint.compute(U1, STATION, CAMPAIGN, "NFC");
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, fp);
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
                 .thenReturn(Optional.of(stamp));
-        assertTrue(service.resolveIdempotentReplay("key", U1).isPresent());
+        assertTrue(service.resolveIdempotentReplay("key", U1, fp, STATION, CAMPAIGN).isPresent());
+    }
+
+    @Test
+    void resolveIdempotentReplay_differentFingerprint_conflicts() {
+        String stored = CollectIdempotencyFingerprint.compute(U1, STATION, CAMPAIGN, "NFC");
+        String other = CollectIdempotencyFingerprint.compute(U1, UUID.randomUUID(), CAMPAIGN, "NFC");
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, stored);
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
+                .thenReturn(Optional.of(stamp));
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.resolveIdempotentReplay("key", U1, other, STATION, CAMPAIGN));
+    }
+
+    @Test
+    void resolveIdempotentReplay_legacyNullFingerprint_sameStationCampaign_replays() {
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, null);
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
+                .thenReturn(Optional.of(stamp));
+        String fp = CollectIdempotencyFingerprint.compute(U1, STATION, CAMPAIGN, "NFC");
+        assertTrue(service.resolveIdempotentReplay("key", U1, fp, STATION, CAMPAIGN).isPresent());
+    }
+
+    @Test
+    void resolveIdempotentReplay_legacyNullFingerprint_differentStation_conflicts() {
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, null);
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
+                .thenReturn(Optional.of(stamp));
+        UUID otherStation = UUID.randomUUID();
+        String fp = CollectIdempotencyFingerprint.compute(U1, otherStation, CAMPAIGN, "NFC");
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.resolveIdempotentReplay("key", U1, fp, otherStation, CAMPAIGN));
     }
 
     @Test
     void resolveIdempotentReplay_crossUserConflict() {
-        UserStamp stamp = UserStamp.builder()
-                .userId(U2).stationId(STATION).campaignId(CAMPAIGN).stampDesignId(UUID.randomUUID())
-                .collectedAt(LocalDateTime.now()).gpsVerified(true).collectMethod(CollectMethod.NFC)
-                .deviceFingerprint("fp").idempotencyKey("key").collectionPolicy("MVP_ONCE_PER_STATION_CAMPAIGN").build();
-        when(userStampRepository.findFirstByIdempotencyKeyAndCollectedAtAfterOrderByCollectedAtDesc(anyString(), any()))
+        UserStamp stamp = stamp(U2, STATION, CAMPAIGN, "fp");
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
                 .thenReturn(Optional.of(stamp));
-        assertThrows(IdempotencyKeyConflictException.class, () -> service.resolveIdempotentReplay("key", U1));
-    }
-
-    @Test
-    void resolveIdempotentReplay_afterWindow_returnsEmpty() {
-        when(userStampRepository.findFirstByIdempotencyKeyAndCollectedAtAfterOrderByCollectedAtDesc(anyString(), any()))
-                .thenReturn(Optional.empty());
-        assertTrue(service.resolveIdempotentReplay("expired-key", U1).isEmpty());
+        assertThrows(IdempotencyKeyConflictException.class,
+                () -> service.resolveIdempotentReplay("key", U1, "fp", STATION, CAMPAIGN));
     }
 
     @Test
     void resolveIdempotentReplay_blankKey_returnsEmpty() {
-        assertTrue(service.resolveIdempotentReplay(null, U1).isEmpty());
-        assertTrue(service.resolveIdempotentReplay("  ", U1).isEmpty());
+        assertTrue(service.resolveIdempotentReplay(null, U1, "fp", STATION, CAMPAIGN).isEmpty());
+        assertTrue(service.resolveIdempotentReplay("  ", U1, "fp", STATION, CAMPAIGN).isEmpty());
+    }
+
+    @Test
+    void resolveIdempotentReplay_legacyNullFingerprint_differentCampaign_conflicts() {
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, null);
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
+                .thenReturn(Optional.of(stamp));
+        UUID otherCampaign = UUID.randomUUID();
+        String fp = CollectIdempotencyFingerprint.compute(U1, STATION, otherCampaign, "NFC");
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.resolveIdempotentReplay("key", U1, fp, STATION, otherCampaign));
+    }
+
+    @Test
+    void assertLogicalMatch_storedFingerprintMismatch_conflicts() {
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, "stored-fp");
+        String other = CollectIdempotencyFingerprint.compute(U1, STATION, CAMPAIGN, "QR_STATIC");
+        assertThrows(IdempotencyConflictException.class,
+                () -> service.assertLogicalMatch(stamp, other, STATION, CAMPAIGN));
+    }
+
+    @Test
+    void resolveIdempotentReplay_softLookup_returnsStampForUser() {
+        UserStamp stamp = stamp(U1, STATION, CAMPAIGN, "fp");
+        when(userStampRepository.findFirstByUserIdAndIdempotencyKeyOrderByCollectedAtDesc(U1, "key"))
+                .thenReturn(Optional.of(stamp));
+        assertTrue(service.resolveIdempotentReplay("key", U1).isPresent());
+    }
+
+    private static UserStamp stamp(UUID userId, UUID stationId, UUID campaignId, String fingerprint) {
+        return UserStamp.builder()
+                .userId(userId).stationId(stationId).campaignId(campaignId).stampDesignId(UUID.randomUUID())
+                .collectedAt(LocalDateTime.now()).gpsVerified(true).collectMethod(CollectMethod.NFC)
+                .deviceFingerprint("fp").idempotencyKey("key").idempotencyFingerprint(fingerprint)
+                .collectionPolicy("MVP_ONCE_PER_STATION_CAMPAIGN").build();
     }
 }

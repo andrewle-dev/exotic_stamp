@@ -53,9 +53,9 @@ class UserRewardControllerTest {
     @MockBean private CustomAccessDeniedHandler accessDeniedHandler;
 
     @Test
-    void unauthenticated_returns403() throws Exception {
+    void unauthenticated_returns401() throws Exception {
         mockMvc.perform(get("/api/v1/rewards/me"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

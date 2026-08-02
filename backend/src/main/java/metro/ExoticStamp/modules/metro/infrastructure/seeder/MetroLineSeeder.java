@@ -9,6 +9,7 @@ import metro.ExoticStamp.modules.metro.domain.model.Station;
 import metro.ExoticStamp.modules.metro.domain.repository.LineRepository;
 import metro.ExoticStamp.modules.metro.domain.repository.StationRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +18,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Dev-only metro reference seed (Line M1 + stations). Never runs under {@code prod}.
+ * Fresh production databases receive metro master data via admin APIs (or a future
+ * intentional Flyway/ops seed), not this runtime seeder.
+ */
 @Component
+@Profile("dev")
 @Order(50)
 @RequiredArgsConstructor
 @Slf4j

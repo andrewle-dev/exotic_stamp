@@ -35,4 +35,23 @@ public class RewardProperties {
      */
     @NotNull
     private String expiryCron = "0 0 2 * * *";
+
+    /**
+     * Cron for reward reconcile after missed AFTER_COMMIT listeners (R-P1-01 Option B).
+     */
+    @NotNull
+    private String reconcileCron = "0 20 */1 * * *";
+
+    /** How far back to scan stamps for missing rewards. */
+    @NotNull
+    private Duration reconcileLookback = Duration.ofHours(48);
+
+    private int reconcileBatchSize = 50;
+
+    @NotNull
+    private Duration reconcileMaxDuration = Duration.ofSeconds(30);
+
+    private int reconcileMaxBatches = 5;
+
+    private int reconcileMaxBatchSize = 100;
 }

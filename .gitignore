@@ -1,6 +1,13 @@
 .DS_Store
 .idea/
 *.iml
+.claude/
+.cursor/
+.m2/
+.agents/
+logs/
+*.log
+artifacts/
 
 # VS Code / Cursor — commit shared launch/tasks; ignore personal settings
 .vscode/*
@@ -12,6 +19,7 @@
 .env
 .env.*
 !.env.example
+!.env.local.example
 *.local
 
 # Flutter
@@ -27,6 +35,7 @@ mobile/coverage/
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
 backend/logs/
+backend/artifacts/
 
 # Local uploads (keep directory; ignore contents)
 backend/uploads/**

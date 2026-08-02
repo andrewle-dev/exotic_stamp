@@ -26,6 +26,11 @@ public class UserRewardRepositoryAdapter implements UserRewardRepository {
     }
 
     @Override
+    public Optional<UserReward> findById(UUID id) {
+        return jpaUserRewardRepository.findById(id);
+    }
+
+    @Override
     public Optional<UserReward> findByUserIdAndId(UUID userId, UUID id) {
         return jpaUserRewardRepository.findByUserIdAndId(userId, id);
     }

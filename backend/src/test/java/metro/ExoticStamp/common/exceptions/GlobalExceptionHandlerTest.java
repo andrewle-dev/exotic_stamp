@@ -1,5 +1,6 @@
 package metro.ExoticStamp.common.exceptions;
 
+import metro.ExoticStamp.modules.collection.domain.exception.IdempotencyConflictException;
 import metro.ExoticStamp.modules.auth.domain.exception.AccountNotVerifiedException;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidCredentialsException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
@@ -25,6 +26,27 @@ class GlobalExceptionHandlerTest {
     void setUp() {
         handler = new GlobalExceptionHandler();
         request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+    }
+
+    @Test
+    void unknownUniqueViolation_doesNotLeakConstraintName() {
+        request = new MockHttpServletRequest("POST", "/api/v1/collections/scan");
+        String pg = "ERROR: duplicate key value violates unique constraint \"uq_user_stamps_user_idempotency\"";
+        var response = handler.handleDataIntegrityViolation(
+                new DataIntegrityViolationException("could not execute statement", new RuntimeException(pg)),
+                request);
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("DATA_INTEGRITY_VIOLATION", response.getBody().code());
+        assertEquals("Duplicate or conflicting data", response.getBody().message());
+        assertFalse(response.getBody().message().contains("uq_user_stamps"));
+    }
+
+    @Test
+    void idempotencyConflict_returns409WithoutConstraintDetails() {
+        request = new MockHttpServletRequest("POST", "/api/v1/collections/scan");
+        var response = handler.handleIdempotencyLogicalConflict(new IdempotencyConflictException(), request);
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("IDEMPOTENCY_CONFLICT", response.getBody().code());
     }
 
     @Test

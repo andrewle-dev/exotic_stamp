@@ -28,7 +28,10 @@ import metro.ExoticStamp.modules.auth.domain.exception.PasswordConfirmationMisma
 import metro.ExoticStamp.modules.auth.domain.exception.PasswordPolicyViolationException;
 import metro.ExoticStamp.modules.auth.domain.exception.ResendCooldownException;
 import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenReusedException;
+import metro.ExoticStamp.modules.auth.domain.exception.RefreshTokenRevokedException;
 import metro.ExoticStamp.modules.auth.domain.exception.RefreshUnavailableException;
+import metro.ExoticStamp.common.exceptions.security.SecurityDependencyUnavailableException;
+import metro.ExoticStamp.modules.auth.application.port.RefreshTokenStorePort.GraceCredentials;
 import metro.ExoticStamp.modules.auth.domain.exception.SecurityBreachException;
 import metro.ExoticStamp.modules.auth.domain.exception.SessionRevokedException;
 import metro.ExoticStamp.modules.auth.domain.exception.UserNotActiveException;
@@ -48,7 +51,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import metro.ExoticStamp.modules.auth.application.view.ParsedAccessTokenView;
+import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -282,6 +288,7 @@ class AuthCommandServiceTest {
         when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(Optional.of("111111"));
         assertThrows(OtpInvalidException.class,
                 () -> authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "222222")));
+        verify(otpStore).incrementAttempts("user@test.com", OtpType.EMAIL_VERIFY);
     }
 
     @Test
@@ -315,7 +322,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
         when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
-        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenPort.parseRefreshUserId(oldRefresh)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
         when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
@@ -361,7 +368,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken(token)).thenReturn(hash);
         when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(token)).thenReturn(true);
-        when(accessTokenPort.extractUserId(token)).thenReturn(USER_ID);
+        when(accessTokenPort.parseRefreshUserId(token)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
         when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
@@ -387,6 +394,120 @@ class AuthCommandServiceTest {
     }
 
     @Test
+    void refresh_revokedLogout_throwsRefreshTokenRevoked() {
+        String token = "logged-out";
+        String hash = "h-logout";
+        AccessToken record = AccessToken.builder()
+                .id(UUID.randomUUID())
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(UUID.randomUUID())
+                .deviceFingerprint("fp")
+                .revokedAt(LocalDateTime.now().minusMinutes(10))
+                .revokedReason(AccessToken.REASON_LOGOUT)
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now().minusDays(1))
+                .version(0L)
+                .build();
+        when(accessTokenPort.hashToken(token)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
+        when(accessTokenPort.isTokenValid(token)).thenReturn(true);
+        when(accessTokenPort.parseRefreshUserId(token)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+
+        assertThrows(RefreshTokenRevokedException.class,
+                () -> authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(token).build()));
+        verify(accessTokenRepository, never()).revokeAllByUserId(any(), any());
+    }
+
+    @Test
+    void refresh_withinGrace_returnsCachedCredentials() {
+        String token = "rotated-grace";
+        String hash = "h-grace";
+        UUID familyId = UUID.randomUUID();
+        AccessToken record = AccessToken.builder()
+                .id(UUID.randomUUID())
+                .userId(USER_ID)
+                .tokenHash(hash)
+                .tokenFamilyId(familyId)
+                .deviceFingerprint("fp")
+                .revokedAt(LocalDateTime.now().minusSeconds(3))
+                .revokedReason(AccessToken.REASON_ROTATED)
+                .expiresAt(LocalDateTime.now().plusDays(1))
+                .createdAt(LocalDateTime.now().minusDays(1))
+                .version(0L)
+                .build();
+        when(accessTokenPort.hashToken(token)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(new GraceCredentials("grace-access", "grace-refresh")));
+        when(accessTokenPort.isTokenValid(token)).thenReturn(true);
+        when(accessTokenPort.parseRefreshUserId(token)).thenReturn(USER_ID);
+        when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
+        when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
+
+        AuthView view = authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(token).build());
+
+        assertEquals("grace-access", view.accessToken());
+        assertEquals("grace-refresh", view.refreshToken());
+        verify(accessTokenPort, never()).issueAccessToken(any(), any());
+    }
+
+    @Test
+    void refresh_graceHitAtStart_skipsDatabaseLookup() {
+        String token = "old-refresh";
+        String hash = "grace-start";
+        when(accessTokenPort.hashToken(token)).thenReturn(hash);
+        when(refreshTokenStore.findGraceCredentials(hash))
+                .thenReturn(Optional.of(new GraceCredentials("cached-access", "cached-refresh")));
+        when(accessTokenPort.parseRefreshUserId("cached-refresh")).thenReturn(USER_ID);
+        when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
+        when(roleQueryService.getRoleNamesByUserId(USER_ID)).thenReturn(List.of("USER"));
+
+        AuthView view = authCommandService.refresh(RefreshTokenCommand.builder().refreshToken(token).build());
+
+        assertEquals("cached-access", view.accessToken());
+        verify(accessTokenRepository, never()).findByTokenHashForUpdate(any());
+    }
+
+    @Test
+    void logout_denylistWriteFailure_propagates() {
+        when(tokenTtlPort.getAccessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+        doThrow(new SecurityDependencyUnavailableException("Security dependency temporarily unavailable"))
+                .when(accessTokenRevocation).addToDenylist(eq("jti-1"), any());
+
+        assertThrows(SecurityDependencyUnavailableException.class,
+                () -> authCommandService.logout(USER_ID, Optional.empty(), Optional.of("jti-1")));
+        verify(accessTokenRepository, never()).revokeByTokenHash(any(), any());
+    }
+
+    @Test
+    void verifyAccount_otpRedisFailure_propagates() {
+        when(otpStore.isMaxAttemptsExceeded("user@test.com", OtpType.EMAIL_VERIFY)).thenReturn(false);
+        when(otpStore.find("user@test.com", OtpType.EMAIL_VERIFY))
+                .thenThrow(new SecurityDependencyUnavailableException("Security dependency temporarily unavailable"));
+
+        assertThrows(SecurityDependencyUnavailableException.class,
+                () -> authCommandService.verifyAccount(new VerifyAccountCommand("user@test.com", "123456")));
+        verify(userAccountPort, never()).findByEmail(anyString());
+    }
+
+    @Test
+    void logoutAll_tokenVersionRedisSyncFailure_stillRevokesSessions() {
+        when(userAccountPort.incrementTokenVersionById(USER_ID)).thenReturn(1);
+        when(userAccountPort.findTokenVersionById(USER_ID)).thenReturn(Optional.of(2L));
+        doThrow(new RuntimeException("redis down"))
+                .when(accessTokenRevocation).setCachedTokenVersion(USER_ID, 2L);
+
+        assertDoesNotThrow(() -> authCommandService.logoutAll(USER_ID));
+
+        verify(accessTokenRepository).revokeAllByUserId(USER_ID, AccessToken.REASON_LOGOUT_ALL);
+        verify(userAccountPort).incrementTokenVersionById(USER_ID);
+    }
+
+    @Test
     void refresh_graceWithoutCache_throwsUnavailableNotReuse() {
         String token = "rotated-retry";
         String hash = "h2";
@@ -408,7 +529,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken(token)).thenReturn(hash);
         when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(token)).thenReturn(true);
-        when(accessTokenPort.extractUserId(token)).thenReturn(USER_ID);
+        when(accessTokenPort.parseRefreshUserId(token)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(authSecurityProperties.getRefreshReuseGrace()).thenReturn(Duration.ofSeconds(30));
 
@@ -448,7 +569,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
         when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
-        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenPort.parseRefreshUserId(oldRefresh)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(userAccountPort.findById(USER_ID))
                 .thenReturn(Optional.of(activeUser))
@@ -482,7 +603,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
         when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
-        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenPort.parseRefreshUserId(oldRefresh)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(userAccountPort.findById(USER_ID)).thenReturn(Optional.of(activeUser));
 
@@ -522,7 +643,7 @@ class AuthCommandServiceTest {
         when(accessTokenPort.hashToken(oldRefresh)).thenReturn(hash);
         when(refreshTokenStore.findGraceCredentials(hash)).thenReturn(Optional.empty());
         when(accessTokenPort.isTokenValid(oldRefresh)).thenReturn(true);
-        when(accessTokenPort.extractUserId(oldRefresh)).thenReturn(USER_ID);
+        when(accessTokenPort.parseRefreshUserId(oldRefresh)).thenReturn(USER_ID);
         when(accessTokenRepository.findByTokenHashForUpdate(hash)).thenReturn(Optional.of(record));
         when(userAccountPort.findById(USER_ID))
                 .thenReturn(Optional.of(activeUser))
@@ -616,6 +737,7 @@ class AuthCommandServiceTest {
                 .newPassword("x")
                 .build();
         assertThrows(OtpInvalidException.class, () -> authCommandService.resetPassword(cmd));
+        verify(otpStore).incrementAttempts("user@test.com", OtpType.FORGOT_PASSWORD);
     }
 
     @Test
@@ -906,5 +1028,59 @@ class AuthCommandServiceTest {
                 .ipAddress("127.0.0.1")
                 .userAgent("test")
                 .build()));
+    }
+
+    @Test
+    void resolveUserId_fromDomainUser() {
+        assertEquals(USER_ID, authCommandService.resolveUserId(activeUser));
+    }
+
+    @Test
+    void resolveUserId_missingPrincipal_throws() {
+        assertThrows(IllegalStateException.class, () -> authCommandService.resolveUserId(null));
+    }
+
+    @Test
+    void resolveUserId_unsupportedPrincipalType_throws() {
+        UserDetails generic = org.springframework.security.core.userdetails.User
+                .withUsername("x")
+                .password("p")
+                .roles("USER")
+                .build();
+        assertThrows(IllegalStateException.class, () -> authCommandService.resolveUserId(generic));
+    }
+
+    @Test
+    void parseOptionalAccessJti_missingOrInvalidHeader_returnsEmpty() {
+        assertTrue(authCommandService.parseOptionalAccessJti(null, USER_ID).isEmpty());
+        assertTrue(authCommandService.parseOptionalAccessJti("Basic abc", USER_ID).isEmpty());
+        when(accessTokenPort.parseAccessToken("bad")).thenThrow(new InvalidTokenException("bad"));
+        assertTrue(authCommandService.parseOptionalAccessJti("Bearer bad", USER_ID).isEmpty());
+    }
+
+    @Test
+    void parseOptionalAccessJti_validBearer_returnsJti() {
+        when(accessTokenPort.parseAccessToken("good")).thenReturn(
+                new ParsedAccessTokenView(USER_ID, "jti-99", 1L));
+        assertEquals(Optional.of("jti-99"),
+                authCommandService.parseOptionalAccessJti("Bearer good", USER_ID));
+    }
+
+    @Test
+    void parseOptionalAccessJti_userMismatch_returnsEmpty() {
+        UUID other = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(accessTokenPort.parseAccessToken("tok")).thenReturn(
+                new ParsedAccessTokenView(other, "jti", 1L));
+        assertTrue(authCommandService.parseOptionalAccessJti("Bearer tok", USER_ID).isEmpty());
+    }
+
+    @Test
+    void logout_withoutRefreshToken_onlyDenylistsAccessJti() {
+        when(tokenTtlPort.getAccessTokenTtl()).thenReturn(Duration.ofMinutes(15));
+
+        authCommandService.logout(USER_ID, Optional.empty(), Optional.of("jti-logout"));
+
+        verify(accessTokenRevocation).addToDenylist(eq("jti-logout"), any());
+        verify(accessTokenRepository, never()).revokeByTokenHash(any(), any());
     }
 }

@@ -1,0 +1,167 @@
+{
+  "generatedAtUtc": "2026-07-25T18:13:53Z",
+  "repositoryRoots": [
+    "D:\\Part-time\\ExoticStamp",
+    "D:\\Part-time\\ExoticStamp\\backend"
+  ],
+  "commitShas": {
+    "root": "cc152bd10ac206eadfd7b1cc5ddf176ed102bfd0",
+    "backendNested": "ba6cb60e8eec76f2fd30c23d12edbd56b6955954"
+  },
+  "moduleSummaries": {
+    "backend": "Spring Boot 3.3.5 / Java 21 admin-capable API with Flyway V23, Docker, Caddy examples, GitHub Actions CI, partial S3 production path",
+    "web": "React 19 + Vite 8 admin web app with auth refresh, CRUD modules, passing lint/type/test/build",
+    "mobile": "Flutter 3.41 mobile app with passing analyze/test, placeholder Android release config, later-phase delivery target"
+  },
+  "detectedFrameworksVersions": {
+    "backend": {
+      "java": "21",
+      "springBoot": "3.3.5",
+      "maven": "Maven wrapper / mvn",
+      "flywayLatestMigration": "V23",
+      "testcontainers": "1.21.4"
+    },
+    "web": {
+      "react": "19.2.7",
+      "vite": "8.1.0",
+      "typescript": "6.0.2"
+    },
+    "mobile": {
+      "flutter": "3.41.0",
+      "dart": "3.11.0"
+    }
+  },
+  "buildCommands": {
+    "backend": "mvn -B -ntp clean verify -Pci",
+    "web": [
+      "npm run lint",
+      "npm run typecheck",
+      "npm run test",
+      "npm run build"
+    ],
+    "mobile": [
+      "flutter doctor -v",
+      "flutter pub get",
+      "flutter analyze",
+      "flutter test"
+    ]
+  },
+  "deploymentTargets": {
+    "webAdmin": "Vercel",
+    "backend": "AWS Lightsail behind Caddy",
+    "assets": "AWS S3",
+    "ciCd": "GitHub Actions",
+    "mobile": [
+      "Google Play",
+      "App Store / TestFlight"
+    ]
+  },
+  "currentLatestFlywayVersion": "V23",
+  "environmentVariableNames": [
+    "ADMIN_SEED_PASSWORD",
+    "API_HOST",
+    "API_PORT",
+    "AUTH_COOKIE_DOMAIN",
+    "AUTH_COOKIE_SAME_SITE",
+    "AWS_REGION",
+    "AWS_S3_API_CALL_ATTEMPT_TIMEOUT",
+    "AWS_S3_API_CALL_TIMEOUT",
+    "AWS_S3_BUCKET",
+    "AWS_S3_CONNECT_TIMEOUT",
+    "AWS_S3_ENDPOINT",
+    "AWS_S3_MAX_RETRIES",
+    "AWS_S3_PATH_STYLE",
+    "AWS_S3_PRESIGN_EXPIRY",
+    "BACKEND_PORT",
+    "BACKEND_URL",
+    "CORS_ALLOWED_HEADERS",
+    "CORS_ALLOWED_METHODS",
+    "CORS_ALLOWED_ORIGINS",
+    "CORS_ALLOW_CREDENTIALS",
+    "CORS_MAX_AGE_SECONDS",
+    "DB_PASSWORD",
+    "DB_URL",
+    "DB_USERNAME",
+    "DEMO_USER_PASSWORD",
+    "ENABLE_QR_FLOW",
+    "FRONTEND_URL",
+    "JWT_SECRET",
+    "MAIL_DISPLAY_NAME",
+    "MAIL_FROM",
+    "MAIL_HOST",
+    "MAIL_LIST_UNSUBSCRIBE",
+    "MAIL_LOGO_URL",
+    "MAIL_PASSWORD",
+    "MAIL_PORT",
+    "MAIL_REPLY_TO",
+    "MAIL_USERNAME",
+    "MOBILE_ANDROID_FORCE_UPDATE",
+    "MOBILE_ANDROID_LATEST_VERSION",
+    "MOBILE_ANDROID_MIN_VERSION",
+    "MOBILE_ANDROID_STORE_URL",
+    "MOBILE_IOS_FORCE_UPDATE",
+    "MOBILE_IOS_LATEST_VERSION",
+    "MOBILE_IOS_MIN_VERSION",
+    "MOBILE_IOS_STORE_URL",
+    "MOBILE_MAINTENANCE_ENABLED",
+    "MOBILE_MAINTENANCE_MESSAGE",
+    "POSTGRES_DB",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_PORT",
+    "POSTGRES_USER",
+    "RATE_LIMIT_KEY_PEPPER",
+    "REDIS_HOST",
+    "REDIS_PASSWORD",
+    "REDIS_PORT",
+    "SERVER_PORT",
+    "SERVER_SHUTDOWN",
+    "SERVER_SHUTDOWN_TIMEOUT",
+    "SPRING_PROFILES_ACTIVE",
+    "STORAGE_CLEANUP_BATCH_SIZE",
+    "STORAGE_CLEANUP_CRON",
+    "STORAGE_CLEANUP_DRY_RUN",
+    "STORAGE_CLEANUP_MAX_DURATION",
+    "STORAGE_FILE_MAX_SIZE_MB",
+    "STORAGE_LOCAL_PATH",
+    "STORAGE_LOCAL_URL",
+    "STORAGE_MULTIPART_MAX_FILE_SIZE",
+    "STORAGE_MULTIPART_MAX_REQUEST_SIZE",
+    "STORAGE_ORPHAN_RETENTION",
+    "STORAGE_PROVIDER",
+    "STORAGE_PUBLIC_BASE_URL",
+    "USE_MOCK_DATA",
+    "VITE_API_BASE_URL",
+    "VITE_APP_ENV",
+    "VITE_APP_VERSION",
+    "VITE_BUILD_DATE"
+  ],
+  "criticalGapIds": [
+    "GAP-001",
+    "GAP-002",
+    "GAP-004"
+  ],
+  "webAdminReleaseBlockers": [
+    "GAP-001",
+    "GAP-002",
+    "GAP-003",
+    "GAP-004",
+    "GAP-005",
+    "GAP-006"
+  ],
+  "filesGenerated": [
+    "docs/production-context/00_EXECUTIVE_SUMMARY.md",
+    "docs/production-context/01_REPOSITORY_AND_GIT_INVENTORY.md",
+    "docs/production-context/02_BACKEND_CURRENT_STATE.md",
+    "docs/production-context/03_WEB_ADMIN_CURRENT_STATE.md",
+    "docs/production-context/04_MOBILE_CURRENT_STATE.md",
+    "docs/production-context/05_WEB_ADMIN_BACKEND_DEPENDENCY_MAP.md",
+    "docs/production-context/06_ENVIRONMENT_AND_SECRET_MATRIX.md",
+    "docs/production-context/07_BUILD_TEST_AND_CI_MATRIX.md",
+    "docs/production-context/08_DEPLOYMENT_AND_INFRASTRUCTURE_INVENTORY.md",
+    "docs/production-context/09_SECURITY_AND_DATA_INTEGRITY_GAPS.md",
+    "docs/production-context/10_PRODUCTION_GAP_REGISTER.md",
+    "docs/production-context/11_WEB_ADMIN_FIRST_DEPLOYMENT_PLAN.md",
+    "docs/production-context/12_FULL_PLATFORM_ROADMAP.md",
+    "docs/production-context/context-index.json"
+  ]
+}

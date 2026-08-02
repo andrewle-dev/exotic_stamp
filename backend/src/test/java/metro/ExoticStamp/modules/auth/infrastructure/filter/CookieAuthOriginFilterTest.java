@@ -77,6 +77,57 @@ class CookieAuthOriginFilterTest {
     }
 
     @Test
+    void cookieRefresh_allowedReferer_passes() throws Exception {
+        MockHttpServletRequest request = refreshWithCookie();
+        request.addHeader("Referer", "http://localhost:5173/dashboard");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        assertTrue(chain.getRequest() != null);
+    }
+
+    @Test
+    void cookieRefresh_disallowedReferer_forbidden() throws Exception {
+        MockHttpServletRequest request = refreshWithCookie();
+        request.addHeader("Referer", "https://evil.example/page");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertEquals(403, response.getStatus());
+        assertTrue(response.getContentAsString().contains("ORIGIN_FORBIDDEN"));
+    }
+
+    @Test
+    void login_withDisallowedOrigin_forbidden() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+        request.addHeader("Origin", "https://evil.example");
+        request.setContentType("application/json");
+        request.setContent("{\"identifier\":\"a@b.c\",\"password\":\"x\"}".getBytes());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertEquals(403, response.getStatus());
+        assertTrue(response.getContentAsString().contains("ORIGIN_FORBIDDEN"));
+    }
+
+    @Test
+    void login_withoutOrigin_passesForNativeClient() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+        request.setContentType("application/json");
+        request.setContent("{\"identifier\":\"a@b.c\",\"password\":\"x\"}".getBytes());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        assertTrue(chain.getRequest() != null);
+    }
+
+    @Test
     void spoofedBodyHeader_withCookie_stillRequiresOrigin() throws Exception {
         MockHttpServletRequest request = refreshWithCookie();
         request.addHeader("X-Client-Transport", "body");

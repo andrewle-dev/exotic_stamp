@@ -1,5 +1,7 @@
 package metro.ExoticStamp.modules.auth.infrastructure.filter;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import metro.ExoticStamp.common.response.ErrorResponse;
 import metro.ExoticStamp.modules.auth.domain.exception.InvalidTokenException;
 import metro.ExoticStamp.modules.auth.domain.exception.TokenExpiredException;
 import metro.ExoticStamp.modules.auth.infrastructure.jwt.JwtProvider;
@@ -9,6 +11,7 @@ import metro.ExoticStamp.modules.auth.infrastructure.security.AccessTokenRevocat
 import metro.ExoticStamp.modules.rbac.application.RoleQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -45,6 +48,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final UserDetailsService userDetailsService;
     private final RoleQueryService roleQueryService;
     private final AccessTokenRevocationValidator accessTokenRevocationValidator;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(
@@ -63,8 +67,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         try {
             ParsedAccessToken parsed = jwtProvider.parseAccessToken(token);
-            if (accessTokenRevocationValidator.validate(parsed.userId(), parsed.jti(), parsed.tokenVersion())
-                    == AccessTokenRevocationStatus.REVOKED) {
+            AccessTokenRevocationStatus status = accessTokenRevocationValidator.validate(
+                    parsed.userId(), parsed.jti(), parsed.tokenVersion());
+
+            if (status == AccessTokenRevocationStatus.DEPENDENCY_UNAVAILABLE) {
+                writeDependencyUnavailable(response, request.getRequestURI());
+                return;
+            }
+
+            if (status == AccessTokenRevocationStatus.REVOKED) {
                 log.debug("[JwtAuthFilter] access token revoked userId={}", parsed.userId());
             } else if (SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(parsed.userId().toString());
@@ -88,6 +99,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         chain.doFilter(request, response);
+    }
+
+    private void writeDependencyUnavailable(HttpServletResponse response, String path) throws IOException {
+        response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        response.setHeader("Retry-After", "5");
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        ErrorResponse body = ErrorResponse.of(
+                "SECURITY_DEPENDENCY_UNAVAILABLE",
+                "Service temporarily unavailable. Please try again later.",
+                503,
+                path
+        );
+        objectMapper.writeValue(response.getOutputStream(), body);
     }
 
     /**
@@ -118,4 +142,3 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return new SimpleGrantedAuthority(ROLE_PREFIX + roleName);
     }
 }
-

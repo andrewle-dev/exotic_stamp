@@ -1,0 +1,81 @@
+# Example Caddyfile for Lightsail / prod-like reverse proxy.
+# Replace {$DOMAIN} via compose environment (e.g. api.example.com).
+# Access logs omit Authorization and Cookie headers at the aggregator.
+
+{$DOMAIN} {
+	encode gzip
+
+	# Body size aligned with multipart upload limits (~6MB + margin).
+	request_body {
+		max_size 8MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	# Block OpenAPI / Swagger surfaces in production edge.
+	@swagger {
+		path /swagger-ui /swagger-ui/* /v3/api-docs /v3/api-docs/* /swagger-resources /swagger-resources/*
+	}
+	respond @swagger 404
+
+	# Public readiness for load balancer / container HEALTHCHECK via Caddy if needed.
+	handle /actuator/health/readiness {
+		reverse_proxy backend:8080 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+			transport http {
+				read_timeout 10s
+				write_timeout 10s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	handle /actuator/health/liveness {
+		reverse_proxy backend:8080 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+			transport http {
+				read_timeout 10s
+				write_timeout 10s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8080 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+			transport http {
+				read_timeout 60s
+				write_timeout 60s
+				dial_timeout 5s
+			}
+		}
+	}
+
+	# Deny other actuator / internal paths at the edge (keep readiness/liveness above).
+	@actuator_block {
+		path /actuator /actuator/*
+		not path /actuator/health/readiness
+		not path /actuator/health/liveness
+	}
+	respond @actuator_block 404
+
+	respond 404
+
+	log {
+		output stdout
+		format json
+		# Stock Caddy image has no transform-encoder. Redact Authorization/Cookie
+		# at the log aggregator, or rebuild Caddy with the filter encoder module.
+	}
+}

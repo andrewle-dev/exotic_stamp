@@ -18,6 +18,12 @@ public interface JpaCampaignRepository extends JpaRepository<Campaign, UUID> {
     boolean existsByLineIdAndIsDefaultTrue(UUID lineId);
 
     @Query("""
+            SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Campaign c
+            WHERE c.lineId = :lineId AND c.isDefault = true AND c.deletedAt IS NULL
+            """)
+    boolean existsActiveDefaultByLineId(@Param("lineId") UUID lineId);
+
+    @Query("""
             SELECT c FROM Campaign c
             WHERE c.lineId = :lineId AND c.isDefault = true AND c.status = 'ACTIVE' AND c.deletedAt IS NULL
             """)

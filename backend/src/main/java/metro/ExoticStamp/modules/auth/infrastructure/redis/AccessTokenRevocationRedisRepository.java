@@ -34,15 +34,33 @@ public class AccessTokenRevocationRedisRepository extends RedisKeyValueSupport {
         this.cacheProperties = cacheProperties;
     }
 
+    /** Soft write retained for non-critical call sites; prefer {@link #addToDenylistRequired}. */
     public void addToDenylist(String jti, Duration accessTokenTtl) {
         putValue(DOMAIN, keyDenylist(jti), DENYLIST_PLACEHOLDER, accessTokenTtl);
     }
 
-    /** Redis down → {@code false} (fail-open: do not treat as revoked). */
-    public boolean isDenylisted(String jti) {
-        return hasKey(DOMAIN, keyDenylist(jti), false);
+    public void addToDenylistRequired(String jti, Duration accessTokenTtl) {
+        putValueRequired(DOMAIN, keyDenylist(jti), DENYLIST_PLACEHOLDER, accessTokenTtl);
     }
 
+    /**
+     * Denylist presence check. Redis errors map to {@link DenylistCheck#UNAVAILABLE} (fail-closed upstream).
+     */
+    public DenylistCheck isDenylistedCheck(String jti) {
+        try {
+            Boolean present = redisTemplate.hasKey(keyDenylist(jti));
+            return Boolean.TRUE.equals(present) ? DenylistCheck.DENYLISTED : DenylistCheck.CLEAR;
+        } catch (Exception e) {
+            markError(DOMAIN);
+            return DenylistCheck.UNAVAILABLE;
+        }
+    }
+
+    public boolean isDenylisted(String jti) {
+        return isDenylistedCheck(jti) == DenylistCheck.DENYLISTED;
+    }
+
+    /** Soft cache read: Redis errors treated as miss (caller falls through to DB). */
     public Optional<Long> getCachedTokenVersion(UUID userId) {
         Optional<Object> raw = getValue(DOMAIN, keyUserVersion(userId));
         return raw.flatMap(AccessTokenRevocationRedisRepository::toLong);
@@ -92,5 +110,11 @@ public class AccessTokenRevocationRedisRepository extends RedisKeyValueSupport {
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
+    }
+
+    public enum DenylistCheck {
+        DENYLISTED,
+        CLEAR,
+        UNAVAILABLE
     }
 }

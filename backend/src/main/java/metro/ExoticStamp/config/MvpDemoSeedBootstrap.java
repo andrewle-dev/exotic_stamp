@@ -75,7 +75,7 @@ public class MvpDemoSeedBootstrap implements ApplicationRunner {
     private final UserRoleRepository userRoleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${application.bootstrap.demo-user-password:changeme-demo-only}")
+    @Value("${application.bootstrap.demo-user-password}")
     private String demoUserPassword;
 
     @Override

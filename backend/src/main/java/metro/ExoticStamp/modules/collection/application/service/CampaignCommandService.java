@@ -151,6 +151,7 @@ public class CampaignCommandService {
                 .orElseThrow(() -> new CampaignNotFoundException(id));
         campaignDomainService.assertMutable(campaign);
         campaign.setDeletedAt(LocalDateTime.now(clock));
+        // Preserve isDefault historically; V22 partial unique ignores deleted_at IS NOT NULL.
         campaignRepository.save(campaign);
     }
 }

@@ -1,5 +1,6 @@
 package metro.ExoticStamp.config;
 
+import metro.ExoticStamp.support.IntegrationTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
 @Testcontainers(disabledWithoutDocker = true)
-class UploadSecurityTest {
+class UploadSecurityIT {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -31,16 +32,9 @@ class UploadSecurityTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379).toString());
-        registry.add("jwt.secret", () -> "test-jwt-secret-must-be-at-least-256-bits-long-for-hmac-sha");
-        registry.add("application.bootstrap.admin-password", () -> "test-admin-pass");
-        registry.add("spring.mail.username", () -> "test@example.com");
-        registry.add("spring.mail.password", () -> "test-mail-password");
-        registry.add("application.mail.from", () -> "test@example.com");
+        IntegrationTestSupport.registerPostgresAndRedis(registry, postgres, redis);
+        IntegrationTestSupport.registerCommonSecrets(registry);
+        IntegrationTestSupport.registerDevBootstrap(registry);
     }
 
     @Autowired

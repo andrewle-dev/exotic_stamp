@@ -12,6 +12,7 @@ import metro.ExoticStamp.modules.community.domain.model.Notification;
 import metro.ExoticStamp.modules.community.domain.repository.NotificationRepository;
 import metro.ExoticStamp.modules.rbac.application.support.RbacTransactionCallbacks;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +43,15 @@ public class NotificationCommandService {
                 .metadata(metadataSanitizer.sanitize(command.metadata()))
                 .build();
 
-        Notification saved = notificationRepository.save(notification);
+        Notification saved;
+        try {
+            saved = notificationRepository.save(notification);
+        } catch (DataIntegrityViolationException ex) {
+            // uq_notifications_user_type_ref — idempotent side effect (Batch E.1)
+            log.debug("[Community] duplicate notification suppressed type={} refPresent={}",
+                    command.type(), command.referenceId() != null);
+            return communityAppMapper.toNotificationView(notification);
+        }
 
         RbacTransactionCallbacks.afterCommit(() -> {
             try {
@@ -50,7 +59,7 @@ public class NotificationCommandService {
                         saved.getId(), saved.getUserId(), saved.getType()));
             } catch (Exception e) {
                 log.error("[Community] NotificationCreatedEvent publish failed notificationId={}: {}",
-                        saved.getId(), e.getMessage(), e);
+                        saved.getId(), e.getClass().getSimpleName());
             }
         });
 

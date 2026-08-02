@@ -1,5 +1,6 @@
 package metro.ExoticStamp;
 
+import metro.ExoticStamp.config.ApplicationSiteProperties;
 import metro.ExoticStamp.config.CorsProperties;
 import metro.ExoticStamp.config.RbacProperties;
 import metro.ExoticStamp.infra.storage.StorageProperties;
@@ -14,7 +15,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 @EnableScheduling
 @EnableConfigurationProperties({RbacProperties.class, StorageProperties.class, CorsProperties.class,
-        TokenRevocationProperties.class})
+        TokenRevocationProperties.class, ApplicationSiteProperties.class,
+        metro.ExoticStamp.infra.security.ratelimit.RateLimitProperties.class})
 public class ExoticStampApplication {
 
     public static void main(String[] args) {

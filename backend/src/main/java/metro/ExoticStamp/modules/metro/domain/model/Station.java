@@ -51,10 +51,10 @@ public class Station extends BaseEntity {
     @Column(length = 255)
     private String address;
 
-    @Column(name = "image_url", length = 255)
+    @Column(name = "image_url", length = 512)
     private String imageUrl;
 
-    @Column(name = "stamp_preview_url", length = 255)
+    @Column(name = "stamp_preview_url", length = 512)
     private String stampPreviewUrl;
 
     @Column(precision = 9, scale = 6)

@@ -46,7 +46,7 @@ public class CampaignRepositoryAdapter implements CampaignRepository {
 
     @Override
     public boolean existsDefaultByLineId(UUID lineId) {
-        return jpaCampaignRepository.existsByLineIdAndIsDefaultTrue(lineId);
+        return jpaCampaignRepository.existsActiveDefaultByLineId(lineId);
     }
 
     @Override

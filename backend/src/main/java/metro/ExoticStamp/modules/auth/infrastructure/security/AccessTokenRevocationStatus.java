@@ -4,5 +4,7 @@ public enum AccessTokenRevocationStatus {
     OK,
     REVOKED,
     /** DB unavailable; request allowed per operations policy (monitor via metrics/logs). */
-    FAIL_OPEN
+    FAIL_OPEN,
+    /** Denylist Redis unavailable; do not authenticate. */
+    DEPENDENCY_UNAVAILABLE
 }

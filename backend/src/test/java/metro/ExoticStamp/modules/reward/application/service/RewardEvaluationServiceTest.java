@@ -231,6 +231,202 @@ class RewardEvaluationServiceTest {
         verify(userRewardRepository, never()).save(any());
     }
 
+    @Test
+    void voucherPoolLinkUniqueRace_releasesAndLeavesPendingStock() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID voucherId = UUID.randomUUID();
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(1L);
+        when(milestoneRepository.findActiveByCampaignId(campaignId)).thenReturn(List.of(milestone));
+        when(userRewardRepository.findMilestoneIdsRewardedForUser(userId)).thenReturn(Set.of());
+        when(userRewardRepository.save(any(UserReward.class))).thenAnswer(inv -> {
+            UserReward ur = inv.getArgument(0);
+            if (ur.getId() == null) {
+                ur.setId(UUID.randomUUID());
+            }
+            if (ur.getVoucherPoolId() != null) {
+                throw new DataIntegrityViolationException(
+                        "duplicate", new RuntimeException("uq_user_rewards_voucher_pool_id"));
+            }
+            return ur;
+        });
+        when(voucherAllocationService.allocate(eq(milestoneId), eq(userId), any(UUID.class)))
+                .thenReturn(Optional.of(new VoucherAllocation(voucherId)));
+
+        service.handleStampCollected(userId, campaignId);
+
+        verify(voucherAllocationService).release(voucherId);
+        ArgumentCaptor<UserReward> cap = ArgumentCaptor.forClass(UserReward.class);
+        verify(userRewardRepository, org.mockito.Mockito.atLeast(2)).save(cap.capture());
+        UserReward last = cap.getAllValues().get(cap.getAllValues().size() - 1);
+        assertEquals(RewardStatus.PENDING_STOCK, last.getStatus());
+        assertEquals(null, last.getVoucherPoolId());
+        verify(rewardAuditHelper).scheduleRewardPendingStock(any(UUID.class));
+    }
+
+    @Test
+    void fulfillPendingStock_fulfilledWhenVoucherAvailable() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID userRewardId = UUID.randomUUID();
+        UUID voucherId = UUID.randomUUID();
+        UserReward pending = pendingReward(userId, campaignId, milestoneId, userRewardId);
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 2, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(pending));
+        when(milestoneRepository.findById(milestoneId)).thenReturn(Optional.of(milestone));
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(2L);
+        when(voucherAllocationService.allocate(milestoneId, userId, userRewardId))
+                .thenReturn(Optional.of(new VoucherAllocation(voucherId)));
+        when(userRewardRepository.save(any(UserReward.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.fulfillPendingStock(userRewardId);
+
+        assertEquals(RewardEvaluationService.PendingStockResult.FULFILLED, result);
+        assertEquals(RewardStatus.ISSUED, pending.getStatus());
+        assertEquals(voucherId, pending.getVoucherPoolId());
+        verify(rewardCachePort).evictUserRewardListAll(userId);
+    }
+
+    @Test
+    void fulfillPendingStock_stillNoStockWhenPoolEmpty() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID userRewardId = UUID.randomUUID();
+        UserReward pending = pendingReward(userId, campaignId, milestoneId, userRewardId);
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(pending));
+        when(milestoneRepository.findById(milestoneId)).thenReturn(Optional.of(milestone));
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(1L);
+        when(voucherAllocationService.allocate(milestoneId, userId, userRewardId)).thenReturn(Optional.empty());
+
+        var result = service.fulfillPendingStock(userRewardId);
+
+        assertEquals(RewardEvaluationService.PendingStockResult.STILL_NO_STOCK, result);
+        assertEquals(RewardStatus.PENDING_STOCK, pending.getStatus());
+    }
+
+    @Test
+    void fulfillPendingStock_skippedWhenAlreadyIssued() {
+        UUID userRewardId = UUID.randomUUID();
+        UserReward issued = UserReward.builder()
+                .id(userRewardId)
+                .userId(UUID.randomUUID())
+                .campaignId(UUID.randomUUID())
+                .milestoneId(UUID.randomUUID())
+                .issuedAt(LocalDateTime.now())
+                .status(RewardStatus.ISSUED)
+                .build();
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(issued));
+
+        var result = service.fulfillPendingStock(userRewardId);
+
+        assertEquals(RewardEvaluationService.PendingStockResult.SKIPPED, result);
+        verify(voucherAllocationService, never()).allocate(any(), any(), any());
+    }
+
+    @Test
+    void fulfillPendingStock_skippedWhenRewardMissing() {
+        UUID userRewardId = UUID.randomUUID();
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.empty());
+
+        assertEquals(RewardEvaluationService.PendingStockResult.SKIPPED, service.fulfillPendingStock(userRewardId));
+        assertEquals(RewardEvaluationService.PendingStockResult.SKIPPED, service.fulfillPendingStock(null));
+    }
+
+    @Test
+    void fulfillPendingStock_skippedWhenVoucherAlreadyLinked() {
+        UUID userRewardId = UUID.randomUUID();
+        UserReward pending = UserReward.builder()
+                .id(userRewardId)
+                .userId(UUID.randomUUID())
+                .campaignId(UUID.randomUUID())
+                .milestoneId(UUID.randomUUID())
+                .voucherPoolId(UUID.randomUUID())
+                .issuedAt(LocalDateTime.now())
+                .status(RewardStatus.PENDING_STOCK)
+                .build();
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(pending));
+
+        assertEquals(RewardEvaluationService.PendingStockResult.SKIPPED, service.fulfillPendingStock(userRewardId));
+    }
+
+    @Test
+    void fulfillPendingStock_skippedWhenMilestoneNotVoucher() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID userRewardId = UUID.randomUUID();
+        UserReward pending = pendingReward(userId, campaignId, milestoneId, userRewardId);
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.DIGITAL_STICKER, MilestoneStatus.ACTIVE);
+
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(pending));
+        when(milestoneRepository.findById(milestoneId)).thenReturn(Optional.of(milestone));
+
+        assertEquals(RewardEvaluationService.PendingStockResult.SKIPPED, service.fulfillPendingStock(userRewardId));
+    }
+
+    @Test
+    void fulfillPendingStock_skippedWhenStampThresholdNotMet() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID userRewardId = UUID.randomUUID();
+        UserReward pending = pendingReward(userId, campaignId, milestoneId, userRewardId);
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 5, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(pending));
+        when(milestoneRepository.findById(milestoneId)).thenReturn(Optional.of(milestone));
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(2L);
+
+        assertEquals(RewardEvaluationService.PendingStockResult.SKIPPED, service.fulfillPendingStock(userRewardId));
+    }
+
+    @Test
+    void fulfillPendingStock_stillNoStockOnVoucherLinkRace() {
+        UUID userId = UUID.randomUUID();
+        UUID campaignId = UUID.randomUUID();
+        UUID milestoneId = UUID.randomUUID();
+        UUID userRewardId = UUID.randomUUID();
+        UUID voucherId = UUID.randomUUID();
+        UserReward pending = pendingReward(userId, campaignId, milestoneId, userRewardId);
+        Milestone milestone = milestone(userId, campaignId, milestoneId, 1, RewardType.VOUCHER, MilestoneStatus.ACTIVE);
+
+        when(userRewardRepository.findById(userRewardId)).thenReturn(Optional.of(pending));
+        when(milestoneRepository.findById(milestoneId)).thenReturn(Optional.of(milestone));
+        when(countPort.countDistinctStationsByUserIdAndCampaignId(userId, campaignId)).thenReturn(1L);
+        when(voucherAllocationService.allocate(milestoneId, userId, userRewardId))
+                .thenReturn(Optional.of(new VoucherAllocation(voucherId)));
+        when(userRewardRepository.save(any(UserReward.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "duplicate", new RuntimeException("uq_user_rewards_voucher_pool_id")))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.fulfillPendingStock(userRewardId);
+
+        assertEquals(RewardEvaluationService.PendingStockResult.STILL_NO_STOCK, result);
+        verify(voucherAllocationService).release(voucherId);
+        assertEquals(RewardStatus.PENDING_STOCK, pending.getStatus());
+        assertEquals(null, pending.getVoucherPoolId());
+    }
+
+    private static UserReward pendingReward(UUID userId, UUID campaignId, UUID milestoneId, UUID userRewardId) {
+        return UserReward.builder()
+                .id(userRewardId)
+                .userId(userId)
+                .campaignId(campaignId)
+                .milestoneId(milestoneId)
+                .issuedAt(LocalDateTime.now())
+                .status(RewardStatus.PENDING_STOCK)
+                .build();
+    }
+
     private static Milestone milestone(UUID userId, UUID campaignId, UUID id, int stamps, RewardType type, MilestoneStatus status) {
         return Milestone.builder()
                 .id(id)

@@ -54,7 +54,7 @@ public class Milestone extends BaseEntity {
     @Column(name = "reward_description", length = 255)
     private String rewardDescription;
 
-    @Column(name = "reward_image_url", length = 255)
+    @Column(name = "reward_image_url", length = 512)
     private String rewardImageUrl;
 
     @Enumerated(EnumType.STRING)

@@ -13,6 +13,8 @@ public interface UserRewardRepository {
 
     UserReward save(UserReward userReward);
 
+    Optional<UserReward> findById(UUID id);
+
     Optional<UserReward> findByUserIdAndId(UUID userId, UUID id);
 
     Set<UUID> findMilestoneIdsRewardedForUser(UUID userId);

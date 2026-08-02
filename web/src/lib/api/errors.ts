@@ -5,18 +5,45 @@ export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly path?: string
+  readonly retryAfterSeconds?: number
 
-  constructor(message: string, status: number, code: string, path?: string) {
+  constructor(
+    message: string,
+    status: number,
+    code: string,
+    path?: string,
+    retryAfterSeconds?: number,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.path = path
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
 export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError
+}
+
+function parseRetryAfterSeconds(value: unknown): number | undefined {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return undefined
+  }
+
+  const asNumber = Number(value)
+  if (Number.isFinite(asNumber) && asNumber >= 0) {
+    return asNumber
+  }
+
+  const retryAt = Date.parse(value)
+  if (Number.isNaN(retryAt)) {
+    return undefined
+  }
+
+  const deltaSeconds = Math.ceil((retryAt - Date.now()) / 1000)
+  return deltaSeconds > 0 ? deltaSeconds : 0
 }
 
 export function parseApiError(error: unknown): ApiError {
@@ -27,6 +54,7 @@ export function parseApiError(error: unknown): ApiError {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 500
     const data = error.response?.data as ErrorResponse | undefined
+    const retryAfterSeconds = parseRetryAfterSeconds(error.response?.headers?.['retry-after'])
 
     if (data?.message) {
       return new ApiError(
@@ -34,6 +62,7 @@ export function parseApiError(error: unknown): ApiError {
         data.status ?? status,
         data.code ?? 'UNKNOWN_ERROR',
         data.path,
+        retryAfterSeconds,
       )
     }
 
@@ -52,11 +81,31 @@ export function parseApiError(error: unknown): ApiError {
     if (status === 422) {
       return new ApiError('The request could not be processed.', 422, 'UNPROCESSABLE')
     }
+    if (status === 429) {
+      return new ApiError(
+        'Too many requests. Please wait a moment and try again.',
+        429,
+        'RATE_LIMITED',
+        undefined,
+        retryAfterSeconds,
+      )
+    }
+    if (status === 503) {
+      return new ApiError(
+        'Service is temporarily unavailable. Please try again shortly.',
+        503,
+        'SERVICE_UNAVAILABLE',
+        undefined,
+        retryAfterSeconds,
+      )
+    }
 
     return new ApiError(
       error.message || 'An unexpected error occurred.',
       status,
       'NETWORK_ERROR',
+      undefined,
+      retryAfterSeconds,
     )
   }
 
