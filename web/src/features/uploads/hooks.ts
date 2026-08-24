@@ -5,11 +5,12 @@ import { uploadPublicAsset } from '../../lib/api/uploads.api'
 export interface UploadPublicAssetVars {
   file: File
   purpose?: AssetUploadPurpose
+  entityId?: string
 }
 
 export function useUploadPublicAsset() {
   return useMutation({
-    mutationFn: ({ file, purpose = 'GENERIC' }: UploadPublicAssetVars) =>
-      uploadPublicAsset(file, purpose),
+    mutationFn: ({ file, purpose = 'GENERIC', entityId }: UploadPublicAssetVars) =>
+      uploadPublicAsset(file, purpose, entityId),
   })
 }

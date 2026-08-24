@@ -228,7 +228,8 @@ export function StationFormDrawer({
                 previewSize="lg"
                 objectFit="cover"
                 help={ASSET_UPLOAD_HELP.stationCover}
-                purpose="STATION_COVER"
+                purpose={station ? 'STATION_COVER' : 'GENERIC'}
+                entityId={station?.id}
                 clearable
               />
             )}
@@ -248,7 +249,8 @@ export function StationFormDrawer({
                 previewSize="lg"
                 objectFit="cover"
                 help={ASSET_UPLOAD_HELP.stationCard}
-                purpose="STATION_CARD"
+                purpose={station ? 'STATION_CARD' : 'GENERIC'}
+                entityId={station?.id}
                 clearable
               />
             )}

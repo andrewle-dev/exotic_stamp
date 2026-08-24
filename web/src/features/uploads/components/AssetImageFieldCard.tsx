@@ -26,6 +26,8 @@ export interface AssetImageFieldCardProps {
   help?: string
   /** Upload purpose sent to the public asset API. */
   purpose?: AssetUploadPurpose
+  /** Entity ID used to build a purpose-specific storage key. */
+  entityId?: string
   /** When true and a file was uploaded this session, show unsaved upload hint. */
   formDirty?: boolean
   /**
@@ -74,6 +76,7 @@ export function AssetImageFieldCard({
   hint,
   help,
   purpose = 'GENERIC',
+  entityId,
   formDirty = false,
   showUrlInput = false,
   previewSize = 'md',
@@ -93,11 +96,11 @@ export function AssetImageFieldCard({
 
   const processFile = useCallback(
     async (file: File) => {
-      const result = await uploadMutation.mutateAsync({ file, purpose })
+      const result = await uploadMutation.mutateAsync({ file, purpose, entityId })
       onChange(result.url)
       setUploadedThisSession(true)
     },
-    [onChange, purpose, uploadMutation],
+    [entityId, onChange, purpose, uploadMutation],
   )
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
