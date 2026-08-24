@@ -32,6 +32,11 @@ public class PublicAssetUploadService {
     }
 
     public PublicAssetUploadView uploadPublicAsset(MultipartFile file, AssetUploadPurpose purpose) {
+        return uploadPublicAsset(file, purpose, null);
+    }
+
+    public PublicAssetUploadView uploadPublicAsset(
+            MultipartFile file, AssetUploadPurpose purpose, String entityId) {
         if (file == null) {
             throw new InvalidFileException("File is required");
         }
@@ -42,7 +47,7 @@ public class PublicAssetUploadService {
                 file,
                 AssetUploadPurposeMapper.toCategory(resolved),
                 StorageVisibility.PUBLIC,
-                (String) null,
+                entityId,
                 detected.contentType(),
                 detected.extension()
         );

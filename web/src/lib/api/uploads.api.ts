@@ -6,6 +6,7 @@ import type { AssetUploadPurpose, PublicAssetUploadResponse } from '../../types/
 export async function uploadPublicAsset(
   file: File,
   purpose: AssetUploadPurpose = 'GENERIC',
+  entityId?: string,
 ): Promise<PublicAssetUploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
@@ -14,7 +15,7 @@ export async function uploadPublicAsset(
     '/api/v1/admin/uploads/public',
     formData,
     {
-      params: { purpose },
+      params: { purpose, ...(entityId ? { entityId } : {}) },
       headers: {
         'Content-Type': 'multipart/form-data',
       },

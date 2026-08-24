@@ -40,9 +40,13 @@ public class AdminPublicUploadController {
     public ResponseEntity<ApiResponse<PublicAssetUploadResponse>> uploadPublic(
             @RequestPart("file") MultipartFile file,
             @RequestParam(value = "purpose", required = false, defaultValue = "GENERIC")
-                    String purpose) {
+                    String purpose,
+            @RequestParam(value = "entityId", required = false) String entityId) {
         AssetUploadPurpose resolved = AssetUploadPurpose.fromParam(purpose);
+        var uploaded = entityId == null
+                ? publicAssetUploadService.uploadPublicAsset(file, resolved)
+                : publicAssetUploadService.uploadPublicAsset(file, resolved, entityId);
         return ResponseEntity.ok(ApiResponse.ok(presentationMapper.toResponse(
-                publicAssetUploadService.uploadPublicAsset(file, resolved))));
+                uploaded)));
     }
 }
