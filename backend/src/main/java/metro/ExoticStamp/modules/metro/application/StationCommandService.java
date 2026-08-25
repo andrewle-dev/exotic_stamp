@@ -94,7 +94,10 @@ public class StationCommandService {
         if (status == MetroStatus.ACTIVE && line.getStatus() != MetroStatus.ACTIVE) {
             throw new InvalidStationStatusException(lineId);
         }
-        validateSortOrder(lineId, command.getSortOrder(), null);
+        Integer sortOrder = command.getSortOrder() != null
+            ? command.getSortOrder()
+            : nextSortOrder(lineId);
+        validateSortOrder(lineId, sortOrder, null);
         validateNewStationCodes(lineId, command.getCode(), command.getNfcTagId(), command.getQrCodeValue());
 
         LocalDateTime now = LocalDateTime.now();
@@ -104,7 +107,7 @@ public class StationCommandService {
                 .code(command.getCode().trim())
                 .name(command.getName().trim())
                 .displayName(blankToNull(command.getDisplayName()))
-                .sortOrder(command.getSortOrder() != null ? command.getSortOrder() : 0)
+                .sortOrder(sortOrder)
                 .description(blankToNull(command.getDescription()))
                 .address(blankToNull(command.getAddress()))
                 .latitude(command.getLatitude())
@@ -412,6 +415,15 @@ public class StationCommandService {
         if (exists) {
             throw new DuplicateStationSequenceException(lineId, sortOrder);
         }
+    }
+
+    private int nextSortOrder(UUID lineId) {
+        return stationRepository.findAllByLineId(lineId).stream()
+                .map(Station::getSortOrder)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .map(value -> value + 1)
+                .orElse(0);
     }
 
     private void validateNewStationCodes(UUID lineId, String code, String nfcTagId, String qrCodeValue) {

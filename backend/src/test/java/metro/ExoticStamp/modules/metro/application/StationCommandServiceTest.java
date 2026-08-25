@@ -102,6 +102,30 @@ class StationCommandServiceTest {
         verify(stationRepository).save(any(Station.class));
     }
 
+        @Test
+        void createStation_withoutSortOrder_assignsNextSequence() {
+                when(lineRepository.findById(LINE_ID)).thenReturn(Optional.of(activeLine()));
+                Station existing = activeStation();
+                existing.setSortOrder(0);
+                when(stationRepository.findAllByLineId(LINE_ID)).thenReturn(List.of(existing));
+                when(stationRepository.existsByLineIdAndSortOrder(LINE_ID, 1)).thenReturn(false);
+                when(stationRepository.existsByLineIdAndCode(LINE_ID, "S2")).thenReturn(false);
+                when(stationRepository.save(any(Station.class))).thenAnswer(inv -> {
+                        Station station = inv.getArgument(0);
+                        station.setId(STATION_ID);
+                        return station;
+                });
+                when(mapper.toStationDetailView(any(Station.class), any(Line.class), eq(true)))
+                                .thenReturn(StationDetailView.builder().id(STATION_ID).build());
+
+                stationCommandService.createStation(CreateStationCommand.builder()
+                                .lineId(LINE_ID).code("S2").name("Second station").build());
+
+                ArgumentCaptor<Station> captor = ArgumentCaptor.forClass(Station.class);
+                verify(stationRepository).save(captor.capture());
+                assertEquals(1, captor.getValue().getSortOrder());
+        }
+
     @Test
     void createStation_lineNotFound_throws() {
         when(lineRepository.findById(LINE_ID)).thenReturn(Optional.empty());
