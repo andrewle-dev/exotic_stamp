@@ -33,8 +33,8 @@ function toPayload(values: StationFormValues, existingSortOrder?: number) {
     displayName: values.displayName?.trim() || undefined,
     description: values.description?.trim() || undefined,
     address: values.address?.trim() || undefined,
-    // Ordering is managed via Stations reorder drawer — preserve on edit, default on create.
-    sortOrder: existingSortOrder ?? 0,
+    // Ordering is managed via Stations reorder drawer — preserve on edit, auto-assign on create.
+    ...(existingSortOrder != null ? { sortOrder: existingSortOrder } : {}),
     latitude: parseOptionalNumber(values.latitude),
     longitude: parseOptionalNumber(values.longitude),
     zoneRadiusMeters: parseOptionalNumber(values.zoneRadiusMeters),
